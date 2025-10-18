@@ -6,6 +6,51 @@ interface BoidsStats {
   fps: number
 }
 
+// Each boid is [x, y, vx, vy]
+interface Boid {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+}
+
+function boidsToFloat32Array(boids: Boid[]): Float32Array {
+  const arr = new Float32Array(boids.length * 4);
+  for (let i = 0; i < boids.length; i++) {
+    arr[i * 4] = boids[i].x;
+    arr[i * 4 + 1] = boids[i].y;
+    arr[i * 4 + 2] = boids[i].vx;
+    arr[i * 4 + 3] = boids[i].vy;
+  }
+  return arr;
+}
+
+function float32ArrayToBoids(arr: Float32Array): Boid[] {
+  const boids: Boid[] = [];
+  for (let i = 0; i < arr.length; i += 4) {
+    boids.push({
+      x: arr[i],
+      y: arr[i + 1],
+      vx: arr[i + 2],
+      vy: arr[i + 3],
+    });
+  }
+  return boids;
+}
+
+function createRandomBoids(count: number, width: number, height: number, maxSpeed: number): Boid[] {
+  const boids: Boid[] = [];
+  for (let i = 0; i < count; i++) {
+    boids.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * maxSpeed,
+      vy: (Math.random() - 0.5) * maxSpeed,
+    });
+  }
+  return boids;
+}
+
 function BoidsDemo() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [wasm, setWasm] = useState<typeof silly_demos | null>(null)
@@ -15,8 +60,13 @@ function BoidsDemo() {
   })
   const [isRunning, setIsRunning] = useState(true)
 
+  // Visualization toggles
+  const [showSeparation, setShowSeparation] = useState(true)
+  const [showAlignment, setShowAlignment] = useState(true)
+  const [showCohesion, setShowCohesion] = useState(true)
+
   // Simulation state - using refs to avoid React re-rendering issues
-  const boidsRef = useRef<Float32Array>(new Float32Array(0))
+  const boidsRef = useRef<Boid[]>([])
   const lastTimeRef = useRef<number>(0)
   const animationRef = useRef<number>(0)
   const fpsCounterRef = useRef({ frames: 0, lastTime: 0 })
@@ -61,17 +111,9 @@ function BoidsDemo() {
     const width = canvas.width
     const height = canvas.height
 
-    // Create boids using flat array
-    const boids = wasm.BoidsTests.create_boids_flat(
-      config.boidCount,
-      0,
-      width,
-      0,
-      height,
-      config.maxSpeed
-    )
-    
-    boidsRef.current = new Float32Array(boids)
+    // Create boids as array of struct
+    const boids = createRandomBoids(config.boidCount, width, height, config.maxSpeed)
+    boidsRef.current = boids
     setStats(prev => ({ ...prev, boidCount: config.boidCount }))
   }, [wasm, config.boidCount])
 
@@ -93,14 +135,14 @@ function BoidsDemo() {
       // Calculate delta time
       const dt = lastTimeRef.current === 0 ? 1/60 : (currentTime - lastTimeRef.current) / 1000
       lastTimeRef.current = currentTime
-      
-      // Clamp dt to avoid large jumps
       const clampedDt = Math.min(dt, 1/30)
 
       // Update boids simulation
       if (boidsRef.current.length > 0) {
-        const updatedBoids = wasm.BoidsTests.update_boids_flat(
-          boidsRef.current,
+        // Convert to flat array for WASM
+        const flat = boidsToFloat32Array(boidsRef.current)
+        const updatedFlat = wasm.BoidsTests.update_boids_flat(
+          flat,
           config.separationRadius,
           config.alignmentRadius,
           config.cohesionRadius,
@@ -115,7 +157,7 @@ function BoidsDemo() {
           height,
           clampedDt
         )
-        boidsRef.current = new Float32Array(updatedBoids)
+        boidsRef.current = float32ArrayToBoids(new Float32Array(updatedFlat))
       }
 
       // Clear canvas with slight trail effect
@@ -129,26 +171,40 @@ function BoidsDemo() {
                     width - 2 * config.boundaryMargin, height - 2 * config.boundaryMargin)
 
       // Draw boids
-      const boidCount = boidsRef.current.length / 4
-      for (let i = 0; i < boidCount; i++) {
-        const idx = i * 4
-        const x = boidsRef.current[idx]
-        const y = boidsRef.current[idx + 1]
-        const vx = boidsRef.current[idx + 2]
-        const vy = boidsRef.current[idx + 3]
-
-        // Calculate heading angle
+      const boids = boidsRef.current
+      for (let i = 0; i < boids.length; i++) {
+        const { x, y, vx, vy } = boids[i]
         const angle = Math.atan2(vy, vx)
         const speed = Math.sqrt(vx * vx + vy * vy)
-        
-        // Color based on speed
         const normalizedSpeed = Math.min(speed / config.maxSpeed, 1)
-        const hue = 180 + normalizedSpeed * 120  // Blue to green based on speed
-        
+        const hue = 180 + normalizedSpeed * 120
         ctx.save()
         ctx.translate(x, y)
         ctx.rotate(angle)
-        
+        // Visualize radii (separation, alignment, cohesion)
+        ctx.save()
+        ctx.setTransform(1, 0, 0, 1, 0, 0) // Reset transform for circles
+        ctx.globalAlpha = 0.08
+        if (showCohesion) {
+          ctx.beginPath()
+          ctx.arc(x, y, config.cohesionRadius, 0, Math.PI * 2)
+          ctx.fillStyle = '#00bcd4' // Cyan for cohesion
+          ctx.fill()
+        }
+        if (showAlignment) {
+          ctx.beginPath()
+          ctx.arc(x, y, config.alignmentRadius, 0, Math.PI * 2)
+          ctx.fillStyle = '#8bc34a' // Light green for alignment
+          ctx.fill()
+        }
+        if (showSeparation) {
+          ctx.beginPath()
+          ctx.arc(x, y, config.separationRadius, 0, Math.PI * 2)
+          ctx.fillStyle = '#ff9800' // Orange for separation
+          ctx.fill()
+        }
+        ctx.globalAlpha = 1
+        ctx.restore()
         // Draw boid as small triangle/arrow
         ctx.fillStyle = `hsl(${hue}, 70%, 60%)`
         ctx.beginPath()
@@ -158,13 +214,10 @@ function BoidsDemo() {
         ctx.lineTo(-3, 2)
         ctx.closePath()
         ctx.fill()
-        
-        // Draw small circle for body
         ctx.fillStyle = `hsl(${hue}, 50%, 80%)`
         ctx.beginPath()
         ctx.arc(-1, 0, 1.5, 0, Math.PI * 2)
         ctx.fill()
-        
         ctx.restore()
       }
 
@@ -193,7 +246,7 @@ function BoidsDemo() {
         cancelAnimationFrame(animationRef.current)
       }
     }
-  }, [wasm, isRunning, config])
+  }, [wasm, isRunning, config, showSeparation, showAlignment, showCohesion])
 
   // Config change handler
   const handleConfigChange = (key: keyof typeof config, value: number) => {
@@ -203,17 +256,8 @@ function BoidsDemo() {
   // Reset simulation
   const resetSimulation = () => {
     if (!wasm || !canvasRef.current) return
-    
     const canvas = canvasRef.current
-    const boids = wasm.BoidsTests.create_boids_flat(
-      config.boidCount,
-      config.boundaryMargin,
-      canvas.width - config.boundaryMargin,
-      config.boundaryMargin, 
-      canvas.height - config.boundaryMargin,
-      config.maxSpeed * 0.5
-    )
-    boidsRef.current = new Float32Array(boids)
+    boidsRef.current = createRandomBoids(config.boidCount, canvas.width, canvas.height, config.maxSpeed * 0.5)
     setStats(prev => ({ ...prev, boidCount: config.boidCount }))
   }
 
@@ -279,6 +323,24 @@ function BoidsDemo() {
                   value={config.boidCount}
                   onChange={(e) => handleConfigChange('boidCount', parseInt(e.target.value))}
                 />
+              </label>
+            </div>
+          </div>
+
+          <div className="control-section">
+            <h4>Visualization</h4>
+            <div className="control-group">
+              <label>
+                <input type="checkbox" checked={showSeparation} onChange={e => setShowSeparation(e.target.checked)} />
+                Show Separation Radius
+              </label>
+              <label>
+                <input type="checkbox" checked={showAlignment} onChange={e => setShowAlignment(e.target.checked)} />
+                Show Alignment Radius
+              </label>
+              <label>
+                <input type="checkbox" checked={showCohesion} onChange={e => setShowCohesion(e.target.checked)} />
+                Show Cohesion Radius
               </label>
             </div>
           </div>
