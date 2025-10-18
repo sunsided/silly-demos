@@ -5,10 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:github-pages": "VITE_BASE_PATH=/silly-demos tsc && vite build",
     "build:local": "tsc && vite build --base ./",
     "preview": "vite preview",
-    "preview:github-pages": "VITE_BASE_PATH=/silly-demos vite preview",
     "preview:local": "vite preview --base ./",
     "lint": "tsc --noEmit"
   },
