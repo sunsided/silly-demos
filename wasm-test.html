@@ -76,116 +76,102 @@
 </div>
 
 <script type="module">
-    (async () => {
-        const mod = await import("./pkg/silly_demos.js");
-        const wasmUrl = new URL("./pkg/silly_demos_bg.wasm", import.meta.url);
-        try {
-            await mod.default(wasmUrl);
-        } catch {
-            const b = await (await fetch(wasmUrl)).arrayBuffer();
-            await mod.default(b);
+    import init, {run, circle_collision} from "./pkg/silly_demos.js";
+
+    await init();
+    await run();
+
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const interEl = document.getElementById("inter");
+    const distEl = document.getElementById("dist");
+    const penEl = document.getElementById("pen");
+
+    function setupCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const cw = canvas.clientWidth, ch = canvas.clientHeight;
+        const bsW = Math.round(cw * dpr), bsH = Math.round(ch * dpr);
+        if (canvas.width !== bsW || canvas.height !== bsH) {
+            canvas.width = bsW;
+            canvas.height = bsH;
         }
-        const {circle_collision} = mod;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
 
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d");
-        const interEl = document.getElementById("inter");
-        const distEl = document.getElementById("dist");
-        const penEl = document.getElementById("pen");
+    setupCanvas();
+    window.addEventListener("resize", setupCanvas);
 
-        // DPR-aware setup
-        function setupCanvas() {
-            const dpr = window.devicePixelRatio || 1;
-            const cw = canvas.clientWidth, ch = canvas.clientHeight;
-            const bsW = Math.round(cw * dpr), bsH = Math.round(ch * dpr);
-            if (canvas.width !== bsW || canvas.height !== bsH) {
-                canvas.width = bsW;
-                canvas.height = bsH;
-            }
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const A = {x: 280, y: 300, r: 90, offx: 0, offy: 0};
+    const B = {x: 560, y: 300, r: 110, offx: 0, offy: 0};
+
+    const pt = (e) => {
+        const r = canvas.getBoundingClientRect();
+        return {x: e.clientX - r.left, y: e.clientY - r.top};
+    };
+    const hit = (c, p) => {
+        const dx = p.x - c.x, dy = p.y - c.y;
+        return dx * dx + dy * dy <= c.r * c.r;
+    };
+
+    let dragging = null;
+    canvas.addEventListener("pointerdown", (e) => {
+        const p = pt(e);
+        if (hit(A, p)) {
+            dragging = A;
+            A.offx = p.x - A.x;
+            A.offy = p.y - A.y;
+        } else if (hit(B, p)) {
+            dragging = B;
+            B.offx = p.x - B.x;
+            B.offy = p.y - B.y;
         }
+        canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const p = pt(e);
+        dragging.x = p.x - dragging.offx;
+        dragging.y = p.y - dragging.offy;
+    });
+    const stopDrag = () => dragging = null;
+    canvas.addEventListener("pointerup", stopDrag);
+    canvas.addEventListener("pointercancel", stopDrag);
+    canvas.addEventListener("pointerleave", stopDrag);
 
-        setupCanvas();
-        window.addEventListener("resize", setupCanvas);
+    const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-        const A = {x: 280, y: 300, r: 90, dragging: false, offx: 0, offy: 0};
-        const B = {x: 560, y: 300, r: 110, dragging: false, offx: 0, offy: 0};
+    function drawCircle(c, fillVar) {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+        ctx.fillStyle = cssVar(fillVar);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#ddd";
+        ctx.stroke();
+    }
 
-        const pt = (e) => {
-            const r = canvas.getBoundingClientRect();
-            return {x: e.clientX - r.left, y: e.clientY - r.top};
-        };
-        const hit = (c, p) => {
-            const dx = p.x - c.x, dy = p.y - c.y;
-            return dx * dx + dy * dy <= c.r * c.r;
-        };
+    function draw() {
+        const res = circle_collision(A.x, A.y, A.r, B.x, B.y, B.r);
+        interEl.textContent = res.intersect ? "yes" : "no";
+        distEl.textContent = res.distance.toFixed(2);
+        penEl.textContent = res.penetration.toFixed(2);
 
-        let dragging = null;
-        canvas.addEventListener("pointerdown", (e) => {
-            const p = pt(e);
-            if (hit(A, p)) {
-                dragging = A;
-                A.offx = p.x - A.x;
-                A.offy = p.y - A.y;
-            } else if (hit(B, p)) {
-                dragging = B;
-                B.offx = p.x - B.x;
-                B.offy = p.y - B.y;
-            }
-            canvas.setPointerCapture(e.pointerId);
-        });
-        canvas.addEventListener("pointermove", (e) => {
-            if (!dragging) return;
-            const p = pt(e);
-            dragging.x = p.x - dragging.offx;
-            dragging.y = p.y - dragging.offy;
-        });
-        const stopDrag = () => dragging = null;
-        canvas.addEventListener("pointerup", stopDrag);
-        canvas.addEventListener("pointercancel", stopDrag);
-        canvas.addEventListener("pointerleave", stopDrag);
+        ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+        drawCircle(A, res.intersect ? "--circle-a-hit" : "--circle-a-normal");
+        drawCircle(B, res.intersect ? "--circle-b-hit" : "--circle-b-normal");
 
-        function cssVar(name) {
-            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-        }
+        ctx.beginPath();
+        ctx.moveTo(A.x, A.y);
+        ctx.lineTo(B.x, B.y);
+        ctx.strokeStyle = cssVar("--line-color");
+        ctx.setLineDash(cssVar("--line-style").split(",").map(parseFloat));
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-        function drawCircle(c, fillVar) {
-            ctx.beginPath();
-            ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
-            ctx.fillStyle = cssVar(fillVar);
-            ctx.fill();
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = "#ddd";
-            ctx.stroke();
-        }
+        requestAnimationFrame(draw);
+    }
 
-        function draw() {
-            const res = circle_collision(A.x, A.y, A.r, B.x, B.y, B.r);
-            interEl.textContent = res.intersect;
-            distEl.textContent = res.distance.toFixed(2);
-            penEl.textContent = res.penetration.toFixed(2);
-
-            ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-
-            const cA = res.intersect ? "--circle-a-hit" : "--circle-a-normal";
-            const cB = res.intersect ? "--circle-b-hit" : "--circle-b-normal";
-            drawCircle(A, cA);
-            drawCircle(B, cB);
-
-            // dotted connector
-            ctx.beginPath();
-            ctx.moveTo(A.x, A.y);
-            ctx.lineTo(B.x, B.y);
-            ctx.strokeStyle = cssVar("--line-color");
-            ctx.setLineDash(cssVar("--line-style").split(",").map(parseFloat));
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            requestAnimationFrame(draw);
-        }
-
-        draw();
-    })();
+    draw();
 </script>
 
 </html>
