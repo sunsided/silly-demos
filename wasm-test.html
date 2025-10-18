@@ -4,11 +4,32 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>WASM circle collision demo</title>
 <style>
+    :root {
+        /* theme */
+        --bg-main: #111;
+        --bg-canvas: #181818;
+        --fg-text: #ddd;
+        --fg-pill-bg: #333;
+
+        /* shared alpha */
+        --circle-alpha: 0.6;
+
+        /* circle colors with embedded transparency */
+        --circle-a-normal: rgb(46 125 50 / var(--circle-alpha));
+        --circle-a-hit: rgb(198 40 40 / var(--circle-alpha));
+        --circle-b-normal: rgb(102 187 106 / var(--circle-alpha));
+        --circle-b-hit: rgb(239 83 80 / var(--circle-alpha));
+
+        /* connecting line */
+        --line-color: #fff;
+        --line-style: 3, 6; /* dash pattern: 3px dash, 6px gap */
+    }
+
     html, body {
         height: 100%;
         margin: 0;
-        background: #111;
-        color: #ddd;
+        background: var(--bg-main);
+        color: var(--fg-text);
         font: 14px/1.3 system-ui, sans-serif;
     }
 
@@ -24,7 +45,7 @@
     }
 
     #canvas {
-        background: #181818;
+        background: var(--bg-canvas);
         display: block;
         width: 100%;
         height: 100%;
@@ -38,7 +59,7 @@
         display: inline-block;
         padding: 2px 8px;
         border-radius: 12px;
-        background: #333;
+        background: var(--fg-pill-bg);
     }
 </style>
 
@@ -56,22 +77,14 @@
 
 <script type="module">
     (async () => {
-        console.log("Loading …");
-
-        // 1) Load wasm-bindgen JS glue dynamically (wasm-pack style)
         const mod = await import("./pkg/silly_demos.js");
-
-        // 2) Initialize WASM; prefer URL, fall back to bytes to bypass MIME quirks
         const wasmUrl = new URL("./pkg/silly_demos_bg.wasm", import.meta.url);
         try {
-            await mod.default(wasmUrl);               // fast path (instantiateStreaming)
-        } catch (e) {
-            console.warn("URL init failed, retrying with bytes:", e);
-            const resp = await fetch(wasmUrl);
-            const bytes = await resp.arrayBuffer();
-            await mod.default(bytes);                 // non-streaming init
+            await mod.default(wasmUrl);
+        } catch {
+            const b = await (await fetch(wasmUrl)).arrayBuffer();
+            await mod.default(b);
         }
-
         const {circle_collision} = mod;
 
         const canvas = document.getElementById("canvas");
@@ -80,41 +93,27 @@
         const distEl = document.getElementById("dist");
         const penEl = document.getElementById("pen");
 
-        // --- DPR-correct canvas setup ---
+        // DPR-aware setup
         function setupCanvas() {
             const dpr = window.devicePixelRatio || 1;
-            const cw = canvas.clientWidth;
-            const ch = canvas.clientHeight;
-
-            // Match backing store to CSS size * DPR
-            const bsW = Math.max(1, Math.round(cw * dpr));
-            const bsH = Math.max(1, Math.round(ch * dpr));
+            const cw = canvas.clientWidth, ch = canvas.clientHeight;
+            const bsW = Math.round(cw * dpr), bsH = Math.round(ch * dpr);
             if (canvas.width !== bsW || canvas.height !== bsH) {
                 canvas.width = bsW;
                 canvas.height = bsH;
             }
-
-            // Draw in CSS pixel space
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         }
 
         setupCanvas();
         window.addEventListener("resize", setupCanvas);
-        // Optional: react to DPR changes on zoom/undock
-        try {
-            const mq = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
-            mq.addEventListener("change", setupCanvas);
-        } catch { /* older browsers */
-        }
 
-        // Scene state (coords in CSS pixels)
         const A = {x: 280, y: 300, r: 90, dragging: false, offx: 0, offy: 0};
         const B = {x: 560, y: 300, r: 110, dragging: false, offx: 0, offy: 0};
 
-        // Pointer utils (CSS pixel space, no scaling)
         const pt = (e) => {
-            const rect = canvas.getBoundingClientRect();
-            return {x: e.clientX - rect.left, y: e.clientY - rect.top};
+            const r = canvas.getBoundingClientRect();
+            return {x: e.clientX - r.left, y: e.clientY - r.top};
         };
         const hit = (c, p) => {
             const dx = p.x - c.x, dy = p.y - c.y;
@@ -122,75 +121,69 @@
         };
 
         let dragging = null;
-
         canvas.addEventListener("pointerdown", (e) => {
             const p = pt(e);
             if (hit(A, p)) {
                 dragging = A;
-                A.dragging = true;
                 A.offx = p.x - A.x;
                 A.offy = p.y - A.y;
             } else if (hit(B, p)) {
                 dragging = B;
-                B.dragging = true;
                 B.offx = p.x - B.x;
                 B.offy = p.y - B.y;
             }
             canvas.setPointerCapture(e.pointerId);
         });
-
         canvas.addEventListener("pointermove", (e) => {
             if (!dragging) return;
             const p = pt(e);
             dragging.x = p.x - dragging.offx;
             dragging.y = p.y - dragging.offy;
         });
-
-        const stopDrag = () => {
-            if (dragging) {
-                dragging.dragging = false;
-                dragging = null;
-            }
-        };
+        const stopDrag = () => dragging = null;
         canvas.addEventListener("pointerup", stopDrag);
         canvas.addEventListener("pointercancel", stopDrag);
         canvas.addEventListener("pointerleave", stopDrag);
 
-        function drawCircle(c, fill, stroke = "#ddd", alpha = 0.6) {
+        function cssVar(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+        function drawCircle(c, fillVar) {
             ctx.beginPath();
             ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
-            // semi-transparent fill
-            ctx.fillStyle = fill.replace("rgb", "rgba").replace(")", `,${alpha})`);
+            ctx.fillStyle = cssVar(fillVar);
             ctx.fill();
             ctx.lineWidth = 2;
-            ctx.strokeStyle = stroke;
+            ctx.strokeStyle = "#ddd";
             ctx.stroke();
         }
 
         function draw() {
             const res = circle_collision(A.x, A.y, A.r, B.x, B.y, B.r);
-
             interEl.textContent = res.intersect;
             distEl.textContent = res.distance.toFixed(2);
             penEl.textContent = res.penetration.toFixed(2);
 
             ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 
-            const cA = res.intersect ? "rgb(198,40,40)" : "rgb(46,125,50)";
-            const cB = res.intersect ? "rgb(239,83,80)" : "rgb(102,187,106)";
+            const cA = res.intersect ? "--circle-a-hit" : "--circle-a-normal";
+            const cB = res.intersect ? "--circle-b-hit" : "--circle-b-normal";
             drawCircle(A, cA);
             drawCircle(B, cB);
 
+            // dotted connector
             ctx.beginPath();
             ctx.moveTo(A.x, A.y);
             ctx.lineTo(B.x, B.y);
-            ctx.strokeStyle = "#444";
+            ctx.strokeStyle = cssVar("--line-color");
+            ctx.setLineDash(cssVar("--line-style").split(",").map(parseFloat));
             ctx.stroke();
+            ctx.setLineDash([]);
 
             requestAnimationFrame(draw);
         }
 
-        console.log("Init complete. Drawing …");
         draw();
     })();
 </script>
