@@ -3,75 +3,42 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>WASM circle collision demo</title>
+<link rel="stylesheet" href="styles.css">
 <style>
+    /* Demo-specific color variables */
     :root {
-        /* theme */
-        --bg-main: #111;
-        --bg-canvas: #181818;
-        --fg-text: #ddd;
-        --fg-pill-bg: #333;
+        /* Enhanced circle styling */
+        --circle-alpha: 0.85;
+        --circle-stroke-alpha: 0.9;
 
-        /* shared alpha */
-        --circle-alpha: 0.6;
+        /* Modern color palette - vibrant yet sophisticated */
+        --circle-a-normal: rgb(64 224 208 / var(--circle-alpha)); /* turquoise */
+        --circle-a-hit: rgb(255 107 107 / var(--circle-alpha)); /* coral red */
+        --circle-b-normal: rgb(138 43 226 / var(--circle-alpha)); /* blue violet */
+        --circle-b-hit: rgb(255 165 0 / var(--circle-alpha)); /* orange */
 
-        /* circle colors with embedded transparency */
-        --circle-a-normal: rgb(46 125 50 / var(--circle-alpha));
-        --circle-a-hit: rgb(198 40 40 / var(--circle-alpha));
-        --circle-b-normal: rgb(102 187 106 / var(--circle-alpha));
-        --circle-b-hit: rgb(239 83 80 / var(--circle-alpha));
+        /* Circle stroke colors */
+        --circle-a-stroke: rgb(64 224 208 / var(--circle-stroke-alpha));
+        --circle-a-stroke-hit: rgb(255 107 107 / var(--circle-stroke-alpha));
+        --circle-b-stroke: rgb(138 43 226 / var(--circle-stroke-alpha));
+        --circle-b-stroke-hit: rgb(255 165 0 / var(--circle-stroke-alpha));
 
-        /* connecting line */
-        --line-color: #fff;
-        --line-style: 3, 6; /* dash pattern: 3px dash, 6px gap */
-    }
-
-    html, body {
-        height: 100%;
-        margin: 0;
-        background: var(--bg-main);
-        color: var(--fg-text);
-        font: 14px/1.3 system-ui, sans-serif;
-    }
-
-    #wrap {
-        display: grid;
-        grid-template-columns: 1fr 320px;
-        gap: 16px;
-        height: 100%;
-    }
-
-    #side {
-        padding: 12px;
-    }
-
-    #canvas {
-        background: var(--bg-canvas);
-        display: block;
-        width: 100%;
-        height: 100%;
-    }
-
-    .stat {
-        margin: 6px 0;
-    }
-
-    .pill {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 12px;
-        background: var(--fg-pill-bg);
+        /* Enhanced connecting line */
+        --line-color: rgba(255, 255, 255, 0.7);
+        --line-glow: rgba(64, 224, 208, 0.4);
+        --line-style: 4, 8; /* dash pattern: 4px dash, 8px gap */
     }
 </style>
 
-<div id="wrap">
-    <canvas id="canvas" width="900" height="600"></canvas>
-    <div id="side">
-        <h3>WASM circle collision</h3>
-        <div class="stat">Intersect: <span id="inter" class="pill">false</span></div>
-        <div class="stat">Distance: <span id="dist" class="pill">0</span></div>
-        <div class="stat">Penetration: <span id="pen" class="pill">0</span></div>
-        <p>Drag the circles. Colors switch on intersection.<br/>
-            Call boundary: <code>circle_collision(x1,y1,r1,x2,y2,r2)</code> (1 call/frame).</p>
+<div id="wrap" class="grid-layout two-column">
+    <canvas id="canvas" class="modern-canvas" width="900" height="600"></canvas>
+    <div id="side" class="glass-panel">
+        <h3 class="gradient-title">WASM circle collision</h3>
+        <div class="stat-row">Intersect: <span id="inter" class="pill">false</span></div>
+        <div class="stat-row">Distance: <span id="dist" class="pill">0</span></div>
+        <div class="stat-row">Penetration: <span id="pen" class="pill">0</span></div>
+        <p class="description-text">Drag the circles. Colors switch on intersection.<br/>
+            Call boundary: <code class="code-highlight">circle_collision(x1,y1,r1,x2,y2,r2)</code> (1 call/frame).</p>
     </div>
 </div>
 
@@ -140,14 +107,31 @@
 
     const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-    function drawCircle(c, fillVar) {
+    function drawCircle(c, fillVar, strokeVar) {
+        // Create radial gradient for depth
+        const gradient = ctx.createRadialGradient(
+            c.x - c.r * 0.3, c.y - c.r * 0.3, 0,
+            c.x, c.y, c.r
+        );
+        const fillColor = cssVar(fillVar);
+        gradient.addColorStop(0, fillColor.replace(/\/[^)]*\)/, '/ 0.95)'));
+        gradient.addColorStop(1, fillColor);
+        
         ctx.beginPath();
         ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
-        ctx.fillStyle = cssVar(fillVar);
+        ctx.fillStyle = gradient;
         ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "#ddd";
+        
+        // Enhanced stroke with glow effect
+        ctx.shadowColor = cssVar(strokeVar);
+        ctx.shadowBlur = 8;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = cssVar(strokeVar);
         ctx.stroke();
+        
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
     }
 
     function draw() {
@@ -157,16 +141,33 @@
         penEl.textContent = res.penetration.toFixed(2);
 
         ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-        drawCircle(A, res.intersect ? "--circle-a-hit" : "--circle-a-normal");
-        drawCircle(B, res.intersect ? "--circle-b-hit" : "--circle-b-normal");
-
+        
+        // Draw connecting line with glow
         ctx.beginPath();
         ctx.moveTo(A.x, A.y);
         ctx.lineTo(B.x, B.y);
+        
+        // Glow effect for line
+        ctx.shadowColor = cssVar("--line-glow");
+        ctx.shadowBlur = 6;
+        ctx.lineWidth = 2;
         ctx.strokeStyle = cssVar("--line-color");
         ctx.setLineDash(cssVar("--line-style").split(",").map(parseFloat));
         ctx.stroke();
+        
+        // Reset shadow and dash
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
         ctx.setLineDash([]);
+
+        // Draw circles with appropriate colors and strokes
+        if (res.intersect) {
+            drawCircle(A, "--circle-a-hit", "--circle-a-stroke-hit");
+            drawCircle(B, "--circle-b-hit", "--circle-b-stroke-hit");
+        } else {
+            drawCircle(A, "--circle-a-normal", "--circle-a-stroke");
+            drawCircle(B, "--circle-b-normal", "--circle-b-stroke");
+        }
 
         requestAnimationFrame(draw);
     }
