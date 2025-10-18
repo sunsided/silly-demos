@@ -67,7 +67,6 @@ impl CircleCollisionResult {
 /// Inputs and outputs are all f32 to keep the boundary cheap.
 #[wasm_bindgen]
 impl CollisionTests {
-    #[wasm_bindgen]
     pub fn circle_collision(x1: f32, y1: f32, r1: f32, x2: f32, y2: f32, r2: f32) -> CircleCollisionResult {
         collision::circle_collision_impl(x1, y1, r1, x2, y2, r2)
     }
@@ -116,7 +115,6 @@ impl PointLineResult {
 /// point_x, point_y: the point to test
 #[wasm_bindgen]
 impl GeometryTests {
-    #[wasm_bindgen]
     pub fn point_line_test(
         line_x1: f32, line_y1: f32, 
         line_x2: f32, line_y2: f32,
