@@ -28,10 +28,15 @@ pub struct GeometryTests;
 
 #[wasm_bindgen]
 pub struct CircleCollisionResult {
+    #[wasm_bindgen(readonly)]
     pub intersect: bool,
+    #[wasm_bindgen(readonly)]
     pub distance: f32,
+    #[wasm_bindgen(readonly)]
     pub dx: f32,
+    #[wasm_bindgen(readonly)]
     pub dy: f32,
+    #[wasm_bindgen(readonly)]
     pub penetration: f32,
 }
 
@@ -46,10 +51,15 @@ impl CollisionTests {
 
 #[wasm_bindgen]
 pub struct PointLineResult {
+    #[wasm_bindgen(readonly)]
     pub distance: f32,
+    #[wasm_bindgen(readonly)]
     pub closest_x: f32,
+    #[wasm_bindgen(readonly)]
     pub closest_y: f32,
+    #[wasm_bindgen(readonly)]
     pub on_segment: bool,
+    #[wasm_bindgen(readonly)]
     pub side: f32, // positive = right side, negative = left side, 0 = on line
 }
 
