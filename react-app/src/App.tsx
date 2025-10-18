@@ -9,7 +9,7 @@ function App() {
       <nav className="navigation">
         <div className="nav-container">
           <h1 className="nav-title">
-            <span className="gradient-title">WASM Silly Demos</span>
+            <span className="gradient-title">Silly Demos with WASM</span>
           </h1>
           <div className="nav-links">
             <Link 
@@ -67,6 +67,7 @@ function Home() {
             <span className="code-highlight">WebAssembly</span>
             <span className="code-highlight">React</span>
             <span className="code-highlight">TypeScript</span>
+            <span className="code-highlight">FiraCode</span>
           </div>
         </div>
       </div>

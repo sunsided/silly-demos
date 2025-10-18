@@ -1,0 +1,57 @@
+/* FiraCode - Web Font Definitions (Standard, much smaller than Nerd Font) */
+
+/* Standard FiraCode with ligatures */
+@font-face {
+  font-family: 'Fira Code';
+  src: url('./FiraCode-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fira Code';
+  src: url('./FiraCode-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fira Code';
+  src: url('./FiraCode-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fira Code';
+  src: url('./FiraCode-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fira Code';
+  src: url('./FiraCode-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Variable Font version (single file for all weights) */
+@font-face {
+  font-family: 'Fira Code VF';
+  src: url('./FiraCode-VF.woff2') format('woff2-variations');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* CSS Custom Properties for easy usage */
+:root {
+  --font-firacode: 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', system-ui, monospace;
+  --font-firacode-vf: 'Fira Code VF', 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', system-ui, monospace;
+}
