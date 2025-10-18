@@ -96,7 +96,7 @@ just react-full-build
 
 ### GitHub Pages Deployment
 
-The project is configured for automatic deployment to GitHub Pages:
+The project is configured for automatic deployment to GitHub Pages with configurable base paths:
 
 ```bash
 # Build for GitHub Pages (includes WASM compilation and React build)
@@ -106,9 +106,17 @@ The project is configured for automatic deployment to GitHub Pages:
 cd react-app && npm run preview:github-pages
 ```
 
-The application will be available at: `https://your-username.github.io/silly-demos/`
+**Configuration**: The base path is automatically set to the repository name in CI. For manual builds, set the `VITE_BASE_PATH` environment variable:
 
-**Automatic Deployment**: Push to the main branch triggers automatic build and deployment via GitHub Actions.
+```bash
+# Custom base path
+export VITE_BASE_PATH=/my-custom-path
+./build-github-pages.sh
+```
+
+The application will be available at: `https://your-username.github.io/[repository-name]/`
+
+**Automatic Deployment**: Push to the main branch triggers automatic build and deployment via GitHub Actions, with the base path automatically configured to match the repository name.
 
 For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
 

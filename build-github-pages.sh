@@ -11,7 +11,9 @@ cd react-app
 npm install
 
 echo "🏗️  Building React app for GitHub Pages..."
-npm run build:github-pages
+# Set the base path to the repository name for GitHub Pages deployment
+export VITE_BASE_PATH=/silly-demos
+npm run build
 
 echo "✅ Build complete! The dist/ folder is ready for GitHub Pages deployment."
 echo "📁 Built files are in: react-app/dist/"

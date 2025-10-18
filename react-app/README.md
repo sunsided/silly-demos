@@ -39,6 +39,32 @@ yarn dev
 - `yarn preview` - Preview production build
 - `yarn lint` - Run TypeScript type checking
 
+### Configuration
+
+The application supports configurable base paths for deployment to different environments:
+
+#### Environment Variables
+
+- `VITE_BASE_PATH`: Override the base path for routing and assets (e.g., `/my-repo-name`)
+
+#### Local Development
+For local development, no configuration is needed. The app runs at the root path `/`.
+
+#### Production/CI Deployment
+For GitHub Pages or similar deployments, set the `VITE_BASE_PATH` environment variable to your repository name:
+
+```bash
+# In CI or production environment
+export VITE_BASE_PATH=/your-repo-name
+yarn build
+```
+
+#### Environment Files
+You can also use environment files:
+- `.env.example` - Template showing available configuration options
+- `.env.production` - Production-specific environment variables
+- `.env.local` - Local overrides (not committed to git)
+
 ## Project Structure
 
 ```
