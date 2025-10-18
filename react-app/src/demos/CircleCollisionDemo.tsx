@@ -283,7 +283,7 @@ function CircleCollisionDemo() {
     <div className="grid-layout two-column">
       <canvas ref={canvasRef} className="modern-canvas" />
       <div className="glass-panel">
-        <h3 className="gradient-title">WASM circle collision</h3>
+        <h3 className="gradient-title">Circle-circle collision</h3>
         <div className="stat-row">
           Intersect: <span className="pill">{stats.intersect ? 'yes' : 'no'}</span>
         </div>
@@ -295,7 +295,6 @@ function CircleCollisionDemo() {
         </div>
         <p className="description-text">
           Drag the circles. Colors switch on intersection.<br/>
-          Call boundary: <code className="code-highlight">circle_collision(x1,y1,r1,x2,y2,r2)</code> (1 call/frame).
         </p>
       </div>
     </div>

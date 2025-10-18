@@ -67,6 +67,7 @@ function Home() {
             <span className="code-highlight">WebAssembly</span>
             <span className="code-highlight">React</span>
             <span className="code-highlight">TypeScript</span>
+            <span className="code-highlight">FiraCode</span>
           </div>
         </div>
       </div>

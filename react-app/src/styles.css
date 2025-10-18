@@ -4,12 +4,13 @@
     /* Blue/teal theme with subtle hot accents */
     --bg-main: linear-gradient(135deg, #0f1419 0%, #1a1f2e 50%, #1e2738 100%);
     --bg-canvas: linear-gradient(135deg, #1e2330 0%, #252b3a 100%);
-    --fg-text: #e6eaf0;    --fg-pill-bg: linear-gradient(135deg, #3a4150 0%, #434a5a 100%);
+    --fg-text: #e6eaf0;
+    --fg-pill-bg: linear-gradient(135deg, #3a4150 0%, #434a5a 100%);
     --pill-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     
     /* Typography */
-    --font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    --font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    --font-family: 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', system-ui, monospace;
+    --font-mono: 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
     
     /* Blue-adjacent accent colors - keeping gradients cool */
     --accent-primary: #4a9eff;
@@ -43,8 +44,12 @@ html, body {
     margin: 0;
     background: var(--bg-main);
     color: var(--fg-text);
-    font: 15px/1.4 var(--font-family);
+    font-family: var(--font-family);
+    font-size: 13px;
+    line-height: 1.4;
     font-weight: 400;
+    font-feature-settings: 'liga' 1, 'calt' 1;
+    font-variant-ligatures: normal;
     overflow: hidden; /* Prevent scrollbars */
 }
 
@@ -96,8 +101,9 @@ html, body {
 /* Typography */
 .gradient-title {
     margin: 0 0 24px 0;
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 600;
+    font-family: var(--font-family);
     background: var(--accent-gradient);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -108,7 +114,8 @@ html, body {
     margin: 24px 0 0 0;
     line-height: 1.5;
     color: rgba(230, 234, 240, 0.75);
-    font-size: 14px;
+    font-size: 12px;
+    font-family: var(--font-family);
 }
 
 /* Interactive elements */
@@ -127,7 +134,8 @@ html, body {
     background: var(--fg-pill-bg);
     box-shadow: var(--pill-shadow);
     font-weight: 600;
-    font-size: 13px;
+    font-family: var(--font-family);
+    font-size: 11px;
     border: 1px solid rgba(230, 234, 240, 0.18);
     min-width: 60px;
     text-align: center;
@@ -147,6 +155,15 @@ html, body {
     font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 500;
+    font-feature-settings: 'liga' 1, 'calt' 1;
+    font-variant-ligatures: normal;
+}
+
+/* General code styling */
+code, pre {
+    font-family: var(--font-mono);
+    font-feature-settings: 'liga' 1, 'calt' 1;
+    font-variant-ligatures: normal;
 }
 
 /* App Layout */
@@ -176,8 +193,9 @@ html, body {
 
 .nav-title {
     margin: 0;
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 700;
+    font-family: var(--font-family);
 }
 
 .nav-links {
@@ -191,6 +209,8 @@ html, body {
     padding: 8px 16px;
     border-radius: 8px;
     font-weight: 500;
+    font-family: var(--font-family);
+    font-size: 13px;
     transition: all 0.2s ease;
     border: 1px solid transparent;
 }
@@ -251,15 +271,18 @@ html, body {
 
 .demo-card h3 {
     margin: 0 0 12px 0;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 600;
+    font-family: var(--font-family);
     color: var(--accent-primary);
 }
 
 .demo-card p {
     margin: 0 0 16px 0;
-    color: rgba(232, 230, 227, 0.75);
+    color: rgba(230, 234, 240, 0.8);
     line-height: 1.5;
+    font-size: 12px;
+    font-family: var(--font-family);
 }
 
 .demo-features {
@@ -276,8 +299,9 @@ html, body {
 
 .tech-info h3 {
     margin: 0 0 16px 0;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
+    font-family: var(--font-family);
     color: var(--accent-primary);
 }
 
