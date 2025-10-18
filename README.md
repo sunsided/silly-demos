@@ -20,6 +20,8 @@ This project demonstrates real-time physics simulations by combining the perform
 with a modern React frontend. The Rust core provides efficient collision detection algorithms, while the React/Vite
 frontend offers interactive visualizations and demos.
 
+See the demos at <https://sunsided.github.io/silly-demos/>
+
 ### Features
 
 - **Circle-Circle Collision Detection**: Fast collision detection with distance and penetration calculations

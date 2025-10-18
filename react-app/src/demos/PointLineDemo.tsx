@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-
-// WASM module types
-interface WasmModule {
-  GeometryTests: typeof import('../pkg/silly_demos').GeometryTests
-  run: () => void
-}
+import init, * as silly_demos from 'silly_demos';
 
 interface Point {
   x: number
@@ -20,7 +15,7 @@ interface LineSegment {
 
 function PointLineDemo() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [wasm, setWasm] = useState<WasmModule | null>(null)
+  const [wasm, setWasm] = useState<typeof silly_demos | null>(null)
   const [stats, setStats] = useState({
     distance: 0,
     closest_x: 0,
@@ -43,25 +38,17 @@ function PointLineDemo() {
 
   // Load WASM module
   useEffect(() => {
-    let mounted = true
-    
-    async function loadWasm() {
-      try {
-        // @ts-ignore - WASM module types
-        const wasmModule = await import('../pkg/silly_demos.js')
-        await wasmModule.default()
-        await wasmModule.run()
-        
-        if (mounted) {
-          setWasm(wasmModule)
-        }
-      } catch (error) {
-        console.error('Failed to load WASM module:', error)
+    let cancel = false;
+    init().then(() => {
+      if (!cancel) {
+        setWasm(silly_demos);
       }
-    }
-
-    loadWasm()
-    return () => { mounted = false }
+    }).catch((error: unknown) => {
+      if (!cancel) {
+        console.error('Failed to load WASM module:', error);
+      }
+    });
+    return () => { cancel = true; };
   }, [])
 
   // Canvas setup and animation
@@ -195,11 +182,17 @@ function PointLineDemo() {
       const line = lineRef.current
       const point = pointRef.current
       
-      const result = wasm.GeometryTests.point_line_test(
+      const result = wasm?.GeometryTests.point_line_test(
         line.start.x, line.start.y,
         line.end.x, line.end.y,
         point.x, point.y
-      )
+      ) || {
+        distance: 0,
+        closest_x: 0,
+        closest_y: 0,
+        on_segment: false,
+        side: 0
+      };
       
       // Calculate orthogonal distance to infinite line
       let ortho_distance = 0

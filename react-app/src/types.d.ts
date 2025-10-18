@@ -16,6 +16,11 @@ declare module '../pkg/silly_demos.js' {
   }
 }
 
+declare module "silly_demos" {
+  const mod: any;
+  export = mod;
+}
+
 // Extend HTMLCanvasElement to include custom properties
 declare global {
   interface HTMLCanvasElement {

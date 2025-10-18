@@ -1,6 +1,7 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import CircleCollisionDemo from './demos/CircleCollisionDemo'
 import PointLineDemo from './demos/PointLineDemo'
+import BoidsDemo from './demos/BoidsDemo'
 
 function App() {
   const location = useLocation()
@@ -31,6 +32,12 @@ function App() {
             >
               Point-Line Test
             </Link>
+            <Link 
+              to="/boids" 
+              className={`nav-link ${location.pathname === '/boids' ? 'active' : ''}`}
+            >
+              Boids Simulation
+            </Link>
           </div>
         </div>
       </nav>
@@ -40,6 +47,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/circle-collision" element={<CircleCollisionDemo />} />
           <Route path="/point-line" element={<PointLineDemo />} />
+          <Route path="/boids" element={<BoidsDemo />} />
         </Routes>
       </main>
     </div>
@@ -74,6 +82,16 @@ function Home() {
               <span className="pill">Geometry</span>
               <span className="pill">Real-time</span>
               <span className="pill">Visual</span>
+            </div>
+          </Link>
+
+          <Link to="/boids" className="demo-card">
+            <h3>Boids Flocking Simulation</h3>
+            <p>Interactive simulation of flocking behavior using separation, alignment, and cohesion rules.</p>
+            <div className="demo-features">
+              <span className="pill">AI</span>
+              <span className="pill">Simulation</span>
+              <span className="pill">Interactive</span>
             </div>
           </Link>
         </div>
