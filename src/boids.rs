@@ -436,7 +436,7 @@ fn boundary_forces(boid: &BoidState, config: &SimpleConfig) -> ((f32, f32), (f32
     // Raise the cap for wall force
     let max_wall_cap = 4.0 * strength;
     // Left
-    if (boid.x < margin) {
+    if boid.x < margin {
         let d = (margin - boid.x).max(0.0) / margin;
         let s = smoothstep(0.0, 1.0, d);
         let f = (wall_mult * 0.3 * strength * s).min(max_wall_cap);
@@ -448,7 +448,7 @@ fn boundary_forces(boid: &BoidState, config: &SimpleConfig) -> ((f32, f32), (f32
         force_x += f;
     }
     // Right
-    if (boid.x > width - margin) {
+    if boid.x > width - margin {
         let d = (boid.x - (width - margin)).max(0.0) / margin;
         let s = smoothstep(0.0, 1.0, d);
         let f = (wall_mult * 0.3 * strength * s).min(max_wall_cap);
@@ -460,7 +460,7 @@ fn boundary_forces(boid: &BoidState, config: &SimpleConfig) -> ((f32, f32), (f32
         force_x -= f;
     }
     // Top
-    if (boid.y < margin) {
+    if boid.y < margin {
         let d = (margin - boid.y).max(0.0) / margin;
         let s = smoothstep(0.0, 1.0, d);
         let f = (wall_mult * 0.3 * strength * s).min(max_wall_cap);
@@ -472,7 +472,7 @@ fn boundary_forces(boid: &BoidState, config: &SimpleConfig) -> ((f32, f32), (f32
         force_y += f;
     }
     // Bottom
-    if (boid.y > height - margin) {
+    if boid.y > height - margin {
         let d = (boid.y - (height - margin)).max(0.0) / margin;
         let s = smoothstep(0.0, 1.0, d);
         let f = (wall_mult * 0.3 * strength * s).min(max_wall_cap);

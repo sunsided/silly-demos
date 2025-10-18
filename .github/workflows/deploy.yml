@@ -39,14 +39,7 @@ jobs:
         uses: jetli/wasm-pack-action@v0.4.0
 
       - name: Build WASM
-        run: wasm-pack build --target web --out-dir react-app/src/pkg
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: react-app/package-lock.json
+        run: wasm-pack build --target web
 
       - name: Install dependencies
         run: cd react-app && npm ci
