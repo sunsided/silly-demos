@@ -171,9 +171,13 @@ function BoidsDemo() {
       // Update FPS
       fpsCounterRef.current.frames++
       if (currentTime - fpsCounterRef.current.lastTime >= 1000) {
+        const elapsed = currentTime - fpsCounterRef.current.lastTime;
+        const fps = elapsed > 0
+          ? Math.round(fpsCounterRef.current.frames * 1000 / elapsed)
+          : 0;
         setStats(prev => ({ 
           ...prev, 
-          fps: Math.round(fpsCounterRef.current.frames * 1000 / (currentTime - fpsCounterRef.current.lastTime))
+          fps
         }))
         fpsCounterRef.current.frames = 0
         fpsCounterRef.current.lastTime = currentTime
