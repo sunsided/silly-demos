@@ -28,39 +28,11 @@ pub struct GeometryTests;
 
 #[wasm_bindgen]
 pub struct CircleCollisionResult {
-    intersect: bool,
-    distance: f32,
-    dx: f32,
-    dy: f32,
-    penetration: f32,
-}
-
-#[wasm_bindgen]
-impl CircleCollisionResult {
-    #[wasm_bindgen(getter)]
-    pub fn intersect(&self) -> bool {
-        self.intersect
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn distance(&self) -> f32 {
-        self.distance
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn dx(&self) -> f32 {
-        self.dx
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn dy(&self) -> f32 {
-        self.dy
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn penetration(&self) -> f32 {
-        self.penetration
-    }
+    pub intersect: bool,
+    pub distance: f32,
+    pub dx: f32,
+    pub dy: f32,
+    pub penetration: f32,
 }
 
 /// Circle–circle collision with distance and penetration.
@@ -74,39 +46,11 @@ impl CollisionTests {
 
 #[wasm_bindgen]
 pub struct PointLineResult {
-    distance: f32,
-    closest_x: f32,
-    closest_y: f32,
-    on_segment: bool,
-    side: f32, // positive = right side, negative = left side, 0 = on line
-}
-
-#[wasm_bindgen]
-impl PointLineResult {
-    #[wasm_bindgen(getter)]
-    pub fn distance(&self) -> f32 {
-        self.distance
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn closest_x(&self) -> f32 {
-        self.closest_x
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn closest_y(&self) -> f32 {
-        self.closest_y
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn on_segment(&self) -> bool {
-        self.on_segment
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn side(&self) -> f32 {
-        self.side
-    }
+    pub distance: f32,
+    pub closest_x: f32,
+    pub closest_y: f32,
+    pub on_segment: bool,
+    pub side: f32, // positive = right side, negative = left side, 0 = on line
 }
 
 /// Point-line distance and closest point calculation.
