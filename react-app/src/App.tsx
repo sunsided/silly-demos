@@ -1,5 +1,6 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import CircleCollisionDemo from './demos/CircleCollisionDemo'
+import PointLineDemo from './demos/PointLineDemo'
 
 function App() {
   const location = useLocation()
@@ -24,6 +25,12 @@ function App() {
             >
               Circle Collision
             </Link>
+            <Link 
+              to="/point-line" 
+              className={`nav-link ${location.pathname === '/point-line' ? 'active' : ''}`}
+            >
+              Point-Line Test
+            </Link>
           </div>
         </div>
       </nav>
@@ -32,6 +39,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/circle-collision" element={<CircleCollisionDemo />} />
+          <Route path="/point-line" element={<PointLineDemo />} />
         </Routes>
       </main>
     </div>
@@ -56,6 +64,16 @@ function Home() {
               <span className="pill">Real-time</span>
               <span className="pill">Physics</span>
               <span className="pill">Interactive</span>
+            </div>
+          </Link>
+          
+          <Link to="/point-line" className="demo-card">
+            <h3>Point-Line Distance Test</h3>
+            <p>Interactive demonstration of point-to-line distance calculations and geometric relationships.</p>
+            <div className="demo-features">
+              <span className="pill">Geometry</span>
+              <span className="pill">Real-time</span>
+              <span className="pill">Visual</span>
             </div>
           </Link>
         </div>
