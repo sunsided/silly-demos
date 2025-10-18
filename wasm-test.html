@@ -31,7 +31,7 @@
 </style>
 
 <div id="wrap" class="grid-layout two-column">
-    <canvas id="canvas" class="modern-canvas" width="900" height="600"></canvas>
+    <canvas id="canvas" class="modern-canvas"></canvas>
     <div id="side" class="glass-panel">
         <h3 class="gradient-title">WASM circle collision</h3>
         <div class="stat-row">Intersect: <span id="inter" class="pill">false</span></div>
@@ -55,25 +55,57 @@
     const penEl = document.getElementById("pen");
 
     function setupCanvas() {
+        // Get the display size (CSS pixels)
+        const rect = canvas.getBoundingClientRect();
+        const displayWidth = rect.width;
+        const displayHeight = rect.height;
+        
+        // Ensure minimum valid dimensions
+        if (displayWidth <= 0 || displayHeight <= 0) return;
+        
+        // Get device pixel ratio for crisp rendering
         const dpr = window.devicePixelRatio || 1;
-        const cw = canvas.clientWidth, ch = canvas.clientHeight;
-        const bsW = Math.round(cw * dpr), bsH = Math.round(ch * dpr);
-        if (canvas.width !== bsW || canvas.height !== bsH) {
-            canvas.width = bsW;
-            canvas.height = bsH;
-        }
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        
+        // Set the internal buffer size
+        canvas.width = displayWidth * dpr;
+        canvas.height = displayHeight * dpr;
+        
+        // Scale the context and center the coordinate system
+        ctx.setTransform(dpr, 0, 0, dpr, canvas.width / 2, canvas.height / 2);
+        
+        // Store current dimensions for use in draw function
+        canvas._displayWidth = displayWidth;
+        canvas._displayHeight = displayHeight;
     }
 
-    setupCanvas();
-    window.addEventListener("resize", setupCanvas);
+    // Store initial circle positions relative to center
+    let initialA = {x: -140, y: 0, r: 90};
+    let initialB = {x: 140, y: 0, r: 110};
 
-    const A = {x: 280, y: 300, r: 90, offx: 0, offy: 0};
-    const B = {x: 560, y: 300, r: 110, offx: 0, offy: 0};
+    // Setup canvas initially
+    setupCanvas();
+    
+    // Handle window resize with immediate response
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        // Force immediate canvas setup
+        setupCanvas();
+        // Add a small delay to handle any layout settling
+        resizeTimeout = setTimeout(setupCanvas, 10);
+    });
+
+    // Initialize circles with centered positions
+    const A = {x: initialA.x, y: initialA.y, r: initialA.r, offx: 0, offy: 0};
+    const B = {x: initialB.x, y: initialB.y, r: initialB.r, offx: 0, offy: 0};
 
     const pt = (e) => {
-        const r = canvas.getBoundingClientRect();
-        return {x: e.clientX - r.left, y: e.clientY - r.top};
+        const rect = canvas.getBoundingClientRect();
+        // Convert screen coordinates to centered canvas coordinates
+        return {
+            x: (e.clientX - rect.left) - rect.width / 2, 
+            y: (e.clientY - rect.top) - rect.height / 2
+        };
     };
     const hit = (c, p) => {
         const dx = p.x - c.x, dy = p.y - c.y;
@@ -140,7 +172,10 @@
         distEl.textContent = res.distance.toFixed(2);
         penEl.textContent = res.penetration.toFixed(2);
 
-        ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+        // Clear the entire canvas using stored dimensions
+        const width = canvas._displayWidth || canvas.getBoundingClientRect().width;
+        const height = canvas._displayHeight || canvas.getBoundingClientRect().height;
+        ctx.clearRect(-width / 2, -height / 2, width, height);
         
         // Draw connecting line with glow
         ctx.beginPath();
