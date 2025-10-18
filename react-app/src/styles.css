@@ -52,7 +52,7 @@ html, body {
 /* Layout utilities */
 .grid-layout {
     display: grid;
-    height: 100vh;
+    height: 100%;
     min-height: 0; /* Allow grid items to shrink */
     padding: 16px;
     box-sizing: border-box;
@@ -307,7 +307,6 @@ html, body {
     .two-column {
         grid-template-columns: 1fr;
         grid-template-rows: 1fr auto;
-        max-height: 100vh;
     }
     
     .glass-panel {
@@ -319,7 +318,7 @@ html, body {
     .grid-layout {
         padding: 12px;
         gap: 16px;
-        height: 100vh;
+        height: 100%;
     }
 
     .nav-container {
