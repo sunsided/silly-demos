@@ -32,7 +32,8 @@ function PointLineDemo() {
     closest_x: 0,
     closest_y: 0,
     on_segment: false,
-    side: 0
+    side: 0,
+    ortho_distance: 0 // Distance to infinite line (orthogonal projection)
   })
 
   // State - using refs to avoid React re-rendering issues
@@ -206,12 +207,28 @@ function PointLineDemo() {
         point.x, point.y
       )
       
+      // Calculate orthogonal distance to infinite line
+      let ortho_distance = 0
+      const dx = line.end.x - line.start.x
+      const dy = line.end.y - line.start.y
+      const line_length_sq = dx * dx + dy * dy
+      
+      if (line_length_sq > 1e-6) {
+        const t = ((point.x - line.start.x) * dx + (point.y - line.start.y) * dy) / line_length_sq
+        const ortho_x = line.start.x + t * dx
+        const ortho_y = line.start.y + t * dy
+        const ortho_dx = point.x - ortho_x
+        const ortho_dy = point.y - ortho_y
+        ortho_distance = Math.sqrt(ortho_dx * ortho_dx + ortho_dy * ortho_dy)
+      }
+      
       setStats({
         distance: result.distance,
         closest_x: result.closest_x,
         closest_y: result.closest_y,
         on_segment: result.on_segment,
-        side: result.side
+        side: result.side,
+        ortho_distance: ortho_distance
       })
 
       // @ts-ignore - custom canvas properties
@@ -221,7 +238,7 @@ function PointLineDemo() {
       ctx.clearRect(-width / 2, -height / 2, width, height)
       
       // Draw infinite line (dashed, toned down)
-      const dashedColor = getCSSVar('--line-color').replace(/\/[^)]*\)/, '/ 0.3)')
+      const dashedColor = getCSSVar('--line-dashed')
       drawInfiniteLine(line, dashedColor, 1)
       
       // Draw main line segment with arrow
@@ -248,7 +265,7 @@ function PointLineDemo() {
       drawPoint({ x: result.closest_x, y: result.closest_y, offx: 0, offy: 0 }, 
                 closestColor, closestColor, 4)
       
-      // Draw distance line
+      // Draw distance line to closest point
       ctx.beginPath()
       ctx.moveTo(point.x, point.y)
       ctx.lineTo(result.closest_x, result.closest_y)
@@ -257,6 +274,39 @@ function PointLineDemo() {
       ctx.setLineDash([4, 4])
       ctx.stroke()
       ctx.setLineDash([])
+      
+      // If point is outside segment, also show orthogonal projection to infinite line
+      if (!result.on_segment) {
+        // Calculate orthogonal projection manually
+        const dx = line.end.x - line.start.x
+        const dy = line.end.y - line.start.y
+        const line_length_sq = dx * dx + dy * dy
+        
+        if (line_length_sq > 1e-6) {
+          const t = ((point.x - line.start.x) * dx + (point.y - line.start.y) * dy) / line_length_sq
+          const ortho_x = line.start.x + t * dx
+          const ortho_y = line.start.y + t * dy
+          
+          // Choose color based on which side of the line the point is on
+          const orthoColor = result.side > 0 ? getCSSVar('--ortho-right-side') : 
+                            result.side < 0 ? getCSSVar('--ortho-left-side') : 
+                            getCSSVar('--ortho-on-line')
+          
+          // Draw orthogonal projection point
+          drawPoint({ x: ortho_x, y: ortho_y, offx: 0, offy: 0 }, 
+                    orthoColor, orthoColor, 3)
+          
+          // Draw orthogonal line (perpendicular to infinite line) with matching color
+          ctx.beginPath()
+          ctx.moveTo(point.x, point.y)
+          ctx.lineTo(ortho_x, ortho_y)
+          ctx.lineWidth = 1
+          ctx.strokeStyle = orthoColor
+          ctx.setLineDash([2, 2])
+          ctx.stroke()
+          ctx.setLineDash([])
+        }
+      }
 
       animationRef.current = requestAnimationFrame(draw)
     }
@@ -393,6 +443,9 @@ function PointLineDemo() {
           Distance: <span className="pill">{stats.distance.toFixed(2)}</span>
         </div>
         <div className="stat-row">
+          Orthogonal distance: <span className="pill">{stats.ortho_distance.toFixed(2)}</span>
+        </div>
+        <div className="stat-row">
           Closest point: <span className="pill">({stats.closest_x.toFixed(1)}, {stats.closest_y.toFixed(1)})</span>
         </div>
         <div className="stat-row">
@@ -407,6 +460,13 @@ function PointLineDemo() {
           Drag the line endpoints (small circles) or the test point (large circle). 
           The dashed line shows the infinite extension of the line segment.
           Point color indicates which side of the line it's on.
+          <br/><br/>
+          <strong>Blue dot:</strong> Closest point on segment<br/>
+          <strong>Color-coded dot:</strong> Orthogonal projection (when outside segment)<br/>
+          • <span style={{color: 'rgb(102, 187, 106)'}}>Green</span> = right side<br/>
+          • <span style={{color: 'rgb(255, 152, 102)'}}>Orange</span> = left side<br/>
+          • <span style={{color: 'rgb(229, 115, 115)'}}>Red</span> = on line<br/>
+          Distance = actual distance to segment, Orthoginal distance = perpendicular distance to infinite line.
         </p>
       </div>
     </div>

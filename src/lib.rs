@@ -166,8 +166,8 @@ pub fn point_line_test(
     
     PointLineResult {
         distance,
-        closest_x,
-        closest_y,
+        closest_x: final_closest_x,
+        closest_y: final_closest_y,
         on_segment,
         side,
     }

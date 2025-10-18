@@ -37,6 +37,12 @@
     --line-color: rgba(230, 234, 240, 0.6);
     --line-glow: rgba(74, 158, 255, 0.4);
     --line-style: 4, 8; /* dash pattern: 4px dash, 8px gap */
+    --line-dashed: rgba(230, 234, 240, 0.3); /* Toned down for infinite line extensions */
+    
+    /* Orthogonal projection colors based on side */
+    --ortho-right-side: rgba(102, 187, 106, 0.8); /* Green for right side */
+    --ortho-left-side: rgba(255, 152, 102, 0.8); /* Orange for left side */
+    --ortho-on-line: rgba(229, 115, 115, 0.8); /* Red for exactly on line */
 }
 
 html, body {
