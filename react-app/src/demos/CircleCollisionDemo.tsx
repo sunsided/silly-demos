@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-
-// WASM module types
-interface WasmModule {
-  CollisionTests: typeof import('../pkg/silly_demos').CollisionTests
-  run: () => void
-}
+import init, * as silly_demos from 'silly_demos';
 
 interface Circle {
   x: number
@@ -16,7 +11,7 @@ interface Circle {
 
 function CircleCollisionDemo() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [wasm, setWasm] = useState<WasmModule | null>(null)
+  const [wasm, setWasm] = useState<typeof silly_demos | null>(null)
   const [stats, setStats] = useState({
     intersect: false,
     distance: 0,
@@ -34,27 +29,20 @@ function CircleCollisionDemo() {
 
   // Load WASM module
   useEffect(() => {
-    let mounted = true
-    
-    async function loadWasm() {
-      try {
-        // @ts-ignore - WASM module types
-        const wasmModule = await import('../pkg/silly_demos.js')
-        await wasmModule.default()
-        // Call run() like in the original HTML
-        await wasmModule.run()
-        
-        if (mounted) {
-          setWasm(wasmModule)
+    let cancel = false;
+    init()
+      .then(() => {
+        if (!cancel) {
+          setWasm(silly_demos);
         }
-      } catch (error) {
-        console.error('Failed to load WASM module:', error)
-      }
-    }
-
-    loadWasm()
-    return () => { mounted = false }
-  }, [])
+      })
+      .catch((error: unknown) => {
+        if (!cancel) {
+          console.error('Failed to load WASM module:', error);
+        }
+      });
+    return () => { cancel = true; };
+  }, []);
 
   // Canvas setup and animation
   useEffect(() => {
@@ -118,12 +106,12 @@ function CircleCollisionDemo() {
       if (!wasm || !ctx) return
       
       const { A, B } = circlesRef.current
-      const result = wasm.CollisionTests.circle_collision(A.x, A.y, A.r, B.x, B.y, B.r)
+      const result = wasm?.CollisionTests.circle_collision(A.x, A.y, A.r, B.x, B.y, B.r)
       
       setStats({
-        intersect: result.intersect,
-        distance: result.distance,
-        penetration: result.penetration
+        intersect: result?.intersect || false,
+        distance: result?.distance || 0,
+        penetration: result?.penetration || 0
       })
 
       // @ts-ignore - custom canvas properties
@@ -149,7 +137,7 @@ function CircleCollisionDemo() {
       ctx.setLineDash([])
 
       // Draw circles
-      if (result.intersect) {
+      if (result?.intersect) {
         drawCircle(A, '--circle-a-hit', '--circle-a-stroke-hit')
         drawCircle(B, '--circle-b-hit', '--circle-b-stroke-hit')
       } else {
