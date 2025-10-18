@@ -4,6 +4,7 @@ import init, * as silly_demos from 'silly_demos';
 interface BoidsStats {
   boidCount: number
   fps: number
+  visibleCount: number
 }
 
 // Each boid is [x, y, vx, vy]
@@ -56,14 +57,15 @@ function BoidsDemo() {
   const [wasm, setWasm] = useState<typeof silly_demos | null>(null)
   const [stats, setStats] = useState<BoidsStats>({
     boidCount: 0,
-    fps: 0
+    fps: 0,
+    visibleCount: 0
   })
   const [isRunning, setIsRunning] = useState(true)
 
   // Visualization toggles
-  const [showSeparation, setShowSeparation] = useState(true)
-  const [showAlignment, setShowAlignment] = useState(true)
-  const [showCohesion, setShowCohesion] = useState(true)
+  const [showSeparation, setShowSeparation] = useState(false)
+  const [showAlignment, setShowAlignment] = useState(false)
+  const [showCohesion, setShowCohesion] = useState(false)
 
   // Simulation state - using refs to avoid React re-rendering issues
   const boidsRef = useRef<Boid[]>([])
@@ -83,7 +85,9 @@ function BoidsDemo() {
     maxSpeed: 100,
     maxForce: 3.0,
     boundaryMargin: 50,
-    boundaryStrength: 2.0
+    boundaryStrength: 2.0,
+    minSpeed: 5.0,
+    jitter: 0.5
   })
 
   // Load WASM module
@@ -108,11 +112,18 @@ function BoidsDemo() {
     if (!wasm || !canvasRef.current) return
 
     const canvas = canvasRef.current
-    const width = canvas.width
-    const height = canvas.height
+    const dpr = window.devicePixelRatio || 1
+    // Set canvas size to match display size * dpr
+    const displayWidth = canvas.clientWidth || 800
+    const displayHeight = canvas.clientHeight || 600
+    canvas.width = Math.round(displayWidth * dpr)
+    canvas.height = Math.round(displayHeight * dpr)
+    // Set style size to match display size (CSS pixels)
+    canvas.style.width = displayWidth + 'px'
+    canvas.style.height = displayHeight + 'px'
 
     // Create boids as array of struct
-    const boids = createRandomBoids(config.boidCount, width, height, config.maxSpeed)
+    const boids = createRandomBoids(config.boidCount, displayWidth, displayHeight, config.maxSpeed)
     boidsRef.current = boids
     setStats(prev => ({ ...prev, boidCount: config.boidCount }))
   }, [wasm, config.boidCount])
@@ -128,9 +139,22 @@ function BoidsDemo() {
       }
 
       const canvas = canvasRef.current
+      const dpr = window.devicePixelRatio || 1
+      // Ensure canvas size is correct every frame (handles resize)
+      const displayWidth = canvas.clientWidth || 800
+      const displayHeight = canvas.clientHeight || 600
+      if (canvas.width !== Math.round(displayWidth * dpr) || canvas.height !== Math.round(displayHeight * dpr)) {
+        canvas.width = Math.round(displayWidth * dpr)
+        canvas.height = Math.round(displayHeight * dpr)
+        canvas.style.width = displayWidth + 'px'
+        canvas.style.height = displayHeight + 'px'
+      }
+      // Use displayWidth/Height for world and drawing
+      const width = displayWidth
+      const height = displayHeight
       const ctx = canvas.getContext('2d')!
-      const width = canvas.width
-      const height = canvas.height
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.scale(dpr, dpr)
 
       // Calculate delta time
       const dt = lastTimeRef.current === 0 ? 1/60 : (currentTime - lastTimeRef.current) / 1000
@@ -155,7 +179,9 @@ function BoidsDemo() {
           config.boundaryStrength,
           width,
           height,
-          clampedDt
+          clampedDt,
+          config.minSpeed, // new
+          config.jitter    // new
         )
         boidsRef.current = float32ArrayToBoids(new Float32Array(updatedFlat))
       }
@@ -172,8 +198,13 @@ function BoidsDemo() {
 
       // Draw boids
       const boids = boidsRef.current
+      let visibleCount = 0;
       for (let i = 0; i < boids.length; i++) {
         const { x, y, vx, vy } = boids[i]
+        // Only count boids that are within the visible canvas
+        if (x >= 0 && x <= width && y >= 0 && y <= height) {
+          visibleCount++;
+        }
         const angle = Math.atan2(vy, vx)
         const speed = Math.sqrt(vx * vx + vy * vy)
         const normalizedSpeed = Math.min(speed / config.maxSpeed, 1)
@@ -221,6 +252,8 @@ function BoidsDemo() {
         ctx.restore()
       }
 
+      setStats(prev => ({ ...prev, visibleCount }))
+
       // Update FPS
       fpsCounterRef.current.frames++
       if (currentTime - fpsCounterRef.current.lastTime >= 1000) {
@@ -257,7 +290,7 @@ function BoidsDemo() {
   const resetSimulation = () => {
     if (!wasm || !canvasRef.current) return
     const canvas = canvasRef.current
-    boidsRef.current = createRandomBoids(config.boidCount, canvas.width, canvas.height, config.maxSpeed * 0.5)
+    boidsRef.current = createRandomBoids(config.boidCount, canvas.clientWidth, canvas.clientHeight, config.maxSpeed * 0.5)
     setStats(prev => ({ ...prev, boidCount: config.boidCount }))
   }
 
@@ -291,6 +324,10 @@ function BoidsDemo() {
               <div className="stat-item">
                 <span className="stat-label">FPS:</span>
                 <span className="stat-value">{stats.fps}</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-label">Visible:</span>
+                <span className="stat-value">{stats.visibleCount}</span>
               </div>
             </div>
           </div>
@@ -329,21 +366,34 @@ function BoidsDemo() {
 
           <div className="control-section">
             <h4>Visualization</h4>
-            <div className="control-group">
-              <label>
+            <div className="control-group" style={{ display: 'flex', flexDirection: 'column', gap: '0.5em' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5em' }}>
                 <input type="checkbox" checked={showSeparation} onChange={e => setShowSeparation(e.target.checked)} />
                 Show Separation Radius
               </label>
-              <label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5em' }}>
                 <input type="checkbox" checked={showAlignment} onChange={e => setShowAlignment(e.target.checked)} />
                 Show Alignment Radius
               </label>
-              <label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5em' }}>
                 <input type="checkbox" checked={showCohesion} onChange={e => setShowCohesion(e.target.checked)} />
                 Show Cohesion Radius
               </label>
             </div>
           </div>
+          <style>{`
+            .control-group label {
+              display: flex;
+              align-items: center;
+              gap: 0.5em;
+              margin-bottom: 0.5em;
+            }
+            .control-group input[type="range"] {
+              display: block;
+              width: 100%;
+              margin-top: 0.25em;
+            }
+          `}</style>
 
           <div className="control-section">
             <h4>Flocking Behavior</h4>
@@ -469,6 +519,34 @@ function BoidsDemo() {
                   step="0.1"
                   value={config.boundaryStrength}
                   onChange={(e) => handleConfigChange('boundaryStrength', parseFloat(e.target.value))}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="control-section">
+            <h4>Stability</h4>
+            <div className="control-group">
+              <label>
+                Min Speed: {config.minSpeed.toFixed(2)}
+                <input
+                  type="range"
+                  min="0"
+                  max="20"
+                  step="0.1"
+                  value={config.minSpeed}
+                  onChange={e => handleConfigChange('minSpeed', parseFloat(e.target.value))}
+                />
+              </label>
+              <label>
+                Jitter: {config.jitter.toFixed(2)}
+                <input
+                  type="range"
+                  min="0"
+                  max="5"
+                  step="0.01"
+                  value={config.jitter}
+                  onChange={e => handleConfigChange('jitter', parseFloat(e.target.value))}
                 />
               </label>
             </div>

@@ -106,7 +106,9 @@ impl BoidsTests {
         boundary_strength: f32,
         world_width: f32,
         world_height: f32,
-        dt: f32
+        dt: f32,
+        min_speed: f32,
+        jitter: f32
     ) -> Vec<f32> {
         boids::update_boids_flat_impl(
             boids_data,
@@ -122,7 +124,9 @@ impl BoidsTests {
             boundary_strength,
             world_width,
             world_height,
-            dt
+            dt,
+            min_speed,
+            jitter
         )
     }
     

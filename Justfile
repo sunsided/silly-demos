@@ -36,24 +36,18 @@ react-preview:
 react-lint:
     cd react-app && yarn lint
 
-# Copy WASM package to React app
-react-copy-wasm:
-    cp -r pkg react-app/src/
-
-# Full React development setup (build WASM + copy + install + dev)
+# Full React development setup (build WASM + install + dev)
 react-full-dev:
     @just build
-    @just react-copy-wasm
     @just react-setup
     @just react-dev
 
-# Full React production setup (build WASM + copy + install + build)
+# Full React production setup (build WASM + install + build)
 react-full-build:
     @just build
-    @just react-copy-wasm
     @just react-setup
     @just react-build
 
 # Clean React build artifacts
 react-clean:
-    cd react-app && rm -rf dist node_modules yarn.lock src/pkg
+    cd react-app && rm -rf dist node_modules yarn.lock
