@@ -54,7 +54,7 @@ html, body {
     display: grid;
     height: 100%;
     min-height: 0; /* Allow grid items to shrink */
-    padding: 16px;
+    padding: 8px;
     box-sizing: border-box;
 }
 
@@ -212,7 +212,7 @@ html, body {
 .main-content {
     flex: 1;
     min-height: 0;
-    padding: 20px;
+    padding: 8px;
 }
 
 /* Home Page */
@@ -316,7 +316,7 @@ html, body {
     }
     
     .grid-layout {
-        padding: 12px;
+        padding: 6px;
         gap: 16px;
         height: 100%;
     }
@@ -333,7 +333,7 @@ html, body {
     }
     
     .main-content {
-        padding: 16px;
+        padding: 6px;
     }
     
     .home-container {
