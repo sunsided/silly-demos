@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 // TypeScript declarations for the WASM module
 declare module '../pkg/silly_demos.js' {
   export default function init(): Promise<void>
