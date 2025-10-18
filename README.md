@@ -1,69 +1,160 @@
 <div align="center">
 
-  <h1><code>wasm-pack-template</code></h1>
+  <h1><code>silly-demos</code></h1>
 
-  <strong>A template for kick starting a Rust and WebAssembly project using <a href="https://github.com/rustwasm/wasm-pack">wasm-pack</a>.</strong>
+<strong>Interactive physics and collision detection demos built with Rust WebAssembly and React</strong>
 
   <p>
-    <a href="https://travis-ci.org/rustwasm/wasm-pack-template"><img src="https://img.shields.io/travis/rustwasm/wasm-pack-template.svg?style=flat-square" alt="Build Status" /></a>
+    <img src="https://img.shields.io/badge/rust-1.70+-orange.svg?style=flat-square" alt="Rust Version" />
+    <img src="https://img.shields.io/badge/wasm--bindgen-0.2-blue.svg?style=flat-square" alt="wasm-bindgen" />
+    <img src="https://img.shields.io/badge/react-19.2-61dafb.svg?style=flat-square" alt="React" />
+    <img src="https://img.shields.io/badge/vite-7.1-646cff.svg?style=flat-square" alt="Vite" />
+    <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg?style=flat-square" alt="License" />
   </p>
 
-  <h3>
-    <a href="https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html">Tutorial</a>
-    <span> | </span>
-    <a href="https://discordapp.com/channels/442252698964721669/443151097398296587">Chat</a>
-  </h3>
-
-  <sub>Built with 🦀🕸 by <a href="https://rustwasm.github.io/">The Rust and WebAssembly Working Group</a></sub>
 </div>
 
 ## About
 
-[**📚 Read this template tutorial! 📚**][template-docs]
+This project demonstrates real-time physics simulations by combining the performance of Rust compiled to WebAssembly
+with a modern React frontend. The Rust core provides efficient collision detection algorithms, while the React/Vite
+frontend offers interactive visualizations and demos.
 
-This template is designed for compiling Rust libraries into WebAssembly and
-publishing the resulting package to NPM.
+### Features
 
-Be sure to check out [other `wasm-pack` tutorials online][tutorials] for other
-templates and usages of `wasm-pack`.
+- **Circle-Circle Collision Detection**: Fast collision detection with distance and penetration calculations
+- **Real-time Visualization**: Interactive demos built with React and HTML5 Canvas
+- **High Performance**: Rust WebAssembly core for computational heavy lifting
+- **Modern Frontend**: Vite-powered React application with TypeScript support
 
-[tutorials]: https://rustwasm.github.io/docs/wasm-pack/tutorials/index.html
-[template-docs]: https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html
-
-## 🚴 Usage
-
-### 🐑 Use `cargo generate` to Clone this Template
-
-[Learn more about `cargo generate` here.](https://github.com/ashleygwilliams/cargo-generate)
+## Project Structure
 
 ```
-cargo generate --git https://github.com/rustwasm/wasm-pack-template.git --name my-project
-cd my-project
+silly-demos/
+├── src/                    # Rust WebAssembly core
+│   ├── lib.rs             # Main library with collision detection
+│   └── utils.rs           # Utility functions
+├── pkg/                   # Generated WebAssembly package
+├── react-app/             # React frontend application
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   ├── demos/         # Interactive demos
+│   │   └── pkg/          # Copied WASM package
+│   └── vite.config.ts    # Vite configuration
+├── Cargo.toml            # Rust dependencies
+└── package.json          # NPM package metadata
 ```
 
-### 🛠️ Build with `wasm-pack build`
+## Getting Started
 
+### Prerequisites
+
+- [Rust](https://rustup.rs/) (1.70 or later)
+- [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
+- [Node.js](https://nodejs.org/) (18 or later)
+- [just](https://github.com/casey/just) command runner
+
+### Quick Start
+
+For a full development setup (builds WASM, sets up React app, and starts dev server):
+
+```bash
+just react-full-dev
 ```
-wasm-pack build
+
+### Building the Rust/WASM Core
+
+```bash
+# Build the WebAssembly package
+just build
+
+# Or build with optimizations for production
+just build --release
 ```
 
-### 🔬 Test in Headless Browsers with `wasm-pack test`
+### Running the React Frontend
 
+```bash
+# Setup React dependencies (first time only)
+just react-setup
+
+# Copy WASM package to React app
+just react-copy-wasm
+
+# Start the development server
+just react-dev
 ```
-wasm-pack test --headless --firefox
+
+The application will be available at `http://localhost:5173`.
+
+### Building for Production
+
+```bash
+# Full production build (WASM + React)
+just react-full-build
 ```
 
-### 🎁 Publish to NPM with `wasm-pack publish`
+## Available Demos
 
+- **Circle Collision Demo**: Interactive visualization of circle-circle collision detection with real-time physics
+
+## Technology Stack
+
+### Rust WebAssembly Core
+
+- **wasm-bindgen**: Seamless interop between Rust and JavaScript
+- **console_error_panic_hook**: Enhanced error logging for development
+- **wee_alloc**: Memory-efficient allocator optimized for WebAssembly
+
+### React Frontend
+
+- **Vite**: Fast build tool and development server
+- **TypeScript**: Type-safe JavaScript development
+- **React Router**: Client-side routing for multi-page demos
+- **HTML5 Canvas**: High-performance 2D graphics rendering
+
+## Development
+
+### Testing
+
+```bash
+# Test the Rust core
+cargo test
+
+# Test WebAssembly bindings in headless browsers
+just test
+
+# Lint the React frontend
+just react-lint
 ```
-wasm-pack publish
-```
 
-## 🔋 Batteries Included
+### Hot Reloading
 
-* [`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen) for communicating
-  between WebAssembly and JavaScript.
-* [`console_error_panic_hook`](https://github.com/rustwasm/console_error_panic_hook)
-  for logging panic messages to the developer console.
-* [`wee_alloc`](https://github.com/rustwasm/wee_alloc), an allocator optimized
-  for small code size.
+The development setup supports hot reloading for both Rust and React code:
+
+1. Run `just react-full-dev` for the complete development setup
+2. Changes to React code will hot reload automatically
+3. Changes to Rust code require rebuilding with `just build` and copying with `just react-copy-wasm`
+
+### Available Just Commands
+
+Run `just` to see all available commands:
+
+- `just build` - Build WASM package
+- `just test` - Run WASM tests
+- `just react-setup` - Install React dependencies
+- `just react-dev` - Start React development server
+- `just react-build` - Build React for production
+- `just react-copy-wasm` - Copy WASM package to React app
+- `just react-full-dev` - Complete development setup
+- `just react-full-build` - Complete production build
+- `just react-clean` - Clean React build artifacts
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE_APACHE](LICENSE_APACHE))
+- MIT License ([LICENSE_MIT](LICENSE_MIT))
+
+at your option.
