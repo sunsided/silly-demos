@@ -94,6 +94,24 @@ The application will be available at `http://localhost:5173`.
 just react-full-build
 ```
 
+### GitHub Pages Deployment
+
+The project is configured for automatic deployment to GitHub Pages:
+
+```bash
+# Build for GitHub Pages (includes WASM compilation and React build)
+./build-github-pages.sh
+
+# Test the GitHub Pages build locally
+cd react-app && npm run preview:github-pages
+```
+
+The application will be available at: `https://your-username.github.io/silly-demos/`
+
+**Automatic Deployment**: Push to the main branch triggers automatic build and deployment via GitHub Actions.
+
+For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
+
 ## Available Demos
 
 - **Circle Collision Demo**: Interactive visualization of circle-circle collision detection with real-time physics
