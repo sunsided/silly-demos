@@ -1,7 +1,9 @@
 [package]
 name = "silly-demos"
 version = "0.1.0"
+description = "Miscellaneous code demos with a web UI"
 authors = ["Markus Mayer <widemeadows@gmail.com>"]
+repository = "https://github.com/sunsided/silly-demos"
 edition = "2024"
 
 [lib]
