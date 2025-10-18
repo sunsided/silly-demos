@@ -118,6 +118,8 @@ The application will be available at: `https://your-username.github.io/[reposito
 
 **Automatic Deployment**: Push to the main branch triggers automatic build and deployment via GitHub Actions, with the base path automatically configured to match the repository name.
 
+**Client-Side Routing**: The app uses a 404.html redirect solution to handle direct navigation to React Router routes on GitHub Pages, ensuring URLs like `/circle-collision` work correctly when accessed directly.
+
 For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
 
 ## Available Demos

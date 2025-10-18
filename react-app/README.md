@@ -65,6 +65,15 @@ You can also use environment files:
 - `.env.production` - Production-specific environment variables
 - `.env.local` - Local overrides (not committed to git)
 
+### GitHub Pages Routing
+
+The app includes a solution for client-side routing on GitHub Pages:
+
+- `public/404.html` - Redirects unknown routes to the main app
+- Script in `index.html` - Handles the redirected URLs and restores the correct route
+
+This ensures that direct navigation to routes like `/circle-collision` works correctly on GitHub Pages, not just when navigating from within the app.
+
 ## Project Structure
 
 ```
