@@ -7,36 +7,54 @@ interface BoidsStats {
   visibleCount: number
 }
 
-// Each boid is [x, y, vx, vy]
+// Each boid is [x, y, vx, vy, flags]
 interface Boid {
   x: number;
   y: number;
   vx: number;
   vy: number;
+  flags: number;
 }
 
+const BOID_STRIDE = 5;
+
 function boidsToFloat32Array(boids: Boid[]): Float32Array {
-  const arr = new Float32Array(boids.length * 4);
+  const arr = new Float32Array(boids.length * BOID_STRIDE);
   for (let i = 0; i < boids.length; i++) {
-    arr[i * 4] = boids[i].x;
-    arr[i * 4 + 1] = boids[i].y;
-    arr[i * 4 + 2] = boids[i].vx;
-    arr[i * 4 + 3] = boids[i].vy;
+    arr[i * BOID_STRIDE] = boids[i].x;
+    arr[i * BOID_STRIDE + 1] = boids[i].y;
+    arr[i * BOID_STRIDE + 2] = boids[i].vx;
+    arr[i * BOID_STRIDE + 3] = boids[i].vy;
+    arr[i * BOID_STRIDE + 4] = boids[i].flags;
   }
   return arr;
 }
 
 function float32ArrayToBoids(arr: Float32Array): Boid[] {
   const boids: Boid[] = [];
-  for (let i = 0; i < arr.length; i += 4) {
+  for (let i = 0; i < arr.length; i += BOID_STRIDE) {
     boids.push({
       x: arr[i],
       y: arr[i + 1],
       vx: arr[i + 2],
       vy: arr[i + 3],
+      flags: arr[i + 4],
     });
   }
   return boids;
+}
+
+function getBoidsInputArray(boids: Float32Array): Float32Array {
+  if (boids.length % BOID_STRIDE !== 0) return boids;
+  const n = boids.length / BOID_STRIDE;
+  const arr = new Float32Array(n * 4);
+  for (let i = 0; i < n; ++i) {
+    arr[i * 4 + 0] = boids[i * BOID_STRIDE + 0];
+    arr[i * 4 + 1] = boids[i * BOID_STRIDE + 1];
+    arr[i * 4 + 2] = boids[i * BOID_STRIDE + 2];
+    arr[i * 4 + 3] = boids[i * BOID_STRIDE + 3];
+  }
+  return arr;
 }
 
 function createRandomBoids(count: number, width: number, height: number, maxSpeed: number): Boid[] {
@@ -47,6 +65,7 @@ function createRandomBoids(count: number, width: number, height: number, maxSpee
       y: Math.random() * height,
       vx: (Math.random() - 0.5) * maxSpeed,
       vy: (Math.random() - 0.5) * maxSpeed,
+      flags: 0,
     });
   }
   return boids;
@@ -75,14 +94,14 @@ function BoidsDemo() {
 
   // Configuration
   const [config, setConfig] = useState({
-    boidCount: 150,
+    boidCount: 300,
     separationRadius: 25,
     alignmentRadius: 50,
     cohesionRadius: 50,
     separationStrength: 1.5,
     alignmentStrength: 1.0,
     cohesionStrength: 1.0,
-    maxSpeed: 100,
+    maxSpeed: 60,
     maxForce: 3.0,
     boundaryMargin: 50,
     boundaryStrength: 2.0,
@@ -153,42 +172,50 @@ function BoidsDemo() {
       const width = displayWidth
       const height = displayHeight
       const ctx = canvas.getContext('2d')!
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
-      ctx.scale(dpr, dpr)
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
       // Calculate delta time
       const dt = lastTimeRef.current === 0 ? 1/60 : (currentTime - lastTimeRef.current) / 1000
       lastTimeRef.current = currentTime
       const clampedDt = Math.min(dt, 1/30)
 
+      // Clamp config values to safe ranges before passing to WASM
+      const safeConfig = {
+        ...config,
+        maxForce: Math.max(0.1, Math.min(config.maxForce, 10)),
+        jitter: Math.max(0, Math.min(config.jitter, 5)),
+        minSpeed: Math.max(0, Math.min(config.minSpeed, 20)),
+        boidCount: Math.max(10, Math.min(config.boidCount, 600)),
+      };
+
       // Update boids simulation
       if (boidsRef.current.length > 0) {
         // Convert to flat array for WASM
         const flat = boidsToFloat32Array(boidsRef.current)
         const updatedFlat = wasm.BoidsTests.update_boids_flat(
-          flat,
-          config.separationRadius,
-          config.alignmentRadius,
-          config.cohesionRadius,
-          config.separationStrength,
-          config.alignmentStrength,
-          config.cohesionStrength,
-          config.maxSpeed,
-          config.maxForce,
-          config.boundaryMargin,
-          config.boundaryStrength,
+          getBoidsInputArray(flat),
+          safeConfig.separationRadius,
+          safeConfig.alignmentRadius,
+          safeConfig.cohesionRadius,
+          safeConfig.separationStrength,
+          safeConfig.alignmentStrength,
+          safeConfig.cohesionStrength,
+          safeConfig.maxSpeed,
+          safeConfig.maxForce,
+          safeConfig.boundaryMargin,
+          safeConfig.boundaryStrength,
           width,
           height,
           clampedDt,
-          config.minSpeed, // new
-          config.jitter    // new
+          safeConfig.minSpeed,
+          safeConfig.jitter
         )
         boidsRef.current = float32ArrayToBoids(new Float32Array(updatedFlat))
       }
 
-      // Clear canvas with slight trail effect
+      // Clear canvas with faster trail fade effect
       ctx.fillStyle = 'rgba(10, 10, 20, 0.1)'
-      ctx.fillRect(0, 0, width, height)
+      ctx.fillRect(0, 0, width, height);
 
       // Draw boundary visualization
       ctx.strokeStyle = 'rgba(100, 100, 150, 0.3)'
@@ -199,8 +226,8 @@ function BoidsDemo() {
       // Draw boids
       const boids = boidsRef.current
       let visibleCount = 0;
-      for (let i = 0; i < boids.length; i++) {
-        const { x, y, vx, vy } = boids[i]
+      for (let i = 0; i < boids.length; ++i) {
+        const { x, y, vx, vy, flags } = boids[i];
         // Only count boids that are within the visible canvas
         if (x >= 0 && x <= width && y >= 0 && y <= height) {
           visibleCount++;
@@ -209,35 +236,35 @@ function BoidsDemo() {
         const speed = Math.sqrt(vx * vx + vy * vy)
         const normalizedSpeed = Math.min(speed / config.maxSpeed, 1)
         const hue = 180 + normalizedSpeed * 120
+        const inMargin = (flags & 0x1) !== 0;
         ctx.save()
         ctx.translate(x, y)
         ctx.rotate(angle)
         // Visualize radii (separation, alignment, cohesion)
         ctx.save()
-        ctx.setTransform(1, 0, 0, 1, 0, 0) // Reset transform for circles
         ctx.globalAlpha = 0.08
         if (showCohesion) {
           ctx.beginPath()
-          ctx.arc(x, y, config.cohesionRadius, 0, Math.PI * 2)
+          ctx.arc(0, 0, config.cohesionRadius, 0, Math.PI * 2)
           ctx.fillStyle = '#00bcd4' // Cyan for cohesion
           ctx.fill()
         }
         if (showAlignment) {
           ctx.beginPath()
-          ctx.arc(x, y, config.alignmentRadius, 0, Math.PI * 2)
+          ctx.arc(0, 0, config.alignmentRadius, 0, Math.PI * 2)
           ctx.fillStyle = '#8bc34a' // Light green for alignment
           ctx.fill()
         }
         if (showSeparation) {
           ctx.beginPath()
-          ctx.arc(x, y, config.separationRadius, 0, Math.PI * 2)
+          ctx.arc(0, 0, config.separationRadius, 0, Math.PI * 2)
           ctx.fillStyle = '#ff9800' // Orange for separation
           ctx.fill()
         }
         ctx.globalAlpha = 1
         ctx.restore()
         // Draw boid as small triangle/arrow
-        ctx.fillStyle = `hsl(${hue}, 70%, 60%)`
+        ctx.fillStyle = inMargin ? 'red' : `hsl(${hue}, 70%, 60%)`
         ctx.beginPath()
         ctx.moveTo(6, 0)
         ctx.lineTo(-3, -2)
@@ -245,7 +272,7 @@ function BoidsDemo() {
         ctx.lineTo(-3, 2)
         ctx.closePath()
         ctx.fill()
-        ctx.fillStyle = `hsl(${hue}, 50%, 80%)`
+        ctx.fillStyle = inMargin ? 'red' : `hsl(${hue}, 50%, 80%)`
         ctx.beginPath()
         ctx.arc(-1, 0, 1.5, 0, Math.PI * 2)
         ctx.fill()
@@ -356,7 +383,7 @@ function BoidsDemo() {
                 <input
                   type="range"
                   min="10"
-                  max="300"
+                  max="600"
                   value={config.boidCount}
                   onChange={(e) => handleConfigChange('boidCount', parseInt(e.target.value))}
                 />
