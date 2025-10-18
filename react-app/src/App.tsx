@@ -9,7 +9,7 @@ function App() {
       <nav className="navigation">
         <div className="nav-container">
           <h1 className="nav-title">
-            <span className="gradient-title">WASM Silly Demos</span>
+            <span className="gradient-title">Silly Demos with WASM</span>
           </h1>
           <div className="nav-links">
             <Link 
