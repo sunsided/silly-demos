@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:local": "tsc && vite build --base ./",
     "preview": "vite preview",
+    "preview:local": "vite preview --base ./",
     "lint": "tsc --noEmit"
   },
   "license": "MIT",
@@ -15,6 +17,7 @@
     "react-router-dom": "^7.9.4"
   },
   "devDependencies": {
+    "@types/node": "^24.8.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.0.4",

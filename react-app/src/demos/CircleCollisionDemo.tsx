@@ -37,7 +37,6 @@ function CircleCollisionDemo() {
 
   const draggingRef = useRef<Circle | null>(null)
   const animationRef = useRef<number>(0)
-  const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
 
   // Load WASM module
   useEffect(() => {

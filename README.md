@@ -94,6 +94,34 @@ The application will be available at `http://localhost:5173`.
 just react-full-build
 ```
 
+### GitHub Pages Deployment
+
+The project is configured for automatic deployment to GitHub Pages with configurable base paths:
+
+```bash
+# Build for GitHub Pages (includes WASM compilation and React build)
+./build-github-pages.sh
+
+# Test the GitHub Pages build locally
+cd react-app && npm run preview:github-pages
+```
+
+**Configuration**: The base path is automatically set to the repository name in CI. For manual builds, set the `VITE_BASE_PATH` environment variable:
+
+```bash
+# Custom base path
+export VITE_BASE_PATH=/my-custom-path
+./build-github-pages.sh
+```
+
+The application will be available at: `https://your-username.github.io/[repository-name]/`
+
+**Automatic Deployment**: Push to the main branch triggers automatic build and deployment via GitHub Actions, with the base path automatically configured to match the repository name.
+
+**Client-Side Routing**: The app uses a 404.html redirect solution to handle direct navigation to React Router routes on GitHub Pages, ensuring URLs like `/circle-collision` work correctly when accessed directly.
+
+For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
+
 ## Available Demos
 
 - **Circle Collision Demo**: Interactive visualization of circle-circle collision detection with real-time physics
