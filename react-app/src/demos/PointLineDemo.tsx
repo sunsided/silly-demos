@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 // WASM module types
 interface WasmModule {
-  point_line_test: (line_x1: number, line_y1: number, line_x2: number, line_y2: number, point_x: number, point_y: number) => {
-    distance: number
-    closest_x: number
-    closest_y: number
-    on_segment: boolean
-    side: number
-  }
+  GeometryTests: typeof import('../pkg/silly_demos').GeometryTests
   run: () => void
 }
 
@@ -201,7 +195,7 @@ function PointLineDemo() {
       const line = lineRef.current
       const point = pointRef.current
       
-      const result = wasm.point_line_test(
+      const result = wasm.GeometryTests.point_line_test(
         line.start.x, line.start.y,
         line.end.x, line.end.y,
         point.x, point.y

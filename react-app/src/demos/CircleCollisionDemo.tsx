@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 // WASM module types
 interface WasmModule {
-  circle_collision: (x1: number, y1: number, r1: number, x2: number, y2: number, r2: number) => {
-    intersect: boolean
-    distance: number
-    penetration: number
-    dx: number
-    dy: number
-  }
+  CollisionTests: typeof import('../pkg/silly_demos').CollisionTests
   run: () => void
 }
 
@@ -124,7 +118,7 @@ function CircleCollisionDemo() {
       if (!wasm || !ctx) return
       
       const { A, B } = circlesRef.current
-      const result = wasm.circle_collision(A.x, A.y, A.r, B.x, B.y, B.r)
+      const result = wasm.CollisionTests.circle_collision(A.x, A.y, A.r, B.x, B.y, B.r)
       
       setStats({
         intersect: result.intersect,

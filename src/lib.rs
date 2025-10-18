@@ -1,4 +1,6 @@
 mod utils;
+mod collision;
+mod geometry;
 
 use crate::utils::set_panic_hook;
 use wasm_bindgen::prelude::*;
@@ -11,8 +13,21 @@ pub fn run() -> Result<(), JsValue> {
     Ok(())
 }
 
+/// Namespace for collision detection tests
+/// This empty struct serves as a namespace for collision-related functions
+/// when exported to WASM, allowing for better organization and avoiding
+/// global namespace pollution in JavaScript/TypeScript
 #[wasm_bindgen]
-pub struct CollisionResult {
+pub struct CollisionTests;
+
+/// Namespace for geometry tests  
+/// This empty struct serves as a namespace for geometry-related functions
+/// when exported to WASM, providing clear module separation
+#[wasm_bindgen]
+pub struct GeometryTests;
+
+#[wasm_bindgen]
+pub struct CircleCollisionResult {
     intersect: bool,
     distance: f32,
     dx: f32,
@@ -21,7 +36,7 @@ pub struct CollisionResult {
 }
 
 #[wasm_bindgen]
-impl CollisionResult {
+impl CircleCollisionResult {
     #[wasm_bindgen(getter)]
     pub fn intersect(&self) -> bool {
         self.intersect
@@ -51,24 +66,10 @@ impl CollisionResult {
 /// Circle–circle collision with distance and penetration.
 /// Inputs and outputs are all f32 to keep the boundary cheap.
 #[wasm_bindgen]
-pub fn circle_collision(x1: f32, y1: f32, r1: f32, x2: f32, y2: f32, r2: f32) -> CollisionResult {
-    let dx = x2 - x1;
-    let dy = y2 - y1;
-    let d2 = dx * dx + dy * dy;
-
-    // Avoid sqrt(0) + division noise; treat coincident centers as zero distance.
-    let distance = if d2 > 0.0 { d2.sqrt() } else { 0.0 };
-
-    let sum = r1 + r2;
-    let intersect = distance <= sum;
-    let penetration = if intersect { sum - distance } else { 0.0 };
-
-    CollisionResult {
-        intersect,
-        distance,
-        dx,
-        dy,
-        penetration,
+impl CollisionTests {
+    #[wasm_bindgen]
+    pub fn circle_collision(x1: f32, y1: f32, r1: f32, x2: f32, y2: f32, r2: f32) -> CircleCollisionResult {
+        collision::circle_collision_impl(x1, y1, r1, x2, y2, r2)
     }
 }
 
@@ -114,61 +115,13 @@ impl PointLineResult {
 /// line_x2, line_y2: end point of line segment  
 /// point_x, point_y: the point to test
 #[wasm_bindgen]
-pub fn point_line_test(
-    line_x1: f32, line_y1: f32, 
-    line_x2: f32, line_y2: f32,
-    point_x: f32, point_y: f32
-) -> PointLineResult {
-    let dx = line_x2 - line_x1;
-    let dy = line_y2 - line_y1;
-    
-    // Handle degenerate case where line segment is a point
-    let line_length_sq = dx * dx + dy * dy;
-    if line_length_sq < 1e-6 {
-        let dist_x = point_x - line_x1;
-        let dist_y = point_y - line_y1;
-        return PointLineResult {
-            distance: (dist_x * dist_x + dist_y * dist_y).sqrt(),
-            closest_x: line_x1,
-            closest_y: line_y1,
-            on_segment: true,
-            side: 0.0,
-        };
-    }
-    
-    // Calculate parametric position along line
-    let t = ((point_x - line_x1) * dx + (point_y - line_y1) * dy) / line_length_sq;
-    
-    // Find closest point on infinite line
-    let closest_x = line_x1 + t * dx;
-    let closest_y = line_y1 + t * dy;
-    
-    // Check if closest point is on the line segment
-    let on_segment = t >= 0.0 && t <= 1.0;
-    
-    // Calculate actual closest point (clamped to segment if needed)
-    let (final_closest_x, final_closest_y) = if on_segment {
-        (closest_x, closest_y)
-    } else if t < 0.0 {
-        (line_x1, line_y1)
-    } else {
-        (line_x2, line_y2)
-    };
-    
-    // Calculate distance
-    let dist_x = point_x - final_closest_x;
-    let dist_y = point_y - final_closest_y;
-    let distance = (dist_x * dist_x + dist_y * dist_y).sqrt();
-    
-    // Calculate which side of the line the point is on
-    // Cross product gives us the signed area (positive = right side)
-    let side = dx * (point_y - line_y1) - dy * (point_x - line_x1);
-    
-    PointLineResult {
-        distance,
-        closest_x: final_closest_x,
-        closest_y: final_closest_y,
-        on_segment,
-        side,
+impl GeometryTests {
+    #[wasm_bindgen]
+    pub fn point_line_test(
+        line_x1: f32, line_y1: f32, 
+        line_x2: f32, line_y2: f32,
+        point_x: f32, point_y: f32
+    ) -> PointLineResult {
+        geometry::point_line_test_impl(line_x1, line_y1, line_x2, line_y2, point_x, point_y)
     }
 }
