@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# Development helper script for WASM Silly Demos React App
+# Development helper script for Silly Demos with WASM React App
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "🦀 WASM Silly Demos Development Helper"
-echo "======================================"
+echo "🦀 Silly Demos with WASM Development Helper"
+echo "==========================================="
 
 case "${1:-help}" in
   "setup")

@@ -1,4 +1,4 @@
-# WASM Silly Demos - React App
+# Silly Demos with WASM - React App
 
 A React application showcasing WebAssembly (WASM) demos built with Rust. Currently features an interactive circle collision detection demo.
 

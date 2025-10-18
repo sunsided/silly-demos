@@ -42,7 +42,7 @@ function Home() {
   return (
     <div className="home-container">
       <div className="glass-panel home-panel">
-        <h2 className="gradient-title">Welcome to WASM Silly Demos</h2>
+        <h2 className="gradient-title">Welcome to Silly Demos with WASM</h2>
         <p className="description-text">
           This is a collection of interactive demos showcasing WebAssembly (WASM) capabilities 
           built with Rust and compiled to run in the browser.
