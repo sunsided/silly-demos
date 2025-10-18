@@ -25,9 +25,13 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 ### Features
 
 - **Circle-Circle Collision Detection**: Fast collision detection with distance and penetration calculations
+- **Point-Line Distance Demo**: Visualizes the shortest distance from a point to a line segment
+- **Boids Simulation**: Interactive flocking simulation based on classic boids algorithm
 - **Real-time Visualization**: Interactive demos built with React and HTML5 Canvas
 - **High Performance**: Rust WebAssembly core for computational heavy lifting
 - **Modern Frontend**: Vite-powered React application with TypeScript support
+- **Seamless Rust-JS Interop**: Uses wasm-bindgen for efficient communication between Rust and JavaScript
+- **SPA Routing**: Supports client-side routing for multi-page demos on GitHub Pages
 
 ## Project Structure
 
@@ -96,17 +100,25 @@ The application will be available at `http://localhost:5173`.
 just react-full-build
 ```
 
-### GitHub Pages Deployment
+## Current Status
 
-The project is configured for automatic deployment to GitHub Pages with configurable base paths:
+- **Automated Deployment**: Every push to `main` triggers a GitHub Actions workflow that builds the Rust WASM core, installs frontend dependencies, builds the React app with the correct base path, and deploys to GitHub Pages. No manual steps are required for deployment.
+- **Base Path Handling**: The React app's base path is set automatically in CI to match the repository name, ensuring assets and routing work correctly on GitHub Pages.
+- **Client-Side Routing**: SPA routing is supported on GitHub Pages using a `404.html` redirect solution in `react-app/public/404.html`.
+- **Project Structure**: The workspace is organized with a Rust core (`src/`), a React frontend (`react-app/`), and the generated WASM package (`pkg/`).
+- **Development & Build**: Use the provided `just` commands and scripts for local development, building, and testing. The workflow and scripts are up-to-date and stable.
+- **Actively Maintained**: The project is maintained and the deployment pipeline is stable and reproducible.
 
-```bash
-# Build for GitHub Pages (includes WASM compilation and React build)
-./build-github-pages.sh
+## GitHub Pages Deployment
 
-# Test the GitHub Pages build locally
-cd react-app && npm run preview:github-pages
-```
+The project uses GitHub Actions for fully automated deployment:
+
+- On every push to `main`, the workflow builds the Rust WASM, installs frontend dependencies, builds the React app with the correct base path, and deploys to GitHub Pages.
+- The base path (`VITE_BASE_PATH`) is set automatically in CI to `/${{ github.event.repository.name }}`.
+- For local builds, you can set `VITE_BASE_PATH` manually if needed.
+- SPA routing is handled by `react-app/public/404.html` for compatibility with GitHub Pages.
+
+See `.github/workflows/deploy.yml` for details.
 
 **Configuration**: The base path is automatically set to the repository name in CI. For manual builds, set the `VITE_BASE_PATH` environment variable:
 
