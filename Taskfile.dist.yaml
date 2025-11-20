@@ -1,0 +1,109 @@
+version: "3"
+
+tasks:
+
+  default:
+    cmds:
+      - task --list
+
+  rust:build:
+    desc: Build WASM
+    vars:
+      ARGS: ""
+    cmds:
+      - wasm-pack build --target=web {{.ARGS}}
+
+  rust:test:
+    desc: Run WASM tests
+    aliases:
+      - test
+    vars:
+      ARGS: ""
+    cmds:
+      - wasm-pack test --headless --firefox {{.ARGS}}
+
+  serve:
+    desc: Serve current directory on a given port
+    vars:
+      PORT: "{{.PORT}}"
+    cmds:
+      - python3 -m http.server {{.PORT}}
+
+  yarn:setup:
+    desc: Setup React dependencies
+    aliases:
+      - yarn:install
+    dir: react-app
+    cmds:
+      - yarn install
+
+  dev:
+    desc: Start React dev server
+    aliases:
+      - yarn:dev
+    dir: react-app
+    cmds:
+      - yarn dev
+
+  yarn:build:
+    desc: Build React app
+    aliases:
+      - react:build
+    dir: react-app
+    cmds:
+      - yarn build
+
+  yarn:preview:
+    desc: Preview React production build
+    aliases:
+      - react:preview
+    dir: react-app
+    cmds:
+      - yarn preview
+
+  yarn:lint:
+    desc: Run React TypeScript checks
+    aliases:
+      - react:lint
+    dir: react-app
+    cmds:
+      - yarn lint
+
+  yarn:build:dev:
+    desc: Build WASM + setup + dev
+    aliases:
+      - react-build-dev
+    deps:
+      - build
+      - yarn:setup
+    cmds:
+      - task: yarn:dev
+
+  build:
+    desc: Build WASM + setup + prod build
+    aliases:
+      - react:build:full
+      - build:react
+      - build:react-full
+      - react-full-build
+    deps:
+      - rust:build
+      - yarn:setup
+    cmds:
+      - task: yarn:build
+
+  build:dev:
+    desc: Build WASM + setup + prod build
+    deps:
+      - build
+    cmds:
+      - task: yarn:dev
+
+  yarn:clean:
+    desc: Clean React build artifacts
+    aliases:
+      - clean:react
+      - react:clean
+    dir: react-app
+    cmds:
+      - rm -rf dist node_modules yarn.lock
