@@ -42,7 +42,7 @@ jobs:
         run: wasm-pack build --target web
 
       - name: Install dependencies
-        run: cd react-app && npm ci
+        run: cd react-app && yarn install --frozen-lockfile
 
       - name: Build React app
         env:
