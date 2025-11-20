@@ -56,7 +56,9 @@ html, body {
     font-weight: 400;
     font-feature-settings: 'liga' 1, 'calt' 1;
     font-variant-ligatures: normal;
-    overflow: hidden; /* Prevent scrollbars */
+    /* Allow vertical scrolling for long pages while preventing horizontal scrollbars */
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 /* Layout utilities */
@@ -566,5 +568,3 @@ code, pre {
     gap: 12px;
     margin-bottom: 16px;
 }
-
-.control-group {
