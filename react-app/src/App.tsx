@@ -2,6 +2,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import CircleCollisionDemo from './demos/CircleCollisionDemo'
 import PointLineDemo from './demos/PointLineDemo'
 import BoidsDemo from './demos/BoidsDemo'
+import VoronoiDemo from './demos/VoronoiDemo'
 
 function App() {
   const location = useLocation()
@@ -38,6 +39,12 @@ function App() {
             >
               Boids Simulation
             </Link>
+            <Link 
+              to="/voronoi" 
+              className={`nav-link ${location.pathname === '/voronoi' ? 'active' : ''}`}
+            >
+              Voronoi / Delaunay
+            </Link>
           </div>
         </div>
       </nav>
@@ -48,6 +55,7 @@ function App() {
           <Route path="/circle-collision" element={<CircleCollisionDemo />} />
           <Route path="/point-line" element={<PointLineDemo />} />
           <Route path="/boids" element={<BoidsDemo />} />
+          <Route path="/voronoi" element={<VoronoiDemo />} />
         </Routes>
       </main>
     </div>
@@ -92,6 +100,16 @@ function Home() {
               <span className="pill">AI</span>
               <span className="pill">Simulation</span>
               <span className="pill">Interactive</span>
+            </div>
+          </Link>
+
+          <Link to="/voronoi" className="demo-card">
+            <h3>Voronoi / Delaunay</h3>
+            <p>Compute and visualize Delaunay triangulation and Voronoi diagram in real-time with Rust + WASM.</p>
+            <div className="demo-features">
+              <span className="pill">Geometry</span>
+              <span className="pill">Triangulation</span>
+              <span className="pill">Voronoi</span>
             </div>
           </Link>
         </div>

@@ -1,6 +1,6 @@
-use crate::vec2::Vec2;
+#![allow(dead_code, unused_variables)]
 
-// Simple internal structures - not exported to WASM
+use crate::vec2::Vec2;
 
 /// Internal boid structure for calculations
 #[derive(Clone, Copy, Debug)]
@@ -21,12 +21,14 @@ impl BoidState {
             y: self.y,
         }
     }
+
     fn vel(&self) -> Vec2 {
         Vec2 {
             x: self.vx,
             y: self.vy,
         }
     }
+
     fn with_vel(&self, v: Vec2) -> Self {
         Self {
             x: self.x,
@@ -36,6 +38,7 @@ impl BoidState {
             flags: self.flags,
         }
     }
+
     fn with_pos(&self, p: Vec2) -> Self {
         Self {
             x: p.x,
@@ -45,6 +48,7 @@ impl BoidState {
             flags: self.flags,
         }
     }
+
     fn with_pos_vel(&self, p: Vec2, v: Vec2) -> Self {
         Self {
             x: p.x,
@@ -63,7 +67,9 @@ fn separation(boid_idx: usize, states: &[BoidState], radius: f32) -> (f32, f32) 
     let mut count = 0;
     let boid = &states[boid_idx];
     for (j, other) in states.iter().enumerate() {
-        if boid_idx == j { continue; }
+        if boid_idx == j {
+            continue;
+        }
         let dx = boid.x - other.x;
         let dy = boid.y - other.y;
         let dist_sq = dx * dx + dy * dy;
@@ -91,7 +97,9 @@ fn alignment(boid_idx: usize, states: &[BoidState], radius: f32) -> (f32, f32) {
     let mut count = 0;
     let boid = &states[boid_idx];
     for (j, other) in states.iter().enumerate() {
-        if boid_idx == j { continue; }
+        if boid_idx == j {
+            continue;
+        }
         let dx = boid.x - other.x;
         let dy = boid.y - other.y;
         let dist_sq = dx * dx + dy * dy;
@@ -119,7 +127,9 @@ fn cohesion(boid_idx: usize, states: &[BoidState], radius: f32) -> (f32, f32) {
     let mut count = 0;
     let boid = &states[boid_idx];
     for (j, other) in states.iter().enumerate() {
-        if boid_idx == j { continue; }
+        if boid_idx == j {
+            continue;
+        }
         let dx = boid.x - other.x;
         let dy = boid.y - other.y;
         let dist_sq = dx * dx + dy * dy;
@@ -535,6 +545,7 @@ fn boundary_avoidance_simple(
     let rng = js_sys::Math::random() as f32;
     let ((force_x, force_y), (_wall_dir_x, _wall_dir_y), max_wall_force) =
         boundary_forces(boid, config);
+
     if let Some((new_x, new_y, new_vx, new_vy)) = handle_hard_bounce(boid, config, nudge, rng) {
         return BoundaryResult::Bounce {
             x: new_x,
@@ -543,6 +554,7 @@ fn boundary_avoidance_simple(
             vy: new_vy,
         };
     }
+
     // Always apply a force in the margin, never override velocity unless hard bounce
     BoundaryResult::Force {
         fx: force_x,

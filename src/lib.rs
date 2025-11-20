@@ -1,8 +1,10 @@
 mod boids;
 mod collision;
 mod geometry;
+mod rand;
 mod utils;
 mod vec2;
+mod voronoi;
 
 use crate::utils::set_panic_hook;
 use wasm_bindgen::prelude::*;

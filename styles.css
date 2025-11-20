@@ -25,7 +25,9 @@ html, body {
     color: var(--fg-text);
     font: 15px/1.4 var(--font-family);
     font-weight: 400;
-    overflow: hidden; /* Prevent scrollbars */
+    /* Enable vertical scrolling for long pages while keeping horizontal overflow hidden */
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 /* Layout utilities */
