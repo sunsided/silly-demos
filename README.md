@@ -27,6 +27,7 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 - **Circle-Circle Collision Detection**: Fast collision detection with distance and penetration calculations
 - **Point-Line Distance Demo**: Visualizes the shortest distance from a point to a line segment
 - **Boids Simulation**: Interactive flocking simulation based on classic boids algorithm
+- **Voronoi / Delaunay**: Interactive Voronoi diagram / Delaunay triangulation
 - **Real-time Visualization**: Interactive demos built with React and HTML5 Canvas
 - **High Performance**: Rust WebAssembly core for computational heavy lifting
 - **Modern Frontend**: Vite-powered React application with TypeScript support
