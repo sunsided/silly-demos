@@ -21,12 +21,14 @@ impl BoidState {
             y: self.y,
         }
     }
+
     fn vel(&self) -> Vec2 {
         Vec2 {
             x: self.vx,
             y: self.vy,
         }
     }
+
     fn with_vel(&self, v: Vec2) -> Self {
         Self {
             x: self.x,
@@ -36,6 +38,7 @@ impl BoidState {
             flags: self.flags,
         }
     }
+
     fn with_pos(&self, p: Vec2) -> Self {
         Self {
             x: p.x,
@@ -45,6 +48,7 @@ impl BoidState {
             flags: self.flags,
         }
     }
+
     fn with_pos_vel(&self, p: Vec2, v: Vec2) -> Self {
         Self {
             x: p.x,
