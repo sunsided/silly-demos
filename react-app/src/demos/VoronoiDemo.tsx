@@ -84,8 +84,8 @@ export default function VoronoiDemo() {
     const [mode, setMode] = useState<Mode>('triangulation')
     const [paused, setPaused] = useState(false)
     const [seed, setSeed] = useState(1337)
-    const [count, setCount] = useState(300)
-    const [speed, setSpeed] = useState(35)
+    const [count, setCount] = useState(100)
+    const [speed, setSpeed] = useState(5)
 
     // simulation buffer
     const pointsRef = useRef<Float32Array>(new Float32Array())
@@ -353,7 +353,7 @@ export default function VoronoiDemo() {
                         <input type="number" value={seed} onChange={e => setSeed(parseInt(e.target.value || '0', 10))}
                                style={{marginLeft: 8, width: 100}}/>
                     </label>
-                    <label className="pill">Points
+                    <label className="pill">Moving Points
                         <input type="number" min={3} max={5000} value={count}
                                onChange={e => setCount(Math.max(3, Math.min(5000, parseInt(e.target.value || '0', 10))))}
                                style={{marginLeft: 8, width: 100}}/>

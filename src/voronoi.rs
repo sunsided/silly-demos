@@ -265,7 +265,10 @@ impl VoronoiTests {
         speed: f32,
     ) -> Vec<f32> {
         let mut s = if seed == 0 { 1 } else { seed };
-        let mut out = Vec::with_capacity(count * 4);
+        // We always append 4 fixed corner points with zero velocity at the end
+        // of the buffer. The caller-provided `count` represents the number of
+        // moving points. Total returned points = count (moving) + 4 (fixed).
+        let mut out = Vec::with_capacity((count + 4) * 4);
         for i in 0..count {
             // Positions within bounds
             let rx = frand01(&mut s);
@@ -286,6 +289,21 @@ impl VoronoiTests {
             // decorrelate with index to keep determinism but variety
             s ^= (i as u32).wrapping_mul(0x9E37_79B9);
         }
+
+        // Append four fixed corner points (vx = vy = 0). These should never be removed.
+        // Order: (0,0), (width,0), (0,height), (width,height)
+        let corners = [
+            (0.0f32, 0.0f32),
+            (width, 0.0f32),
+            (0.0f32, height),
+            (width, height),
+        ];
+        for &(x, y) in &corners {
+            out.push(x);
+            out.push(y);
+            out.push(0.0);
+            out.push(0.0);
+        }
         out
     }
 
@@ -293,7 +311,13 @@ impl VoronoiTests {
     pub fn voronoi_step_points(points: &[f32], width: f32, height: f32, dt: f32) -> Vec<f32> {
         let mut out = points.to_vec();
         let n = points.len() / 4;
-        for i in 0..n {
+        // Treat the last 4 points (if present) as fixed corners.
+        // This matches the buffers produced by voronoi_create_points.
+        let fixed_corners = n >= 4;
+
+        // Update moving points
+        let moving_n = if fixed_corners { n - 4 } else { n };
+        for i in 0..moving_n {
             let ix = i * 4;
             let mut x = points[ix];
             let mut y = points[ix + 1];
@@ -321,6 +345,27 @@ impl VoronoiTests {
             out[ix + 1] = y;
             out[ix + 2] = vx;
             out[ix + 3] = vy;
+        }
+
+        // Pin the last four as fixed corners with zero velocity, and update
+        // their positions to match the current canvas size (handles resizes).
+        if fixed_corners {
+            let base = moving_n * 4;
+            let corners = [
+                (0.0f32, 0.0f32),
+                (width, 0.0f32),
+                (0.0f32, height),
+                (width, height),
+            ];
+            for (k, &(x, y)) in corners.iter().enumerate() {
+                let ix = base + k * 4;
+                if ix + 3 < out.len() {
+                    out[ix] = x;
+                    out[ix + 1] = y;
+                    out[ix + 2] = 0.0;
+                    out[ix + 3] = 0.0;
+                }
+            }
         }
         out
     }
