@@ -10,15 +10,24 @@ tasks:
     desc: Build WASM
     vars:
       ARGS: ""
+    preconditions:
+      - sh: command -v wasm-pack
+        msg: "wasm-pack is not installed"
     cmds:
       - wasm-pack build --target=web {{.ARGS}}
 
-  rust:test:
+  wasm:test:
     desc: Run WASM tests
     aliases:
       - test
+      - rust:test
     vars:
       ARGS: ""
+    preconditions:
+      - sh: command -v wasm-pack
+        msg: "wasm-pack is not installed"
+      - sh: command -v firefox
+        msg: "Firefox is required for wasm-pack test --firefox"
     cmds:
       - wasm-pack test --headless --firefox {{.ARGS}}
 
@@ -26,6 +35,9 @@ tasks:
     desc: Serve current directory on a given port
     vars:
       PORT: "{{.PORT}}"
+    preconditions:
+      - sh: command -v python3
+        msg: "python3 is required for serving files"
     cmds:
       - python3 -m http.server {{.PORT}}
 
@@ -34,6 +46,9 @@ tasks:
     aliases:
       - yarn:install
     dir: react-app
+    preconditions:
+      - sh: command -v yarn
+        msg: "yarn is not installed"
     cmds:
       - yarn install
 
@@ -42,6 +57,9 @@ tasks:
     aliases:
       - yarn:dev
     dir: react-app
+    preconditions:
+      - sh: command -v yarn
+        msg: "yarn is not installed"
     cmds:
       - yarn dev
 
@@ -50,6 +68,9 @@ tasks:
     aliases:
       - react:build
     dir: react-app
+    preconditions:
+      - sh: command -v yarn
+        msg: "yarn is not installed"
     cmds:
       - yarn build
 
@@ -58,6 +79,9 @@ tasks:
     aliases:
       - react:preview
     dir: react-app
+    preconditions:
+      - sh: command -v yarn
+        msg: "yarn is not installed"
     cmds:
       - yarn preview
 
@@ -66,6 +90,9 @@ tasks:
     aliases:
       - react:lint
     dir: react-app
+    preconditions:
+      - sh: command -v yarn
+        msg: "yarn is not installed"
     cmds:
       - yarn lint
 
@@ -105,5 +132,8 @@ tasks:
       - clean:react
       - react:clean
     dir: react-app
+    preconditions:
+      - sh: command -v rm
+        msg: "rm command missing? Something is very wrong."
     cmds:
       - rm -rf dist node_modules yarn.lock
