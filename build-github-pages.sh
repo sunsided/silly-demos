@@ -4,7 +4,7 @@
 set -e
 
 echo "🦀 Building WASM module..."
-wasm-pack build --target web --out-dir react-app/src/pkg
+wasm-pack build --target web
 
 echo "📦 Installing React app dependencies..."
 cd react-app
