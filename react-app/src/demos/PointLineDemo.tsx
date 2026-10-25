@@ -1,462 +1,204 @@
-import { useEffect, useRef, useState } from 'react'
-import init, * as silly_demos from 'silly_demos';
+import { useRef, useState } from 'react'
+import { Loading, Sheet } from '../components/Sheet'
+import { useAnimationFrame, useCanvas, useDrag, type Point } from '../lib/canvas'
+import { clear, cross, dimension, handle, label } from '../lib/draft'
+import { useTheme, type Theme } from '../lib/theme'
+import { useWasm, type Wasm } from '../lib/wasm'
 
-interface Point {
-  x: number
-  y: number
-  offx: number
-  offy: number
+type HandleName = 'a' | 'b' | 'p'
+type Closest = 'interior' | 'a' | 'b'
+
+interface Stats {
+  distance: number
+  perpendicular: number
+  side: number
+  closest: Closest
 }
 
-interface LineSegment {
-  start: Point
-  end: Point
+const HIT_RADIUS = 14
+
+/** Small square marking a right angle at `at`, between directions `u` and `v`. */
+function rightAngle(ctx: CanvasRenderingContext2D, at: Point, u: Point, v: Point, color: string, s = 9) {
+  ctx.beginPath()
+  ctx.moveTo(at.x + u.x * s, at.y + u.y * s)
+  ctx.lineTo(at.x + (u.x + v.x) * s, at.y + (u.y + v.y) * s)
+  ctx.lineTo(at.x + v.x * s, at.y + v.y * s)
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1
+  ctx.stroke()
+}
+
+function sideColor(theme: Theme, side: number) {
+  return side > 0 ? theme.verdigris : side < 0 ? theme.cobalt : theme.signal
 }
 
 function PointLineDemo() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [wasm, setWasm] = useState<typeof silly_demos | null>(null)
-  const [stats, setStats] = useState({
-    distance: 0,
-    closest_x: 0,
-    closest_y: 0,
-    on_segment: false,
-    side: 0,
-    ortho_distance: 0 // Distance to infinite line (orthogonal projection)
+  const { wasm, error } = useWasm()
+  return wasm ? <PointLine wasm={wasm} /> : <Loading error={error} />
+}
+
+function PointLine({ wasm }: { wasm: Wasm }) {
+  const theme = useTheme()
+  const [stats, setStats] = useState<Stats>({ distance: 0, perpendicular: 0, side: 0, closest: 'interior' })
+  const pts = useRef<Record<HandleName, Point>>({
+    a: { x: -160, y: 60 },
+    b: { x: 160, y: -40 },
+    p: { x: 30, y: -110 },
   })
 
-  // State - using refs to avoid React re-rendering issues
-  const lineRef = useRef<LineSegment>({
-    start: { x: -150, y: -50, offx: 0, offy: 0 },
-    end: { x: 150, y: 50, offx: 0, offy: 0 }
+  // Fit the initial layout to narrow screens.
+  const placed = useRef(false)
+  const { ref, size } = useCanvas(({ width }) => {
+    if (placed.current) return
+    placed.current = true
+    const k = Math.min(1, width / 480)
+    for (const q of Object.values(pts.current)) {
+      q.x *= k
+      q.y *= k
+    }
   })
-  
-  const pointRef = useRef<Point>({ x: 0, y: -100, offx: 0, offy: 0 })
-
-  const draggingRef = useRef<Point | null>(null)
-  const animationRef = useRef<number>(0)
-
-  // Load WASM module
-  useEffect(() => {
-    let cancel = false;
-    init().then(() => {
-      if (!cancel) {
-        setWasm(silly_demos);
+  useDrag<HandleName>(
+    ref,
+    p => ({ x: p.x - size.current.width / 2, y: p.y - size.current.height / 2 }),
+    p => {
+      // The test point wins over the segment's end points when they overlap.
+      for (const name of ['p', 'a', 'b'] as const) {
+        const h = pts.current[name]
+        if (Math.hypot(p.x - h.x, p.y - h.y) <= HIT_RADIUS) return name
       }
-    }).catch((error: unknown) => {
-      if (!cancel) {
-        console.error('Failed to load WASM module:', error);
-      }
-    });
-    return () => { cancel = true; };
-  }, [])
+      return null
+    },
+    (name, d) => {
+      pts.current[name].x += d.x
+      pts.current[name].y += d.y
+    },
+  )
 
-  // Canvas setup and animation
-  useEffect(() => {
-    if (!wasm || !canvasRef.current) return
+  useAnimationFrame(() => {
+    const ctx = ref.current?.getContext('2d')
+    if (!ctx || size.current.width === 0) return
+    const t = theme.current
+    const { a, b, p } = pts.current
 
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    const r = wasm.GeometryTests.point_line_test(a.x, a.y, b.x, b.y, p.x, p.y)
+    const c = { x: r.closest_x, y: r.closest_y }
+    const distance = r.distance
+    const side = r.side
+    const onSegment = r.on_segment
+    r.free()
 
-    function setupCanvas() {
-      const rect = canvas.getBoundingClientRect()
-      const displayWidth = rect.width
-      const displayHeight = rect.height
-      
-      if (displayWidth <= 0 || displayHeight <= 0 || !ctx) return
-      
-      const dpr = window.devicePixelRatio || 1
-      
-      canvas.width = displayWidth * dpr
-      canvas.height = displayHeight * dpr
-      
-      ctx.setTransform(dpr, 0, 0, dpr, canvas.width / 2, canvas.height / 2)
-      
-      // @ts-ignore - adding custom properties
-      canvas._displayWidth = displayWidth
-      // @ts-ignore - adding custom properties
-      canvas._displayHeight = displayHeight
-    }
+    // Foot of the perpendicular on the infinite line.
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.hypot(dx, dy)
+    const u = len > 0 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 }
+    const along = (p.x - a.x) * u.x + (p.y - a.y) * u.y
+    const foot = { x: a.x + u.x * along, y: a.y + u.y * along }
+    const perpendicular = Math.hypot(p.x - foot.x, p.y - foot.y)
 
-    function getCSSVar(name: string): string {
-      return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-    }
-
-    function drawPoint(p: Point, color: string, strokeColor: string, radius = 8) {
-      if (!ctx) return
-      
-      ctx.beginPath()
-      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2)
-      ctx.fillStyle = color
-      ctx.fill()
-      
-      ctx.lineWidth = 2
-      ctx.strokeStyle = strokeColor
-      ctx.stroke()
-    }
-
-    function drawLineSegment(line: LineSegment, color: string, width = 3) {
-      if (!ctx) return
-      
-      const dx = line.end.x - line.start.x
-      const dy = line.end.y - line.start.y
-      const length = Math.sqrt(dx * dx + dy * dy)
-      
-      if (length < 1) return
-      
-      // Normalize direction vector
-      const ux = dx / length
-      const uy = dy / length
-      
-      // Draw main line segment
-      ctx.beginPath()
-      ctx.moveTo(line.start.x, line.start.y)
-      ctx.lineTo(line.end.x, line.end.y)
-      ctx.lineWidth = width
-      ctx.strokeStyle = color
-      ctx.setLineDash([])
-      ctx.stroke()
-      
-      // Draw arrowhead at end
-      const arrowSize = 12
-      const arrowX = line.end.x - arrowSize * ux
-      const arrowY = line.end.y - arrowSize * uy
-      
-      ctx.beginPath()
-      ctx.moveTo(line.end.x, line.end.y)
-      ctx.lineTo(arrowX - arrowSize * 0.5 * uy, arrowY + arrowSize * 0.5 * ux)
-      ctx.moveTo(line.end.x, line.end.y)
-      ctx.lineTo(arrowX + arrowSize * 0.5 * uy, arrowY - arrowSize * 0.5 * ux)
-      ctx.lineWidth = width
-      ctx.stroke()
-    }
-
-    function drawInfiniteLine(line: LineSegment, color: string, width = 1) {
-      if (!ctx) return
-      
-      const dx = line.end.x - line.start.x
-      const dy = line.end.y - line.start.y
-      const length = Math.sqrt(dx * dx + dy * dy)
-      
-      if (length < 1) return
-      
-      // Normalize direction vector
-      const ux = dx / length
-      const uy = dy / length
-      
-      // Extend line to canvas bounds (approximate)
-      // @ts-ignore - custom canvas properties
-      const width_canvas = canvas._displayWidth || 800
-      // @ts-ignore - custom canvas properties
-      const height_canvas = canvas._displayHeight || 600
-      const extension = Math.max(width_canvas, height_canvas)
-      
-      const startExt = {
-        x: line.start.x - extension * ux,
-        y: line.start.y - extension * uy
-      }
-      
-      const endExt = {
-        x: line.end.x + extension * ux,
-        y: line.end.y + extension * uy
-      }
-      
-      // Draw extended dashed line
-      ctx.beginPath()
-      ctx.moveTo(startExt.x, startExt.y)
-      ctx.lineTo(line.start.x, line.start.y)
-      ctx.moveTo(line.end.x, line.end.y)
-      ctx.lineTo(endExt.x, endExt.y)
-      
-      ctx.lineWidth = width
-      ctx.strokeStyle = color
-      ctx.setLineDash([8, 8])
-      ctx.stroke()
-      ctx.setLineDash([])
-    }
-
-    function draw() {
-      if (!wasm || !ctx) return
-      
-      const line = lineRef.current
-      const point = pointRef.current
-      
-      const result = wasm?.GeometryTests.point_line_test(
-        line.start.x, line.start.y,
-        line.end.x, line.end.y,
-        point.x, point.y
-      ) || {
-        distance: 0,
-        closest_x: 0,
-        closest_y: 0,
-        on_segment: false,
-        side: 0
-      };
-      
-      // Calculate orthogonal distance to infinite line
-      let ortho_distance = 0
-      const dx = line.end.x - line.start.x
-      const dy = line.end.y - line.start.y
-      const line_length_sq = dx * dx + dy * dy
-      
-      if (line_length_sq > 1e-6) {
-        const t = ((point.x - line.start.x) * dx + (point.y - line.start.y) * dy) / line_length_sq
-        const ortho_x = line.start.x + t * dx
-        const ortho_y = line.start.y + t * dy
-        const ortho_dx = point.x - ortho_x
-        const ortho_dy = point.y - ortho_y
-        ortho_distance = Math.sqrt(ortho_dx * ortho_dx + ortho_dy * ortho_dy)
-      }
-      
-      setStats({
-        distance: result.distance,
-        closest_x: result.closest_x,
-        closest_y: result.closest_y,
-        on_segment: result.on_segment,
-        side: result.side,
-        ortho_distance: ortho_distance
-      })
-
-      // @ts-ignore - custom canvas properties
-      const width = canvas._displayWidth || canvas.getBoundingClientRect().width
-      // @ts-ignore - custom canvas properties
-      const height = canvas._displayHeight || canvas.getBoundingClientRect().height
-      ctx.clearRect(-width / 2, -height / 2, width, height)
-      
-      // Draw infinite line (dashed, toned down)
-      const dashedColor = getCSSVar('--line-dashed')
-      drawInfiniteLine(line, dashedColor, 1)
-      
-      // Draw main line segment with arrow
-      const lineColor = getCSSVar('--line-color')
-      drawLineSegment(line, lineColor, 3)
-      
-      // Draw line segment endpoints (handles)
-      const handleColor = getCSSVar('--circle-a-normal')
-      const handleStroke = getCSSVar('--circle-a-stroke')
-      drawPoint(line.start, handleColor, handleStroke, 6)
-      drawPoint(line.end, handleColor, handleStroke, 6)
-      
-      // Draw test point
-      const pointColor = result.side > 0 ? getCSSVar('--circle-b-normal') : 
-                        result.side < 0 ? getCSSVar('--circle-a-hit') : 
-                        getCSSVar('--circle-b-hit')
-      const pointStroke = result.side > 0 ? getCSSVar('--circle-b-stroke') : 
-                         result.side < 0 ? getCSSVar('--circle-a-stroke-hit') : 
-                         getCSSVar('--circle-b-stroke-hit')
-      drawPoint(point, pointColor, pointStroke, 8)
-      
-      // Draw closest point and distance line
-      const closestColor = getCSSVar('--line-glow')
-      drawPoint({ x: result.closest_x, y: result.closest_y, offx: 0, offy: 0 }, 
-                closestColor, closestColor, 4)
-      
-      // Draw distance line to closest point
-      ctx.beginPath()
-      ctx.moveTo(point.x, point.y)
-      ctx.lineTo(result.closest_x, result.closest_y)
-      ctx.lineWidth = 2
-      ctx.strokeStyle = closestColor
-      ctx.setLineDash([4, 4])
-      ctx.stroke()
-      ctx.setLineDash([])
-      
-      // If point is outside segment, also show orthogonal projection to infinite line
-      if (!result.on_segment) {
-        // Calculate orthogonal projection manually
-        const dx = line.end.x - line.start.x
-        const dy = line.end.y - line.start.y
-        const line_length_sq = dx * dx + dy * dy
-        
-        if (line_length_sq > 1e-6) {
-          const t = ((point.x - line.start.x) * dx + (point.y - line.start.y) * dy) / line_length_sq
-          const ortho_x = line.start.x + t * dx
-          const ortho_y = line.start.y + t * dy
-          
-          // Choose color based on which side of the line the point is on
-          const orthoColor = result.side > 0 ? getCSSVar('--ortho-right-side') : 
-                            result.side < 0 ? getCSSVar('--ortho-left-side') : 
-                            getCSSVar('--ortho-on-line')
-          
-          // Draw orthogonal projection point
-          drawPoint({ x: ortho_x, y: ortho_y, offx: 0, offy: 0 }, 
-                    orthoColor, orthoColor, 3)
-          
-          // Draw orthogonal line (perpendicular to infinite line) with matching color
-          ctx.beginPath()
-          ctx.moveTo(point.x, point.y)
-          ctx.lineTo(ortho_x, ortho_y)
-          ctx.lineWidth = 1
-          ctx.strokeStyle = orthoColor
-          ctx.setLineDash([2, 2])
-          ctx.stroke()
-          ctx.setLineDash([])
-        }
-      }
-
-      animationRef.current = requestAnimationFrame(draw)
-    }
-
-    setupCanvas()
-    
-    const handleResize = () => {
-      setupCanvas()
-    }
-
-    window.addEventListener('resize', handleResize)
-    draw()
-
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current)
-      }
-    }
-  }, [wasm])
-
-  // Mouse/touch event handlers
-  useEffect(() => {
-    if (!canvasRef.current || !wasm) return
-
-    const canvas = canvasRef.current
-
-    function getPoint(e: PointerEvent | MouseEvent) {
-      const rect = canvas.getBoundingClientRect()
-      return {
-        x: (e.clientX - rect.left) - rect.width / 2,
-        y: (e.clientY - rect.top) - rect.height / 2
-      }
-    }
-
-    function hitTest(p: Point, testPoint: { x: number, y: number }, radius = 12) {
-      const dx = testPoint.x - p.x
-      const dy = testPoint.y - p.y
-      return dx * dx + dy * dy <= radius * radius
-    }
-
-    function updateCursor(e: MouseEvent) {
-      const testPoint = getPoint(e)
-      const line = lineRef.current
-      const point = pointRef.current
-      
-      if (hitTest(line.start, testPoint, 12) || 
-          hitTest(line.end, testPoint, 12) || 
-          hitTest(point, testPoint, 12)) {
-        canvas.style.cursor = 'pointer'
-      } else {
-        canvas.style.cursor = 'default'
-      }
-    }
-
-    function handlePointerDown(e: PointerEvent) {
-      e.preventDefault()
-      const testPoint = getPoint(e)
-      const line = lineRef.current
-      const point = pointRef.current
-
-      if (hitTest(line.start, testPoint, 12)) {
-        draggingRef.current = line.start
-        line.start.offx = testPoint.x - line.start.x
-        line.start.offy = testPoint.y - line.start.y
-        canvas.setPointerCapture(e.pointerId)
-        canvas.style.cursor = 'grabbing'
-      } else if (hitTest(line.end, testPoint, 12)) {
-        draggingRef.current = line.end
-        line.end.offx = testPoint.x - line.end.x
-        line.end.offy = testPoint.y - line.end.y
-        canvas.setPointerCapture(e.pointerId)
-        canvas.style.cursor = 'grabbing'
-      } else if (hitTest(point, testPoint, 12)) {
-        draggingRef.current = point
-        point.offx = testPoint.x - point.x
-        point.offy = testPoint.y - point.y
-        canvas.setPointerCapture(e.pointerId)
-        canvas.style.cursor = 'grabbing'
-      }
-    }
-
-    function handlePointerMove(e: PointerEvent) {
-      if (!draggingRef.current) return
-      e.preventDefault()
-
-      const testPoint = getPoint(e)
-      draggingRef.current.x = testPoint.x - draggingRef.current.offx
-      draggingRef.current.y = testPoint.y - draggingRef.current.offy
-    }
-
-    function handlePointerUp(e: PointerEvent) {
-      if (draggingRef.current) {
-        e.preventDefault()
-        draggingRef.current = null
-        // Reset cursor based on current mouse position
-        updateCursor(e as any)
-      }
-    }
-
-    // Add event listeners
-    canvas.addEventListener('pointerdown', handlePointerDown)
-    canvas.addEventListener('pointermove', handlePointerMove)
-    canvas.addEventListener('pointerup', handlePointerUp)
-    canvas.addEventListener('pointercancel', handlePointerUp)
-    canvas.addEventListener('mousemove', updateCursor)
-
-    return () => {
-      canvas.removeEventListener('pointerdown', handlePointerDown)
-      canvas.removeEventListener('pointermove', handlePointerMove)
-      canvas.removeEventListener('pointerup', handlePointerUp)
-      canvas.removeEventListener('pointercancel', handlePointerUp)
-      canvas.removeEventListener('mousemove', updateCursor)
-    }
-  }, [wasm])
-
-  if (!wasm) {
-    return (
-      <div className="loading-container">
-        <div className="glass-panel">
-          <h3 className="gradient-title">Loading WASM module...</h3>
-          <p className="description-text">Please wait while the WebAssembly module loads.</p>
-        </div>
-      </div>
+    const closest: Closest = onSegment ? 'interior' : along < 0 ? 'a' : 'b'
+    setStats(prev =>
+      prev.distance === distance && prev.perpendicular === perpendicular && prev.side === side && prev.closest === closest
+        ? prev
+        : { distance, perpendicular, side, closest },
     )
-  }
+
+    clear(ctx, size.current.dpr)
+    const w = size.current.width
+    const h = size.current.height
+    ctx.translate(w / 2, h / 2)
+
+    // Infinite line through the segment.
+    const ext = Math.hypot(w, h)
+    ctx.beginPath()
+    ctx.moveTo(a.x - u.x * ext, a.y - u.y * ext)
+    ctx.lineTo(b.x + u.x * ext, b.y + u.y * ext)
+    ctx.setLineDash([10, 6, 2, 6])
+    ctx.lineWidth = 1
+    ctx.strokeStyle = t.inkFaint
+    ctx.stroke()
+    ctx.setLineDash([])
+
+    // The segment itself, with direction arrow.
+    ctx.beginPath()
+    ctx.moveTo(a.x, a.y)
+    ctx.lineTo(b.x, b.y)
+    ctx.lineWidth = 2.5
+    ctx.strokeStyle = t.ink
+    ctx.stroke()
+    if (len > 40) {
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+      ctx.beginPath()
+      ctx.moveTo(mid.x + u.x * 8, mid.y + u.y * 8)
+      ctx.lineTo(mid.x - u.x * 4 - u.y * 6, mid.y - u.y * 4 + u.x * 6)
+      ctx.lineTo(mid.x - u.x * 4 + u.y * 6, mid.y - u.y * 4 - u.x * 6)
+      ctx.closePath()
+      ctx.fillStyle = t.ink
+      ctx.fill()
+    }
+
+    const pc = sideColor(t, side)
+
+    // Perpendicular to the infinite line, when it misses the segment.
+    if (!onSegment && perpendicular > 1) {
+      ctx.beginPath()
+      ctx.moveTo(p.x, p.y)
+      ctx.lineTo(foot.x, foot.y)
+      ctx.setLineDash([3, 4])
+      ctx.strokeStyle = t.inkSoft
+      ctx.lineWidth = 1
+      ctx.stroke()
+      ctx.setLineDash([])
+      const n = { x: (p.x - foot.x) / perpendicular, y: (p.y - foot.y) / perpendicular }
+      rightAngle(ctx, foot, n, along < 0 ? u : { x: -u.x, y: -u.y }, t.inkSoft)
+      cross(ctx, foot, t.inkSoft, 4)
+      label(ctx, t, `⊥ ${perpendicular.toFixed(1)}`, {
+        x: (p.x + foot.x) / 2 + u.x * 34 * (along < 0 ? -1 : 1),
+        y: (p.y + foot.y) / 2 + u.y * 34 * (along < 0 ? -1 : 1),
+      }, t.inkSoft)
+    }
+
+    // Shortest distance to the segment.
+    if (distance > 1) {
+      dimension(ctx, t, p, c, distance.toFixed(1), { color: pc })
+      if (onSegment) {
+        const n = { x: (p.x - c.x) / distance, y: (p.y - c.y) / distance }
+        rightAngle(ctx, c, n, u, pc)
+      }
+    }
+
+    handle(ctx, a, t.ink, t.paper, 6)
+    handle(ctx, b, t.ink, t.paper, 6)
+    handle(ctx, p, pc, t.paper, 8)
+    cross(ctx, c, pc, 4)
+
+    const off = (q: Point, k = 20) => ({ x: q.x - u.y * k, y: q.y + u.x * k })
+    label(ctx, t, 'A', off(a, -18))
+    label(ctx, t, 'B', off(b, -18))
+    label(ctx, t, 'P', { x: p.x + 16, y: p.y - 14 }, pc, 'left')
+  })
+
+  const sideText = stats.side > 0 ? 'Right' : stats.side < 0 ? 'Left' : 'On the line'
+  const closestText = { interior: 'Between A, B', a: 'End A', b: 'End B' }[stats.closest]
 
   return (
-    <div className="grid-layout two-column">
-      <canvas ref={canvasRef} className="modern-canvas" />
-      <div className="glass-panel">
-        <h3 className="gradient-title">Point-line distance test</h3>
-        <div className="stat-row">
-          Distance: <span className="pill">{stats.distance.toFixed(2)}</span>
-        </div>
-        <div className="stat-row">
-          Orthogonal distance: <span className="pill">{stats.ortho_distance.toFixed(2)}</span>
-        </div>
-        <div className="stat-row">
-          Closest point: <span className="pill">({stats.closest_x.toFixed(1)}, {stats.closest_y.toFixed(1)})</span>
-        </div>
-        <div className="stat-row">
-          On segment: <span className="pill">{stats.on_segment ? 'yes' : 'no'}</span>
-        </div>
-        <div className="stat-row">
-          Side: <span className="pill">
-            {stats.side > 0 ? 'right' : stats.side < 0 ? 'left' : 'on line'}
-          </span>
-        </div>
-        <p className="description-text">
-          Drag the line endpoints (small circles) or the test point (large circle). 
-          The dashed line shows the infinite extension of the line segment.
-          Point color indicates which side of the line it's on.
-          <br/><br/>
-          <strong>Blue dot:</strong> Closest point on segment<br/>
-          <strong>Color-coded dot:</strong> Orthogonal projection (when outside segment)<br/>
-          • <span style={{color: 'rgb(102, 187, 106)'}}>Green</span> = right side<br/>
-          • <span style={{color: 'rgb(255, 152, 102)'}}>Orange</span> = left side<br/>
-          • <span style={{color: 'rgb(229, 115, 115)'}}>Red</span> = on line<br/>
-          Distance = actual distance to segment, Orthoginal distance = perpendicular distance to infinite line.
+    <Sheet
+      title="Point to segment"
+      summary="The shortest distance from P to the segment AB, and how it differs from the perpendicular distance to the infinite line. Drag A, B or P."
+      readouts={[
+        { label: 'Distance', value: stats.distance.toFixed(1), tone: stats.side > 0 ? 'verdigris' : stats.side < 0 ? 'cobalt' : 'signal' },
+        { label: 'Perpendicular', value: stats.perpendicular.toFixed(1) },
+        { label: 'Side of A→B', value: sideText, tone: stats.side > 0 ? 'verdigris' : stats.side < 0 ? 'cobalt' : 'signal' },
+        { label: 'Closest at', value: closestText },
+      ]}
+      canvas={<canvas ref={ref} className="drawing-canvas" role="img" aria-label="Draggable line segment and test point with distance dimensions" />}
+      notes={
+        <p>
+          When P projects past an end point, the nearest point is that end point, and the
+          dotted perpendicular to the infinite line is shorter than the true distance.
         </p>
-      </div>
-    </div>
+      }
+    />
   )
 }
 

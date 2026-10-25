@@ -30,12 +30,6 @@ pub struct CollisionTests;
 #[wasm_bindgen]
 pub struct GeometryTests;
 
-/// Namespace for boids simulation
-/// This empty struct serves as a namespace for boids-related functions
-/// when exported to WASM, providing clear module separation
-#[wasm_bindgen]
-pub struct BoidsTests;
-
 #[wasm_bindgen]
 pub struct CircleCollisionResult {
     #[wasm_bindgen(readonly)]
@@ -98,81 +92,138 @@ impl GeometryTests {
     }
 }
 
-/// Boids simulation update function.
-/// Uses flat arrays to avoid complex WASM struct passing that can cause memory issues.
+/// Flocking parameters. Distances in px, speeds in px/s, forces in px/s².
 #[wasm_bindgen]
-impl BoidsTests {
-    /// Update boids simulation using flat arrays
-    /// Input: [x1, y1, vx1, vy1, x2, y2, vx2, vy2, ...]
-    /// Returns: [x1, y1, vx1, vy1, x2, y2, vx2, vy2, ...]
-    pub fn update_boids_flat(
-        boids_data: &[f32], // Flat array: [x, y, vx, vy, x, y, vx, vy, ...]
-        separation_radius: f32,
-        alignment_radius: f32,
-        cohesion_radius: f32,
-        separation_strength: f32,
-        alignment_strength: f32,
-        cohesion_strength: f32,
-        max_speed: f32,
-        max_force: f32,
-        boundary_margin: f32,
-        boundary_strength: f32,
-        world_width: f32,
-        world_height: f32,
-        dt: f32,
-        min_speed: f32,
-        jitter: f32,
-    ) -> Vec<f32> {
-        boids::update_boids_flat_impl(
-            boids_data,
-            separation_radius,
-            alignment_radius,
-            cohesion_radius,
-            separation_strength,
-            alignment_strength,
-            cohesion_strength,
-            max_speed,
-            max_force,
-            boundary_margin,
-            boundary_strength,
-            world_width,
-            world_height,
-            dt,
-            min_speed,
-            jitter,
-        )
+#[derive(Clone, Copy)]
+pub struct BoidsParams {
+    pub separation_radius: f32,
+    pub alignment_radius: f32,
+    pub cohesion_radius: f32,
+    pub separation_weight: f32,
+    pub alignment_weight: f32,
+    pub cohesion_weight: f32,
+    pub min_speed: f32,
+    pub max_speed: f32,
+    pub max_force: f32,
+    pub edge_margin: f32,
+    pub edge_weight: f32,
+    pub wander: f32,
+    /// Full field-of-view angle in degrees.
+    pub view_angle: f32,
+}
+
+#[wasm_bindgen]
+impl BoidsParams {
+    /// Creates parameters with sensible defaults.
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self::from(boids::FlockParams::default())
+    }
+}
+
+impl Default for BoidsParams {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<boids::FlockParams> for BoidsParams {
+    fn from(p: boids::FlockParams) -> Self {
+        Self {
+            separation_radius: p.separation_radius,
+            alignment_radius: p.alignment_radius,
+            cohesion_radius: p.cohesion_radius,
+            separation_weight: p.separation_weight,
+            alignment_weight: p.alignment_weight,
+            cohesion_weight: p.cohesion_weight,
+            min_speed: p.min_speed,
+            max_speed: p.max_speed,
+            max_force: p.max_force,
+            edge_margin: p.edge_margin,
+            edge_weight: p.edge_weight,
+            wander: p.wander,
+            view_angle: p.view_angle,
+        }
+    }
+}
+
+impl From<&BoidsParams> for boids::FlockParams {
+    fn from(p: &BoidsParams) -> Self {
+        Self {
+            separation_radius: p.separation_radius,
+            alignment_radius: p.alignment_radius,
+            cohesion_radius: p.cohesion_radius,
+            separation_weight: p.separation_weight,
+            alignment_weight: p.alignment_weight,
+            cohesion_weight: p.cohesion_weight,
+            min_speed: p.min_speed,
+            max_speed: p.max_speed.max(p.min_speed),
+            max_force: p.max_force,
+            edge_margin: p.edge_margin,
+            edge_weight: p.edge_weight,
+            wander: p.wander,
+            view_angle: p.view_angle,
+        }
+    }
+}
+
+/// A boids flock living in WASM memory. The simulation state stays on the
+/// Rust side; JS only reads a flat snapshot for drawing.
+#[wasm_bindgen]
+pub struct BoidsSim {
+    flock: boids::Flock,
+}
+
+#[wasm_bindgen]
+impl BoidsSim {
+    #[wasm_bindgen(constructor)]
+    pub fn new(count: usize, width: f32, height: f32, seed: u32) -> Self {
+        Self {
+            flock: boids::Flock::new(count, width, height, seed as u64),
+        }
     }
 
-    /// Create N random boids as a flat array
-    /// Returns: [x1, y1, vx1, vy1, x2, y2, vx2, vy2, ...]
-    pub fn create_boids_flat(
-        count: usize,
-        min_x: f32,
-        max_x: f32,
-        min_y: f32,
-        max_y: f32,
-        max_speed: f32,
-    ) -> Vec<f32> {
-        use js_sys::Math;
+    pub fn set_params(&mut self, params: &BoidsParams) {
+        self.flock.params = params.into();
+    }
 
-        let mut result = Vec::with_capacity(count * 4);
+    pub fn set_count(&mut self, count: usize) {
+        self.flock.set_count(count);
+    }
 
-        for _ in 0..count {
-            let x = min_x + Math::random() as f32 * (max_x - min_x);
-            let y = min_y + Math::random() as f32 * (max_y - min_y);
+    pub fn resize(&mut self, width: f32, height: f32) {
+        self.flock.resize(width, height);
+    }
 
-            let angle = Math::random() as f32 * 2.0 * std::f32::consts::PI;
-            let speed = Math::random() as f32 * max_speed;
+    /// Respawns every boid at a random position.
+    pub fn scatter(&mut self) {
+        self.flock.scatter();
+    }
 
-            let vx = angle.cos() * speed;
-            let vy = angle.sin() * speed;
-
-            result.push(x);
-            result.push(y);
-            result.push(vx);
-            result.push(vy);
+    /// Advances the simulation by `dt` seconds, in substeps of at most 1/60 s.
+    pub fn step(&mut self, dt: f32) {
+        let substeps = (dt * 60.0).ceil().clamp(1.0, 4.0) as usize;
+        let h = dt.min(4.0 / 60.0) / substeps as f32;
+        for _ in 0..substeps {
+            self.flock.step(h);
         }
+    }
 
-        result
+    pub fn count(&self) -> usize {
+        self.flock.boids.len()
+    }
+
+    /// How aligned the flock is, from 0 (random) to 1 (all flying the same way).
+    pub fn polarization(&self) -> f32 {
+        self.flock.polarization()
+    }
+
+    /// Flat snapshot with stride 5: `[x, y, vx, vy, neighbors, ...]`.
+    pub fn state(&self) -> Vec<f32> {
+        let mut out = Vec::with_capacity(self.flock.boids.len() * 5);
+        for b in &self.flock.boids {
+            out.extend_from_slice(&[b.pos.x, b.pos.y, b.vel.x, b.vel.y, b.neighbors as f32]);
+        }
+        out
     }
 }

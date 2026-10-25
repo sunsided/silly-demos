@@ -1,55 +1,53 @@
-import { Routes, Route, Link, useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, NavLink, Route, Routes } from 'react-router-dom'
 import CircleCollisionDemo from './demos/CircleCollisionDemo'
 import PointLineDemo from './demos/PointLineDemo'
 import BoidsDemo from './demos/BoidsDemo'
 import VoronoiDemo from './demos/VoronoiDemo'
+import { DEFAULT_FLOCK, FlockCanvas } from './components/FlockCanvas'
+import { useWasm } from './lib/wasm'
+
+const DEMOS = [
+  {
+    path: '/boids',
+    name: 'Boids',
+    blurb: 'A flock that emerges from three local steering rules: keep your distance, match heading, stay together.',
+    rust: 'BoidsSim::step',
+  },
+  {
+    path: '/circle-collision',
+    name: 'Circle collision',
+    blurb: 'Drag two circles and watch the center distance, the gap between them and how far they overlap.',
+    rust: 'CollisionTests::circle_collision',
+  },
+  {
+    path: '/point-line',
+    name: 'Point to segment',
+    blurb: 'The shortest distance from a point to a line segment, and which side of the line the point is on.',
+    rust: 'GeometryTests::point_line_test',
+  },
+  {
+    path: '/voronoi',
+    name: 'Voronoi / Delaunay',
+    blurb: 'Moving points with their Delaunay triangulation and the Voronoi diagram it implies.',
+    rust: 'VoronoiTests::voronoi_edges',
+  },
+]
 
 function App() {
-  const location = useLocation()
-
   return (
     <div className="app">
-      <nav className="navigation">
-        <div className="nav-container">
-          <h1 className="nav-title">
-            <span className="gradient-title">Silly Demos with WASM</span>
-          </h1>
-          <div className="nav-links">
-            <Link 
-              to="/" 
-              className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
-            >
-              Home
-            </Link>
-            <Link 
-              to="/circle-collision" 
-              className={`nav-link ${location.pathname === '/circle-collision' ? 'active' : ''}`}
-            >
-              Circle Collision
-            </Link>
-            <Link 
-              to="/point-line" 
-              className={`nav-link ${location.pathname === '/point-line' ? 'active' : ''}`}
-            >
-              Point-Line Test
-            </Link>
-            <Link 
-              to="/boids" 
-              className={`nav-link ${location.pathname === '/boids' ? 'active' : ''}`}
-            >
-              Boids Simulation
-            </Link>
-            <Link 
-              to="/voronoi" 
-              className={`nav-link ${location.pathname === '/voronoi' ? 'active' : ''}`}
-            >
-              Voronoi / Delaunay
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <header className="masthead">
+        <Link to="/" className="wordmark">silly-demos</Link>
+        <nav className="masthead-nav" aria-label="Demos">
+          {DEMOS.map(d => (
+            <NavLink key={d.path} to={d.path} className="nav-link">{d.name}</NavLink>
+          ))}
+        </nav>
+        <a className="nav-link source-link" href="https://github.com/sunsided/silly-demos">Source</a>
+      </header>
 
-      <main className="main-content">
+      <main className="main">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/circle-collision" element={<CircleCollisionDemo />} />
@@ -62,69 +60,44 @@ function App() {
   )
 }
 
+const HERO_FLOCK = { ...DEFAULT_FLOCK, count: 260 }
+
 function Home() {
+  const { wasm } = useWasm()
+  const [reducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+
   return (
-    <div className="home-container">
-      <div className="glass-panel home-panel">
-        <h2 className="gradient-title">Welcome to Silly Demos with WASM</h2>
-        <p className="description-text">
-          This is a collection of interactive demos showcasing WebAssembly (WASM) capabilities 
-          built with Rust and compiled to run in the browser.
-        </p>
-        
-        <div className="demo-grid">
-          <Link to="/circle-collision" className="demo-card">
-            <h3>Circle Collision Detection</h3>
-            <p>Interactive demonstration of circle collision detection and physics calculations using WASM.</p>
-            <div className="demo-features">
-              <span className="pill">Real-time</span>
-              <span className="pill">Physics</span>
-              <span className="pill">Interactive</span>
-            </div>
-          </Link>
-          
-          <Link to="/point-line" className="demo-card">
-            <h3>Point-Line Distance Test</h3>
-            <p>Interactive demonstration of point-to-line distance calculations and geometric relationships.</p>
-            <div className="demo-features">
-              <span className="pill">Geometry</span>
-              <span className="pill">Real-time</span>
-              <span className="pill">Visual</span>
-            </div>
-          </Link>
-
-          <Link to="/boids" className="demo-card">
-            <h3>Boids Flocking Simulation</h3>
-            <p>Interactive simulation of flocking behavior using separation, alignment, and cohesion rules.</p>
-            <div className="demo-features">
-              <span className="pill">AI</span>
-              <span className="pill">Simulation</span>
-              <span className="pill">Interactive</span>
-            </div>
-          </Link>
-
-          <Link to="/voronoi" className="demo-card">
-            <h3>Voronoi / Delaunay</h3>
-            <p>Compute and visualize Delaunay triangulation and Voronoi diagram in real-time with Rust + WASM.</p>
-            <div className="demo-features">
-              <span className="pill">Geometry</span>
-              <span className="pill">Triangulation</span>
-              <span className="pill">Voronoi</span>
-            </div>
-          </Link>
+    <div className="home">
+      <section className="hero grid-paper">
+        {wasm && (
+          <FlockCanvas
+            wasm={wasm}
+            config={HERO_FLOCK}
+            running={!reducedMotion}
+            className="hero-canvas"
+            label="A flock of boids drifting across the page"
+          />
+        )}
+        <div className="hero-text">
+          <h1 className="hero-title">silly-demos</h1>
+          <p className="hero-lede">
+            Small geometry and simulation sketches. The math runs in Rust compiled to WebAssembly;
+            the browser only draws.
+          </p>
         </div>
+      </section>
 
-        <div className="tech-info">
-          <h3>Technologies Used</h3>
-          <div className="tech-tags">
-            <span className="code-highlight">Rust</span>
-            <span className="code-highlight">WebAssembly</span>
-            <span className="code-highlight">React</span>
-            <span className="code-highlight">TypeScript</span>
-            <span className="code-highlight">FiraCode</span>
-          </div>
-        </div>
-      </div>
+      <ol className="index" aria-label="Demos">
+        {DEMOS.map(d => (
+          <li key={d.path}>
+            <Link to={d.path} className="index-row">
+              <span className="index-name">{d.name}</span>
+              <span className="index-blurb">{d.blurb}</span>
+              <code className="index-rust">{d.rust}</code>
+            </Link>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }

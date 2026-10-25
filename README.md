@@ -26,7 +26,7 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 
 - **Circle-Circle Collision Detection**: Fast collision detection with distance and penetration calculations
 - **Point-Line Distance Demo**: Visualizes the shortest distance from a point to a line segment
-- **Boids Simulation**: Interactive flocking simulation based on classic boids algorithm
+- **Boids Simulation**: Reynolds flocking (separation, alignment, cohesion) with field of view, look-ahead edge avoidance and a spatial grid for neighbor lookups; the flock state lives in WASM
 - **Voronoi / Delaunay**: Interactive Voronoi diagram / Delaunay triangulation
 - **Real-time Visualization**: Interactive demos built with React and HTML5 Canvas
 - **High Performance**: Rust WebAssembly core for computational heavy lifting
@@ -139,7 +139,9 @@ For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
 
 ## Available Demos
 
-- **Circle Collision Demo**: Interactive visualization of circle-circle collision detection with real-time physics
+- **Boids**: Flocking simulation with live controls for every rule and a view of what a single boid perceives
+- **Circle Collision**: Drag two circles; dimensions show center distance, gap and overlap
+- **Point to Segment**: Shortest distance from a point to a line segment versus the perpendicular distance to the infinite line
 
 ## Technology Stack
 
@@ -161,8 +163,8 @@ For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
 ### Testing
 
 ```bash
-# Test the Rust core
-cargo test
+# Test the Rust core (natively; the default build target is wasm32)
+just test-native
 
 # Test WebAssembly bindings in headless browsers
 just test

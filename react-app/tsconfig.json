@@ -14,7 +14,10 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "silly_demos": ["../pkg/silly_demos"]
+    }
   },
   "include": ["src", "src/**/*"],
   "references": [{ "path": "./tsconfig.node.json" }]
