@@ -22,7 +22,7 @@ export const isShapeKind = (v: string | null): v is ShapeKind => SHAPE_KINDS.inc
 export interface ShapeState {
   kind: ShapeKind
   c: Point
-  /** Rotation in radians (OBB, ellipse). */
+  /** Rotation in radians (OBB, ellipse); for polygons only where the rotation handle sits. */
   angle: number
   /** Half extents (boxes) or semi-axes (ellipse). */
   hw: number
@@ -60,15 +60,15 @@ export function defaultShape(kind: ShapeKind, c: Point, k = 1): ShapeState {
     case 'ellipse':
       return { ...base, hw: s(110), hh: s(60), angle: -0.4 }
     case 'triangle':
-      return { ...base, pts: [{ x: 0, y: s(-90) }, { x: s(85), y: s(60) }, { x: s(-85), y: s(60) }] }
+      return { ...base, pts: centered([{ x: 0, y: s(-90) }, { x: s(85), y: s(60) }, { x: s(-85), y: s(60) }]) }
     case 'polygon':
       return {
         ...base,
-        pts: [0, 1, 2, 3, 4, 5].map(i => {
+        pts: centered([0, 1, 2, 3, 4, 5].map(i => {
           const t = (i / 6) * Math.PI * 2 + 0.3
           const r = s(i % 2 ? 95 : 75)
           return { x: Math.cos(t) * r, y: Math.sin(t) * r }
-        }),
+        })),
       }
     case 'capsule':
       return { ...base, r: s(40), pts: [{ x: s(-70), y: s(-40) }, { x: s(70), y: s(40) }] }
@@ -149,18 +149,29 @@ export function handles(s: ShapeState): Handle[] {
         rotator(s, s.hh + 32),
       ]
     case 'triangle':
-    case 'polygon':
-      return s.pts.map((v, i) => ({
-        at: add(s.c, v),
-        set: (s, p) => { s.pts[i] = sub(p, s.c) },
-      }))
+    case 'polygon': {
+      const reach = Math.max(...s.pts.map(v => Math.hypot(v.x, v.y))) + 28
+      return [
+        ...s.pts.map((v, i): Handle => ({ at: add(s.c, v), set: (s, p) => moveVertex(s, i, p) })),
+        {
+          at: add(s.c, rotate({ x: 0, y: -reach }, s.angle)),
+          set: (s, p) => {
+            const d = sub(p, s.c)
+            const angle = Math.atan2(d.y, d.x) + Math.PI / 2
+            s.pts = s.pts.map(v => rotate(v, angle - s.angle))
+            s.angle = angle
+          },
+          guide: true,
+        },
+      ]
+    }
     case 'capsule': {
       const [p0, p1] = s.pts
       const d = sub(p1, p0)
       const len = Math.hypot(d.x, d.y) || 1
       const mid = add(s.c, { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 })
       return [
-        ...s.pts.map((v, i): Handle => ({ at: add(s.c, v), set: (s, p) => { s.pts[i] = sub(p, s.c) } })),
+        ...s.pts.map((v, i): Handle => ({ at: add(s.c, v), set: (s, p) => moveVertex(s, i, p) })),
         {
           at: add(mid, { x: (-d.y / len) * s.r, y: (d.x / len) * s.r }),
           set: (s, p) => {
@@ -173,6 +184,26 @@ export function handles(s: ShapeState): Handle[] {
       ]
     }
   }
+}
+
+/**
+ * Moves vertex `i` to `p`, then re-centers so `c` stays the vertex mean the
+ * body drags and rotates about.
+ */
+function moveVertex(s: ShapeState, i: number, p: Point) {
+  const world = s.pts.map(v => add(s.c, v))
+  world[i] = p
+  s.c = mean(world)
+  s.pts = world.map(v => sub(v, s.c))
+}
+
+const mean = (pts: Point[]): Point =>
+  pts.reduce((m, v) => ({ x: m.x + v.x / pts.length, y: m.y + v.y / pts.length }), { x: 0, y: 0 })
+
+/** Shifts points so their mean is the origin. */
+function centered(pts: Point[]): Point[] {
+  const m = mean(pts)
+  return pts.map(v => sub(v, m))
 }
 
 /** Moves the whole shape. Vertices are stored relative to the center, so only it changes. */

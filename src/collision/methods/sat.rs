@@ -5,26 +5,30 @@
 use super::prelude::*;
 use super::sketch_axis;
 use crate::collision::shape::MAX_VERTS;
-
-/// Candidate axes contributed by one shape.
+/// Candidate axes contributed by one shape, with the index of the edge each is normal to.
 struct Axes {
     v: [Vec2; MAX_VERTS],
+    edge: [u8; MAX_VERTS],
     n: usize,
 }
 
 fn axes<P: Probe>(shape: &Shape, p: &mut P) -> Axes {
     let mut out = Axes {
         v: [Vec2::default(); MAX_VERTS],
+        edge: [0; MAX_VERTS],
         n: 0,
     };
     match *shape {
         // Box edges come in parallel pairs; their normals are already unit length.
+        // Edge 0 runs along the box's x axis, edge 1 along its y axis.
         Shape::Aabb { .. } => {
-            out.v[..2].copy_from_slice(&[Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)]);
+            out.v[..2].copy_from_slice(&[Vec2::new(0.0, 1.0), Vec2::new(1.0, 0.0)]);
+            out.edge[..2].copy_from_slice(&[0, 1]);
             out.n = 2;
         }
         Shape::Obb { u, .. } => {
-            out.v[..2].copy_from_slice(&[u, u.perp()]);
+            out.v[..2].copy_from_slice(&[u.perp(), u]);
+            out.edge[..2].copy_from_slice(&[0, 1]);
             out.n = 2;
         }
         Shape::Triangle(poly) | Shape::Polygon(poly) => {
@@ -35,6 +39,7 @@ fn axes<P: Probe>(shape: &Shape, p: &mut P) -> Axes {
                     p.sqrt();
                     p.div();
                     out.v[out.n] = Vec2::new(e.y, -e.x).normalized();
+                    out.edge[out.n] = i as u8;
                     out.n += 1;
                 }
             }
@@ -66,7 +71,7 @@ fn project<P: Probe>(shape: &Shape, poly: Option<&Poly>, axis: Vec2, p: &mut P) 
 }
 
 /// For a circle against a polygon: the axis from the polygon vertex nearest the center.
-fn circle_axis<P: Probe>(circle: &Shape, poly: &Poly, p: &mut P) -> Option<Vec2> {
+fn circle_axis<P: Probe>(circle: &Shape, poly: &Poly, p: &mut P) -> Option<(Vec2, (Vec2, Vec2))> {
     let Shape::Circle { c, .. } = *circle else {
         return None;
     };
@@ -82,7 +87,7 @@ fn circle_axis<P: Probe>(circle: &Shape, poly: &Poly, p: &mut P) -> Option<Vec2>
     }
     p.sqrt();
     p.div();
-    Some(d.normalized())
+    Some((d.normalized(), (nearest, c)))
 }
 
 /// The axis of least overlap so far.
@@ -99,21 +104,40 @@ struct Best {
 /// least penetration gives the minimum translation vector.
 pub fn sat<P: Probe>(a: &Shape, b: &Shape, p: &mut P) -> Contact {
     let (pa, pb) = (a.polygon(), b.polygon());
-    let (aa, ab) = (axes(a, p), axes(b, p));
     let extra = match (&pa, &pb) {
         (None, Some(poly)) => circle_axis(a, poly, p),
         (Some(poly), None) => circle_axis(b, poly, p),
         _ => None,
     };
-    let candidates = aa.v[..aa.n]
-        .iter()
-        .chain(&ab.v[..ab.n])
-        .chain(extra.as_ref());
+    let (aa, ab) = (axes(a, p), axes(b, p));
     let total = aa.n + ab.n + extra.is_some() as usize;
 
     let mut best: Option<Best> = None;
-    for (i, &axis) in candidates.enumerate() {
+    for i in 0..total {
+        let axis = if i < aa.n {
+            aa.v[i]
+        } else if i < aa.n + ab.n {
+            ab.v[i - aa.n]
+        } else {
+            extra.map(|(axis, _)| axis).unwrap_or_default()
+        };
         p.axis();
+        if p.sketching() {
+            // Mark the edge (or vertex-to-center line) whose normal is being tested.
+            let (e0, e1) = match (&pa, &pb) {
+                (Some(poly), _) if i < aa.n => poly.edge(aa.edge[i] as usize),
+                (_, Some(poly)) if i < aa.n + ab.n => poly.edge(ab.edge[i - aa.n] as usize),
+                _ => extra.map(|(_, e)| e).unwrap_or_default(),
+            };
+            p.note(|| Note::segment(e0, e1, Tone::Verdigris));
+            p.note(|| {
+                Note::label(
+                    (e0 + e1) * 0.5 + axis * 14.0,
+                    Tone::Verdigris,
+                    format!("{}", i + 1),
+                )
+            });
+        }
         let ia = project(a, pa.as_ref(), axis, p);
         let ib = project(b, pb.as_ref(), axis, p);
         // Distance B must move along +axis, or along -axis, to separate.
@@ -125,7 +149,7 @@ pub fn sat<P: Probe>(a: &Shape, b: &Shape, p: &mut P) -> Contact {
                 axis,
                 ia,
                 ib,
-                || format!("separating axis {} of {total}", i + 1),
+                || format!("axis {} of {total} separates", i + 1),
                 p,
             );
             return Contact::boolean(false);

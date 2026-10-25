@@ -68,11 +68,14 @@ pub fn edge_crossing<P: Probe>(a: &Shape, b: &Shape, p: &mut P) -> Contact {
     let (Some(pa), Some(pb)) = (a.polygon(), b.polygon()) else {
         unreachable!("edge test on non-polygons");
     };
+    let total = pa.len() * pb.len();
     for i in 0..pa.len() {
         let (a0, a1) = pa.edge(i);
         for j in 0..pb.len() {
             p.iteration();
             let (b0, b1) = pb.edge(j);
+            // Each tested pair as a faint link between the edge midpoints.
+            p.note(|| Note::dashed((a0 + a1) * 0.5, (b0 + b1) * 0.5, Tone::Faint));
             if segments_cross(a0, a1, b0, b1, p) {
                 p.note(|| Note::segment(a0, a1, Tone::Signal));
                 p.note(|| Note::segment(b0, b1, Tone::Signal));
@@ -80,7 +83,7 @@ pub fn edge_crossing<P: Probe>(a: &Shape, b: &Shape, p: &mut P) -> Contact {
                     Note::label(
                         (a0 + a1 + b0 + b1) * 0.25 + Vec2::new(0.0, -14.0),
                         Tone::Signal,
-                        "edges cross",
+                        format!("edges cross, pair {} of {total}", i * pb.len() + j + 1),
                     )
                 });
                 return Contact::boolean(true);
@@ -103,7 +106,7 @@ pub fn edge_crossing<P: Probe>(a: &Shape, b: &Shape, p: &mut P) -> Contact {
         Note::label(
             a.center().lerp(b.center(), 0.5),
             Tone::Cobalt,
-            "no crossings, no containment",
+            format!("none of {total} edge pairs cross, no containment"),
         )
     });
     Contact::boolean(false)

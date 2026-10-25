@@ -94,6 +94,8 @@ a {
 
 .app {
     display: grid;
+    /* minmax keeps the scrolling nav from widening the page on small screens. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: var(--masthead) 1fr;
     height: 100%;
 }

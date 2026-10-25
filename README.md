@@ -23,7 +23,7 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 
 ### Features
 
-- **Circle-Circle Collision Detection**: Fast collision detection with distance and penetration calculations
+- **Collision Lab**: Pick two shapes (circle, boxes, triangle, convex polygon, ellipse, capsule) and switch between the methods that can test them, from pair-specific shortcuts to SAT and GJK/EPA, each with its own construction drawing, operation counts and timing
 - **Point-Line Distance Demo**: Visualizes the shortest distance from a point to a line segment
 - **Boids Simulation**: Reynolds flocking (separation, alignment, cohesion) with field of view, look-ahead edge avoidance and a spatial grid for neighbor lookups; the flock state lives in WASM
 - **Voronoi / Delaunay**: Interactive Voronoi diagram / Delaunay triangulation
@@ -39,7 +39,7 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 silly-demos/
 ├── src/                   # Rust WebAssembly core
 │   ├── lib.rs             # wasm-bindgen exports
-│   ├── collision.rs       # Collision tests
+│   ├── collision/         # Shapes, collision methods, broadphase, method registry
 │   ├── geometry.rs        # Point/segment geometry
 │   ├── boids.rs           # Flocking simulation
 │   ├── voronoi.rs         # Delaunay triangulation / Voronoi edges
@@ -47,6 +47,7 @@ silly-demos/
 ├── pkg/                   # Generated WebAssembly package (wasm-pack)
 ├── react-app/             # React frontend application
 │   ├── src/
+│   │   ├── collision/     # Shape editors and the construction-note renderer
 │   │   ├── components/    # Sheet layout, shared canvases
 │   │   ├── demos/         # Interactive demos
 │   │   └── lib/           # Canvas, drafting, theme and WASM helpers
@@ -117,12 +118,13 @@ The application will be available at: `https://your-username.github.io/[reposito
 
 **Automatic Deployment**: Push to the main branch triggers automatic build and deployment via GitHub Actions, with the base path automatically configured to match the repository name.
 
-**Client-Side Routing**: The app uses a 404.html redirect solution to handle direct navigation to React Router routes on GitHub Pages, ensuring URLs like `/circle-collision` work correctly when accessed directly.
+**Client-Side Routing**: The app uses a 404.html redirect solution to handle direct navigation to React Router routes on GitHub Pages, ensuring URLs like `/collision` work correctly when accessed directly.
 
 ## Available Demos
 
 - **Boids**: Flocking simulation with live controls for every rule and a view of what a single boid perceives
-- **Circle Collision**: Drag two circles; dimensions show center distance, gap and overlap
+- **Collision Lab**: Two shapes, every applicable collision method, its construction and its cost
+- **Voronoi / Delaunay**: Moving points with their Delaunay triangulation and Voronoi diagram
 - **Point to Segment**: Shortest distance from a point to a line segment versus the perpendicular distance to the infinite line
 
 ## Technology Stack

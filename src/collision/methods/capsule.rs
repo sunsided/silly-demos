@@ -93,6 +93,7 @@ pub fn capsule_polygon<P: Probe>(a: &Shape, b: &Shape, p: &mut P) -> Contact {
             return Contact::boolean(true);
         }
         let (ca, cb) = closest_between_segments(s0, s1, v0, v1, p);
+        p.note(|| Note::dashed(ca, cb, Tone::Faint));
         let d2 = (cb - ca).length_squared();
         p.dots(1);
         if d2 < best.0 {
