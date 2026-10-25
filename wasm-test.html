@@ -171,7 +171,11 @@
         lab.set_shape(0, "circle", new Float32Array([A.x, A.y, A.r]));
         lab.set_shape(1, "circle", new Float32Array([B.x, B.y, B.r]));
         const report = lab.run("circle-distance", 0);
-        const gap = report.distance;
+        if (!report) {
+            console.error('CollisionLab has no "circle-distance" method for two circles');
+            return;
+        }
+        const gap = report.distance ?? 0;
         const res = { intersect: report.intersect };
         report.free();
         interEl.textContent = res.intersect ? "yes" : "no";

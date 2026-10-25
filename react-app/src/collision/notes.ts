@@ -7,6 +7,14 @@ const tones = (t: Theme) => [t.ink, t.inkSoft, t.inkFaint, t.cobalt, t.signal, t
 const DASHED = 1
 const FILLED = 2
 
+/** Each problem is logged once, not on every frame. */
+const warned = new Set<string>()
+function warnOnce(message: string) {
+  if (warned.has(message)) return
+  warned.add(message)
+  console.warn(`drawNotes: ${message}`)
+}
+
 /**
  * Draws the construction notes a method recorded. The buffer holds, per note,
  * `[kind, tone, flags, label, count, ...count floats]`; see `Note::encode`.
@@ -14,7 +22,16 @@ const FILLED = 2
 export function drawNotes(ctx: CanvasRenderingContext2D, t: Theme, buf: Float32Array, labels: string[]) {
   const palette = tones(t)
   for (let i = 0; i < buf.length;) {
+    // A short buffer means the encoder and this decoder disagree; stop rather than read garbage.
+    if (i + 5 > buf.length) {
+      warnOnce('truncated note header')
+      return
+    }
     const [kind, tone, flags, text, count] = buf.subarray(i, i + 5)
+    if (i + 5 + count > buf.length) {
+      warnOnce(`note of kind ${kind} claims ${count} values past the end of the buffer`)
+      return
+    }
     const d = buf.subarray(i + 5, i + 5 + count)
     i += 5 + count
     const color = palette[tone] ?? t.ink
@@ -97,6 +114,9 @@ export function drawNotes(ctx: CanvasRenderingContext2D, t: Theme, buf: Float32A
         arrowhead(ctx, { x: bx, y: by }, (bx - ax) / len, (by - ay) / len)
         break
       }
+      default:
+        // A kind added to `Note::encode` without a case here.
+        warnOnce(`unknown note kind ${kind}`)
     }
     ctx.restore()
   }
