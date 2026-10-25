@@ -29,6 +29,8 @@ tasks:
       - Cargo.toml
       - Cargo.lock
       - src/**/*.rs
+      - crates/*/Cargo.toml
+      - crates/*/src/**/*.rs
     generates:
       - pkg/silly_demos.js
       - pkg/silly_demos_bg.wasm
@@ -54,12 +56,12 @@ tasks:
       - task: web:preview
 
   test:
-    desc: Run Rust unit tests natively
+    desc: Run Rust unit tests natively (all workspace crates)
     preconditions:
       - sh: command -v cargo
         msg: "cargo not found — install Rust from https://rustup.rs/"
     cmds:
-      - cargo test --lib --target {{.HOST}} {{.CLI_ARGS}}
+      - cargo test --workspace --lib --target {{.HOST}} {{.CLI_ARGS}}
 
   test:wasm:
     desc: Run wasm-bindgen tests in headless Firefox
@@ -80,14 +82,14 @@ tasks:
   lint:
     desc: Lint Rust code (including tests) and typecheck the frontend
     cmds:
-      - cargo clippy --lib --tests --target {{.HOST}} -- -D warnings
+      - cargo clippy --workspace --lib --tests --target {{.HOST}} -- -D warnings
       - task: web:check
 
   lint:fix:
     desc: Auto-fix Rust lint issues and format
     aliases: [fix]
     cmds:
-      - cargo clippy --lib --tests --target {{.HOST}} --fix --allow-staged
+      - cargo clippy --workspace --lib --tests --target {{.HOST}} --fix --allow-staged
       - cargo fmt --all
 
   check:
