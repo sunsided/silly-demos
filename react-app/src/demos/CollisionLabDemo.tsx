@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Choice, ControlGroup, Loading, Select, Sheet, Toggle } from '../components/Sheet'
+import { Choice, ControlGroup, Loading, Select, Sheet, Slider, Toggle } from '../components/Sheet'
 import { drawNotes } from '../collision/notes'
 import {
   SHAPE_KINDS,
@@ -24,7 +24,10 @@ type Lab = InstanceType<Wasm['CollisionLab']>
 /** Broadphase flags, as in `src/collision/broadphase.rs`. */
 const BOUNDING_CIRCLE = 1
 const BOUNDING_BOX = 2
-const STAGES = ['Bounding circle', 'Bounding box', 'Full test']
+const QUADTREE = 4
+/** Indexed by `CollisionReport.stage`. */
+const STAGES = ['Bounding circle', 'Bounding box', 'Full test', 'Quadtree']
+const FULL_TEST = 2
 /** Ground truth for the comparison table. */
 const REFERENCE = 'gjk-epa'
 const HANDLE_RADIUS = 10
@@ -56,8 +59,58 @@ const sameRows = (a: Row[], b: Row[]) =>
 const formatDistance = (d: number | undefined) =>
   d === undefined ? '—' : d > 0 ? `gap ${d.toFixed(1)}` : `overlap ${(-d).toFixed(1)}`
 
+/** Quadtree numbers, as returned by `CollisionReport.scene()`. */
+interface SceneStats {
+  bodies: number
+  nodes: number
+  depth: number
+  checks: number
+  candidates: number
+  allPairs: number
+  partners: number
+}
+
+function readScene(raw: Uint32Array): SceneStats | null {
+  if (raw.length < 7) return null
+  const [bodies, nodes, depth, checks, candidates, allPairs, partners] = raw
+  return { bodies, nodes, depth, checks, candidates, allPairs, partners }
+}
+
+/**
+ * Nanoseconds per call of `run(n)`, which must do its work `n` times.
+ * Browsers coarsen performance.now(), so the batch grows until it takes a few ms.
+ */
+function timePerRun(run: (n: number) => void) {
+  let n = 16
+  for (;;) {
+    const t0 = performance.now()
+    run(n)
+    const elapsed = performance.now() - t0
+    if (elapsed > 4 || n >= 1 << 22) return (elapsed * 1e6) / n
+    n *= 4
+  }
+}
+
+function drawCrowd(ctx: CanvasRenderingContext2D, t: Theme, buf: Float32Array) {
+  ctx.save()
+  ctx.strokeStyle = t.inkSoft
+  ctx.fillStyle = t.cobaltFaint
+  ctx.lineWidth = 1
+  for (let i = 0; i < buf.length;) {
+    const n = buf[i]
+    tracePath(ctx, buf.subarray(i + 1, i + 1 + n * 2))
+    ctx.fill()
+    ctx.stroke()
+    i += 1 + n * 2
+  }
+  ctx.restore()
+}
+
 const formatTime = (ns: number | undefined) =>
-  ns === undefined ? '…' : ns < 10 ? `${ns.toFixed(1)} ns` : `${Math.round(ns)} ns`
+  ns === undefined ? '…'
+    : ns >= 1000 ? `${(ns / 1000).toFixed(ns >= 10000 ? 0 : 1)} µs`
+    : ns < 10 ? `${ns.toFixed(1)} ns`
+    : `${Math.round(ns)} ns`
 
 function tracePath(ctx: CanvasRenderingContext2D, outline: Float32Array) {
   ctx.beginPath()
@@ -124,6 +177,10 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
   const [broadphase, setBroadphase] = useState(0)
   const [rows, setRows] = useState<Row[]>([])
   const [timings, setTimings] = useState<Record<string, number>>({})
+  const [crowd, setCrowd] = useState(0)
+  const [scene, setScene] = useState<SceneStats | null>(null)
+  const [sceneTimes, setSceneTimes] = useState<{ quadtree: number; brute: number } | null>(null)
+  const [reducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
 
   const ids = rows.map(r => r.id)
   const wanted = search.get('m')
@@ -216,50 +273,77 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
       const l = lab.current
       if (!l) return
       const result: Record<string, number> = {}
-      for (const id of methods) {
-        // Browsers coarsen performance.now(), so grow the batch until it takes a few ms.
-        let n = 64
-        let elapsed = 0
-        for (;;) {
-          const t0 = performance.now()
-          l.bench(id, mask, n)
-          elapsed = performance.now() - t0
-          if (elapsed > 4 || n >= 1 << 22) break
-          n *= 4
-        }
-        result[id] = (elapsed * 1e6) / n
-      }
+      for (const id of methods) result[id] = timePerRun(n => l.bench(id, mask, n))
       setTimings(result)
     }, 250)
   }
 
   const notes = useRef<{ buf: Float32Array; labels: string[] }>({ buf: new Float32Array(), labels: [] })
 
-  useAnimationFrame(() => {
+  // The crowd is rebuilt when its size changes and keeps drifting afterwards.
+  useEffect(() => {
+    const l = lab.current
+    if (!l) return
+    l.set_crowd(crowd, size.current.width || 800, size.current.height || 600, 0x5eed)
+  }, [crowd, size, wasm])
+
+  // The scene keeps moving, so the quadtree is re-timed on an interval rather than on settle.
+  const quadtreeOn = (broadphase & QUADTREE) !== 0
+  useEffect(() => {
+    if (!quadtreeOn) {
+      setSceneTimes(null)
+      return
+    }
+    const measure = () => {
+      const l = lab.current
+      if (!l) return
+      setSceneTimes({
+        quadtree: timePerRun(n => l.bench_quadtree(n)),
+        brute: timePerRun(n => l.bench_brute_force(n)),
+      })
+    }
+    const first = window.setTimeout(measure, 300)
+    const every = window.setInterval(measure, 1500)
+    return () => {
+      clearTimeout(first)
+      clearInterval(every)
+    }
+  }, [quadtreeOn, crowd])
+
+  useAnimationFrame((_, dt) => {
     const ctx = ref.current?.getContext('2d')
     const l = lab.current
     if (!ctx || !l || size.current.width === 0) return
     const t = theme.current
     const [a, b] = shapes.current
 
-    // Recompute only when the shapes, the broadphase or the selected method changed.
+    // A drifting crowd changes the scene every frame, so it always recomputes.
+    const crowdMoving = crowd > 0 && !reducedMotion
+    if (crowdMoving) l.step_crowd(Math.min(dt, 0.1))
+
+    // Otherwise recompute only when the shapes, broadphase, crowd or selected method changed.
     const poseKey = `${version.current}|${broadphase}`
-    const key = `${poseKey}|${method}`
-    if (computed.current?.key !== key) {
+    const key = `${poseKey}|${crowd}|${method}`
+    if (crowdMoving || computed.current?.key !== key) {
       l.set_shape(0, a.kind, params(a))
       l.set_shape(1, b.kind, params(b))
       outlines.current = [l.outline(0), l.outline(1)]
 
       const rows: Row[] = []
+      let stats: SceneStats | null = null
       for (const id of l.methods()) {
         const r = l.run(id, broadphase)
         if (!r) continue
         rows.push({ id, intersect: r.intersect, distance: r.distance, stage: r.stage, counts: Array.from(r.counts()) })
-        if (id === method || (!method && rows.length === 1)) notes.current = { buf: r.notes(), labels: r.labels() }
+        if (id === method || (!method && rows.length === 1)) {
+          notes.current = { buf: r.notes(), labels: r.labels() }
+          stats = readScene(r.scene())
+        }
         r.free()
       }
       computed.current = { key, rows }
       setRows(prev => (sameRows(prev, rows) ? prev : rows))
+      setScene(prev => (JSON.stringify(prev) === JSON.stringify(stats) ? prev : stats))
 
       if (poseKey !== pose.current) {
         pose.current = poseKey
@@ -274,6 +358,7 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
     const overlap = next.find(r => r.id === REFERENCE)?.intersect ?? false
     const selected = next.find(r => r.id === method) ?? next[0]
     const hit = selected?.intersect ?? false
+    if (crowd > 0) drawCrowd(ctx, t, l.crowd_outlines())
     drawShape(ctx, t, outlines.current[0], a, hit, 'A')
     drawShape(ctx, t, outlines.current[1], b, hit, 'B')
 
@@ -311,10 +396,10 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
         },
         {
           label: 'Distance',
-          value: selected?.stage === 2 ? formatDistance(selected.distance) : '—',
+          value: selected?.stage === FULL_TEST ? formatDistance(selected.distance) : '—',
           tone: selected?.distance !== undefined && selected.distance <= 0 ? 'signal' : undefined,
         },
-        { label: 'Decided by', value: selected ? STAGES[selected.stage] : '—', tone: selected?.stage === 2 ? undefined : 'cobalt' },
+        { label: 'Decided by', value: selected ? STAGES[selected.stage] : '—', tone: selected?.stage === FULL_TEST ? undefined : 'cobalt' },
         { label: 'Time per test', value: method ? formatTime(timings[method]) : '—' },
         { label: 'Products', value: dots },
         { label: 'Roots / divisions', value: `${sqrts} / ${divs}` },
@@ -323,6 +408,17 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
       ]}
       canvas={<canvas ref={ref} className="drawing-canvas" role="img" aria-label="Two draggable shapes with the selected collision method's construction" />}
       notes={
+        <>
+        {scene && (
+          <p className="scene-stats">
+            <strong>Quadtree</strong> over {scene.bodies} bodies: {scene.nodes} cells, depth {scene.depth}.{' '}
+            {scene.candidates.toLocaleString()} candidate pairs instead of {scene.allPairs.toLocaleString()}
+            {' '}({((100 * scene.candidates) / Math.max(1, scene.allPairs)).toFixed(1)} %); A and B have {scene.partners}.
+            {sceneTimes && (
+              <> Build and collect pairs {formatTime(sceneTimes.quadtree)}, brute force {formatTime(sceneTimes.brute)}.</>
+            )}
+          </p>
+        )}
         <table className="compare">
           <caption>All methods for this pair</caption>
           <thead>
@@ -335,7 +431,7 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
           </thead>
           <tbody>
             {rows.map(r => {
-              const disagrees = reference && r.stage === 2 && r.intersect !== reference.intersect
+              const disagrees = reference && r.stage === FULL_TEST && r.intersect !== reference.intersect
               return (
                 <tr key={r.id} data-selected={r.id === method || undefined} onClick={() => setParam('m', r.id)}>
                   <th scope="row">{wasm.CollisionLab.method_name(r.id)}</th>
@@ -343,13 +439,14 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
                     {r.intersect ? 'yes' : 'no'}
                     {disagrees && <span title="Disagrees with GJK + EPA"> ≠</span>}
                   </td>
-                  <td>{r.stage === 2 ? formatDistance(r.distance) : STAGES[r.stage].toLowerCase()}</td>
+                  <td>{r.stage === FULL_TEST ? formatDistance(r.distance) : STAGES[r.stage].toLowerCase()}</td>
                   <td>{formatTime(timings[r.id])}</td>
                 </tr>
               )
             })}
           </tbody>
         </table>
+        </>
       }
     >
       <ControlGroup title="Shapes">
@@ -373,6 +470,8 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
       <ControlGroup title="Broadphase">
         <Toggle label="Bounding circles first" checked={(broadphase & BOUNDING_CIRCLE) !== 0} onChange={toggle(BOUNDING_CIRCLE)} />
         <Toggle label="Bounding boxes first" checked={(broadphase & BOUNDING_BOX) !== 0} onChange={toggle(BOUNDING_BOX)} />
+        <Toggle label="Quadtree over the scene" checked={quadtreeOn} onChange={toggle(QUADTREE)} />
+        <Slider label="Crowd" unit="shapes" value={crowd} min={0} max={400} step={10} onChange={setCrowd} />
       </ControlGroup>
     </Sheet>
   )

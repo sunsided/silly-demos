@@ -4,6 +4,8 @@ import type { Theme } from '../lib/theme'
 /** Palette order matches `Tone` in `src/collision/report.rs`. */
 const tones = (t: Theme) => [t.ink, t.inkSoft, t.inkFaint, t.cobalt, t.signal, t.verdigris]
 
+/** `Tone::Faint` */
+const FAINT = 2
 const DASHED = 1
 const FILLED = 2
 
@@ -80,7 +82,8 @@ export function drawNotes(ctx: CanvasRenderingContext2D, t: Theme, buf: Float32A
           ctx.fill()
           ctx.globalAlpha = 1
         }
-        ctx.lineWidth = flags & DASHED ? 1 : 1.5
+        // Faint polygons are reference grids (quadtree cells); keep them hairline.
+        ctx.lineWidth = flags & DASHED || tone === FAINT ? 1 : 1.5
         ctx.stroke()
         break
       }

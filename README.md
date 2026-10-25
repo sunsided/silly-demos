@@ -23,7 +23,7 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 
 ### Features
 
-- **Collision Lab**: Pick two shapes (circle, boxes, triangle, convex polygon, ellipse, capsule) and switch between the methods that can test them, from pair-specific shortcuts to SAT and GJK/EPA, each with its own construction drawing, operation counts and timing
+- **Collision Lab**: Pick two shapes (circle, boxes, triangle, convex polygon, ellipse, capsule) and switch between the methods that can test them, from pair-specific shortcuts to SAT and GJK/EPA, each with its own construction drawing, operation counts and timing; a quadtree over a drifting crowd of shapes shows scene-wide pair pruning against brute force
 - **Point-Line Distance Demo**: Visualizes the shortest distance from a point to a line segment
 - **Boids Simulation**: Reynolds flocking (separation, alignment, cohesion) with field of view, look-ahead edge avoidance and a spatial grid for neighbor lookups; the flock state lives in WASM
 - **Voronoi / Delaunay**: Interactive Voronoi diagram / Delaunay triangulation

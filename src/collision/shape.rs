@@ -111,6 +111,14 @@ impl Poly {
         (self.v[i], self.v[(i + 1) % self.n])
     }
 
+    pub fn translated(&self, d: Vec2) -> Self {
+        let mut out = *self;
+        for v in &mut out.v[..out.n] {
+            *v += d;
+        }
+        out
+    }
+
     pub fn centroid(&self) -> Vec2 {
         let sum = self.verts().iter().fold(Vec2::default(), |s, &v| s + v);
         sum / self.n.max(1) as f32
@@ -205,6 +213,26 @@ impl Shape {
                 r: at(4)?.abs(),
             },
         })
+    }
+
+    /// The same shape moved by `d`.
+    pub fn translated(&self, d: Vec2) -> Self {
+        match *self {
+            Shape::Circle { c, r } => Shape::Circle { c: c + d, r },
+            Shape::Aabb { min, max } => Shape::Aabb {
+                min: min + d,
+                max: max + d,
+            },
+            Shape::Obb { c, half, u } => Shape::Obb { c: c + d, half, u },
+            Shape::Triangle(p) => Shape::Triangle(p.translated(d)),
+            Shape::Polygon(p) => Shape::Polygon(p.translated(d)),
+            Shape::Ellipse { c, a, b, u } => Shape::Ellipse { c: c + d, a, b, u },
+            Shape::Capsule { p, q, r } => Shape::Capsule {
+                p: p + d,
+                q: q + d,
+                r,
+            },
+        }
     }
 
     pub fn kind(&self) -> ShapeKind {

@@ -4,8 +4,10 @@
 pub mod broadphase;
 pub mod methods;
 pub mod probe;
+pub mod quadtree;
 pub mod registry;
 pub mod report;
+pub mod scene;
 pub mod shape;
 
 #[cfg(test)]

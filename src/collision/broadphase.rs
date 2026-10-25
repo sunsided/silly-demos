@@ -6,6 +6,8 @@ use crate::vec2::Vec2;
 /// Bit flags selecting the broadphase stages run before the narrowphase.
 pub const BOUNDING_CIRCLE: u32 = 1;
 pub const BOUNDING_BOX: u32 = 2;
+/// Scene-wide: A and B are only tested if they share a quadtree leaf.
+pub const QUADTREE: u32 = 4;
 
 /// How far a test got before it returned.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -13,6 +15,7 @@ pub enum Stage {
     BoundingCircle = 0,
     BoundingBox = 1,
     Narrowphase = 2,
+    Quadtree = 3,
 }
 
 /// Runs the enabled cheap rejection tests on the cached bounding volumes.
