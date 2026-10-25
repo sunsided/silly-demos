@@ -68,12 +68,14 @@ interface SceneStats {
   candidates: number
   allPairs: number
   partners: number
+  boxOverlaps: number
+  collisions: number
 }
 
 function readScene(raw: Uint32Array): SceneStats | null {
-  if (raw.length < 7) return null
-  const [bodies, nodes, depth, checks, candidates, allPairs, partners] = raw
-  return { bodies, nodes, depth, checks, candidates, allPairs, partners }
+  if (raw.length < 9) return null
+  const [bodies, nodes, depth, checks, candidates, allPairs, partners, boxOverlaps, collisions] = raw
+  return { bodies, nodes, depth, checks, candidates, allPairs, partners, boxOverlaps, collisions }
 }
 
 /**
@@ -104,6 +106,9 @@ function drawCrowd(ctx: CanvasRenderingContext2D, t: Theme, buf: Float32Array) {
   }
   ctx.restore()
 }
+
+/** Percentage with a non-breaking space, so the sign never wraps onto its own line. */
+const percent = (part: number, whole: number) => `${((100 * part) / Math.max(1, whole)).toFixed(1)}\u00a0%`
 
 const formatTime = (ns: number | undefined) =>
   ns === undefined ? '…'
@@ -415,7 +420,9 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
           <p className="scene-stats">
             <strong>Quadtree</strong> over {scene.bodies} bodies: {scene.nodes} cells, depth {scene.depth}.{' '}
             {scene.candidates.toLocaleString()} candidate pairs instead of {scene.allPairs.toLocaleString()}
-            {' '}({((100 * scene.candidates) / Math.max(1, scene.allPairs)).toFixed(1)} %); A and B have {scene.partners}.
+            {' '}({percent(scene.candidates, scene.allPairs)}); A and B have {scene.partners}.{' '}
+            Of the candidates, {scene.boxOverlaps} have overlapping boxes and{' '}
+            <strong>{scene.collisions} really collide</strong> ({percent(scene.collisions, scene.candidates)}).
             {sceneTimes && (
               <> Build and collect pairs {formatTime(sceneTimes.quadtree)}, brute force {formatTime(sceneTimes.brute)}.</>
             )}

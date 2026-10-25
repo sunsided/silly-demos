@@ -270,7 +270,8 @@ impl CollisionReport {
         vec![c.dots, c.sqrts, c.divs, c.axes, c.supports, c.iterations]
     }
 
-    /// Quadtree stats `[bodies, nodes, depth, checks, candidates, all_pairs, partners]`,
+    /// Quadtree stats `[bodies, nodes, depth, checks, candidates, all_pairs, partners,
+    /// box_overlaps, collisions]`,
     /// or empty when the quadtree stage is off.
     pub fn scene(&self) -> Vec<u32> {
         self.scene
@@ -283,6 +284,8 @@ impl CollisionReport {
                     s.candidates,
                     s.all_pairs,
                     s.partners,
+                    s.box_overlaps,
+                    s.collisions,
                 ]
             })
             .unwrap_or_default()
