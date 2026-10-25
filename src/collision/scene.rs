@@ -1,7 +1,9 @@
 //! A crowd of drifting bodies around shapes A and B, and the quadtree stage
 //! that decides whether A and B are worth testing at all.
 
-use super::quadtree::{Aabb, Quadtree};
+use super::methods::gjk::gjk_boolean;
+use super::probe::Silent;
+use super::quadtree::{Aabb, Quadtree, overlaps};
 use super::report::{Note, Tone};
 use super::shape::{Body, Shape, ShapeKind};
 use crate::rand::frand01;
@@ -80,6 +82,10 @@ pub struct SceneStats {
     pub all_pairs: u32,
     /// Candidate pairs involving A or B.
     pub partners: u32,
+    /// Candidates whose bounding boxes really overlap.
+    pub box_overlaps: u32,
+    /// Candidates whose shapes really collide (GJK).
+    pub collisions: u32,
 }
 
 /// Boxes of A, B and the crowd (in that order) and the root cell covering them all.
@@ -146,6 +152,21 @@ pub fn quadtree_stage(
         });
     }
 
+    // How much of the candidate list is real work: boxes that overlap, and shapes that touch.
+    let body = |i: u32| match i {
+        0 => a,
+        1 => b,
+        _ => &crowd.bodies[i as usize - 2],
+    };
+    let mut box_overlaps = 0;
+    let mut collisions = 0;
+    for &(i, j) in &pairs {
+        if overlaps(&boxes[i as usize], &boxes[j as usize]) {
+            box_overlaps += 1;
+            collisions += gjk_boolean(&body(i).shape, &body(j).shape, &mut Silent).intersect as u32;
+        }
+    }
+
     let stats = SceneStats {
         bodies: n,
         nodes: tree.nodes.len() as u32,
@@ -154,6 +175,40 @@ pub fn quadtree_stage(
         candidates: pairs.len() as u32,
         all_pairs: n * n.saturating_sub(1) / 2,
         partners: partners.len() as u32,
+        box_overlaps,
+        collisions,
     };
     (shared, stats)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The quadtree must not hide a real collision: the same number of
+    /// colliding pairs as testing every pair directly.
+    #[test]
+    fn candidates_find_every_collision() {
+        let half = Vec2::new(400.0, 300.0);
+        let crowd = Crowd::new(250, half, 7);
+        let circle = |x| {
+            Body::new(Shape::Circle {
+                c: Vec2::new(x, 0.0),
+                r: 80.0,
+            })
+        };
+        let (a, b) = (circle(-60.0), circle(60.0));
+        let (_, stats) = quadtree_stage(&a, &b, &crowd, &mut Vec::new());
+
+        let bodies: Vec<&Body> = [&a, &b].into_iter().chain(&crowd.bodies).collect();
+        let mut brute = 0;
+        for (i, x) in bodies.iter().enumerate() {
+            for y in &bodies[i + 1..] {
+                brute += gjk_boolean(&x.shape, &y.shape, &mut Silent).intersect as u32;
+            }
+        }
+        assert!(brute > 0, "the scene should contain some collisions");
+        assert_eq!(stats.collisions, brute);
+        assert!(stats.collisions <= stats.box_overlaps && stats.box_overlaps <= stats.candidates);
+    }
 }
