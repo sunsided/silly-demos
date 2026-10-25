@@ -1,0 +1,11 @@
+[package]
+name = "rover"
+version = "0.1.0"
+description = "A simulated differential-drive rover with a laser scanner that maps and explores a floor plan"
+authors = ["Markus Mayer <widemeadows@gmail.com>"]
+repository = "https://github.com/sunsided/silly-demos"
+license = "MIT OR Apache-2.0 OR EUPL-1.2"
+edition = "2024"
+publish = false
+
+[dependencies]

@@ -26,6 +26,13 @@ export const DEMOS = [
     rust: 'GeometryTests::point_line_test',
   },
   {
+    route: '/rover',
+    name: 'Rover exploration',
+    blurb:
+      'A rover with a laser scanner maps a floor plan it has never seen, clearing the fog of war frontier by frontier, then drives home.',
+    rust: 'RoverLab::step',
+  },
+  {
     route: '/voronoi',
     name: 'Voronoi / Delaunay',
     blurb: 'Moving points with their Delaunay triangulation and the Voronoi diagram it implies.',

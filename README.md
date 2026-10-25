@@ -27,6 +27,7 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 
 - **Collision Lab**: Pick two shapes (circle, boxes, triangle, convex polygon, ellipse, capsule) and switch between the methods that can test them, from pair-specific shortcuts to SAT and GJK/EPA, each with its own construction drawing, operation counts and timing; a quadtree over a drifting crowd of shapes shows scene-wide pair pruning against brute force
 - **Inverse Kinematics**: A planar arm reaching for a draggable or animated target, solved by FABRIK, CCD, Jacobian transpose or damped least squares, with the remaining error and iterations per frame; optional limits keep the links from crossing and the arm above the floor, rerouting it when it gets stuck
+- **Rover Exploration**: A differential-drive rover with a 240° laser scanner maps a floor plan it has never seen, clearing the fog of war; a frontier explorer plans to the nearest frontier by travel distance and drives home when none is left, next to a port of the reactive controller from a 2013 university lab. The simulation is its own crate, `crates/rover`
 - **Point-Line Distance Demo**: Visualizes the shortest distance from a point to a line segment
 - **Boids Simulation**: Reynolds flocking (separation, alignment, cohesion) with field of view, look-ahead edge avoidance and a spatial grid for neighbor lookups; the flock state lives in WASM
 - **Voronoi / Delaunay**: Interactive Voronoi diagram / Delaunay triangulation
@@ -48,7 +49,10 @@ silly-demos/
 │   ├── ik.rs              # Inverse kinematics solvers
 │   ├── boids.rs           # Flocking simulation
 │   ├── voronoi.rs         # Delaunay triangulation / Voronoi edges
+│   ├── rover_lab.rs       # WASM bindings for the rover crate
 │   └── vec2.rs            # 2D vector math
+├── crates/
+│   └── rover/             # Rover simulation: floor plan, laser, mapping, frontiers, planning, controllers
 ├── pkg/                   # Generated WebAssembly package (wasm-pack)
 ├── web/                   # SvelteKit frontend (static site)
 │   ├── tokens/tokens.json # Design tokens (W3C DTCG format)
@@ -115,6 +119,7 @@ BASE_PATH=/my-custom-path task build
 - **Collision Lab**: Two shapes, every applicable collision method, its construction and its cost
 - **Inverse Kinematics**: FABRIK, CCD and Jacobian solvers moving a jointed arm onto a target
 - **Voronoi / Delaunay**: Moving points with their Delaunay triangulation and Voronoi diagram
+- **Rover Exploration**: Fog-of-war mapping with frontier exploration and the trip home, or the 2013 reactive controller
 - **Point to Segment**: Shortest distance from a point to a line segment versus the perpendicular distance to the infinite line
 
 ## Technology Stack
