@@ -38,8 +38,20 @@ pub struct Quadtree {
 }
 
 impl Quadtree {
-    /// Builds the tree over `boxes` inside `bounds`, which should contain them all.
+    /// Builds the tree over `boxes` inside the fixed `bounds`. Boxes reaching
+    /// outside are clamped to it, so they land in the border cells; clamping
+    /// keeps overlapping boxes overlapping, so no pair is missed.
     pub fn build(bounds: Aabb, boxes: &[Aabb]) -> Self {
+        let clamp = |v: Vec2| {
+            Vec2::new(
+                v.x.clamp(bounds.0.x, bounds.1.x),
+                v.y.clamp(bounds.0.y, bounds.1.y),
+            )
+        };
+        let boxes: Vec<Aabb> = boxes
+            .iter()
+            .map(|&(lo, hi)| (clamp(lo), clamp(hi)))
+            .collect();
         let mut tree = Self {
             nodes: vec![Node {
                 bounds,
@@ -49,7 +61,7 @@ impl Quadtree {
             }],
             tests: 0,
         };
-        tree.split(0, boxes);
+        tree.split(0, &boxes);
         tree
     }
 
@@ -152,5 +164,20 @@ mod tests {
         }
         // The point of the tree: far fewer candidates than all pairs.
         assert!(candidates.len() < 300 * 299 / 2 / 10);
+    }
+
+    #[test]
+    fn boxes_outside_the_root_still_pair_up() {
+        let root = (Vec2::new(0.0, 0.0), Vec2::new(100.0, 100.0));
+        let b = |x0: f32, y0: f32, x1: f32, y1: f32| (Vec2::new(x0, y0), Vec2::new(x1, y1));
+        // Two overlapping boxes entirely right of the root, plus filler to force splits.
+        let mut boxes = vec![b(120.0, 40.0, 140.0, 60.0), b(130.0, 50.0, 150.0, 70.0)];
+        boxes.extend((0..20).map(|i| {
+            let x = (i % 5) as f32 * 20.0;
+            let y = (i / 5) as f32 * 25.0;
+            b(x, y, x + 5.0, y + 5.0)
+        }));
+        let (candidates, _) = Quadtree::build(root, &boxes).pairs();
+        assert!(candidates.binary_search(&(0, 1)).is_ok());
     }
 }
