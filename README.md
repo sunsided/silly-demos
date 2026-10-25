@@ -10,7 +10,7 @@
     <img src="https://img.shields.io/badge/sveltekit-3.1-ff3e00.svg?style=flat-square" alt="SvelteKit" />
     <img src="https://img.shields.io/badge/svelte-5-ff3e00.svg?style=flat-square" alt="Svelte" />
     <img src="https://img.shields.io/badge/vite-8.3-646cff.svg?style=flat-square" alt="Vite" />
-    <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg?style=flat-square" alt="License" />
+    <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0%20OR%20EUPL--1.2-green.svg?style=flat-square" alt="License" />
   </p>
 
 </div>
@@ -159,9 +159,10 @@ available from the root with a `web:` prefix (e.g. `task web:check`).
 
 ## License
 
-Licensed under either of
+Licensed under any of
 
 - Apache License, Version 2.0 ([LICENSE_APACHE](LICENSE_APACHE))
 - MIT License ([LICENSE_MIT](LICENSE_MIT))
+- European Union Public Licence, Version 1.2 ([LICENSE_EUPL](LICENSE_EUPL))
 
 at your option.
