@@ -15,7 +15,7 @@ tasks:
     desc: Install frontend dependencies from yarn.lock
     preconditions:
       - sh: command -v yarn
-        msg: "yarn not found — install Node.js 18+ and run: corepack enable"
+        msg: "yarn not found — install Node.js 20.19+ and run: corepack enable"
     sources:
       - package.json
       - yarn.lock

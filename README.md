@@ -7,8 +7,8 @@
   <p>
     <img src="https://img.shields.io/badge/rust-1.70+-orange.svg?style=flat-square" alt="Rust Version" />
     <img src="https://img.shields.io/badge/wasm--bindgen-0.2-blue.svg?style=flat-square" alt="wasm-bindgen" />
-    <img src="https://img.shields.io/badge/react-19.2-61dafb.svg?style=flat-square" alt="React" />
-    <img src="https://img.shields.io/badge/vite-7.1-646cff.svg?style=flat-square" alt="Vite" />
+    <img src="https://img.shields.io/badge/react-19.3-61dafb.svg?style=flat-square" alt="React" />
+    <img src="https://img.shields.io/badge/vite-8.3-646cff.svg?style=flat-square" alt="Vite" />
     <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg?style=flat-square" alt="License" />
   </p>
 
@@ -58,7 +58,7 @@ silly-demos/
 
 - [Rust](https://rustup.rs/) (1.70 or later)
 - [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
-- [Node.js](https://nodejs.org/) (18 or later)
+- [Node.js](https://nodejs.org/) (20.19 or later)
 - [Yarn](https://classic.yarnpkg.com/) (classic, e.g. via `corepack enable`)
 - [Task](https://taskfile.dev/installation/) runner
 

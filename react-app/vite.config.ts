@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { fileURLToPath } from "url";
 import path from 'path';
 
 export default defineConfig(({ mode }) => {
@@ -52,7 +51,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         // Correct path for glue code relative to vite.config.ts in react-app/
-        "silly_demos": path.resolve(__dirname, '../pkg/silly_demos.js')
+        "silly_demos": path.resolve(import.meta.dirname, '../pkg/silly_demos.js')
       },
     },
   };
