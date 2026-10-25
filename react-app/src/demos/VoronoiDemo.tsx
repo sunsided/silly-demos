@@ -1,390 +1,276 @@
 import { useEffect, useRef, useState } from 'react'
-import init, * as silly_demos from 'silly_demos'
+import { ControlGroup, Loading, Sheet, Slider, Toggle } from '../components/Sheet'
+import { useAnimationFrame, useCanvas, type Point } from '../lib/canvas'
+import { clear, cross, label } from '../lib/draft'
+import { useTheme, type Theme } from '../lib/theme'
+import { useWasm, type Wasm } from '../lib/wasm'
 
 // Each point is [x, y, vx, vy]
 const STRIDE = 4
 
-type Mode = 'triangulation' | 'voronoi'
-
-function toF32(arr: Float32Array | number[]): Float32Array {
-    return arr instanceof Float32Array ? arr : new Float32Array(arr)
+interface Stats {
+  triangles: number
+  edges: number
+  hover: string
 }
 
-function useHiDPICanvas(canvasRef: React.RefObject<HTMLCanvasElement | null>) {
-  useEffect(() => {
-    const initial = canvasRef.current
-    if (!initial) return
-
-    function resize() {
-      const c = canvasRef.current
-      if (!c) return
-      const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2))
-      const rect = c.getBoundingClientRect()
-      const w = Math.max(1, Math.floor(rect.width))
-      const h = Math.max(1, Math.floor(rect.height))
-      if (c.width !== Math.floor(w * dpr) || c.height !== Math.floor(h * dpr)) {
-        c.width = Math.floor(w * dpr)
-        c.height = Math.floor(h * dpr)
-        const ctx = c.getContext('2d')!
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      }
-      ;(c as any)._displayWidth = w
-      ;(c as any)._displayHeight = h
-    }
-
-    resize()
-    const ro = new ResizeObserver(() => resize())
-    const observed = canvasRef.current
-    if (observed) ro.observe(observed)
-    window.addEventListener('resize', resize)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', resize)
-    }
-  }, [canvasRef])
+function pointInTriangle(p: Point, a: Point, b: Point, c: Point): boolean {
+  const s1 = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
+  const s2 = (c.x - b.x) * (p.y - b.y) - (c.y - b.y) * (p.x - b.x)
+  const s3 = (a.x - c.x) * (p.y - c.y) - (a.y - c.y) * (p.x - c.x)
+  return (s1 >= 0 && s2 >= 0 && s3 >= 0) || (s1 <= 0 && s2 <= 0 && s3 <= 0)
 }
 
-// Geometry helpers
-function pointInTriangle(px: number, py: number, ax: number, ay: number, bx: number, by: number, cx: number, cy: number): boolean {
-  // Using barycentric technique with same-side test
-  const v0x = cx - ax, v0y = cy - ay
-  const v1x = bx - ax, v1y = by - ay
-  const v2x = px - ax, v2y = py - ay
-  const dot00 = v0x * v0x + v0y * v0y
-  const dot01 = v0x * v1x + v0y * v1y
-  const dot02 = v0x * v2x + v0y * v2y
-  const dot11 = v1x * v1x + v1y * v1y
-  const dot12 = v1x * v2x + v1y * v2y
-  const denom = dot00 * dot11 - dot01 * dot01
-  if (Math.abs(denom) < 1e-8) return false
-  const inv = 1 / denom
-  const u = (dot11 * dot02 - dot01 * dot12) * inv
-  const v = (dot00 * dot12 - dot01 * dot02) * inv
-  return u >= -1e-6 && v >= -1e-6 && (u + v) <= 1 + 1e-6
-}
-
-function circumcenter(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): [number, number] | null {
-  // Robust-ish circumcenter; returns null for near-collinear
-  const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+function circumcircle(a: Point, b: Point, c: Point): { x: number; y: number; r: number } | null {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y))
   if (Math.abs(d) < 1e-8) return null
-  const a2 = ax * ax + ay * ay
-  const b2 = bx * bx + by * by
-  const c2 = cx * cx + cy * cy
-  const ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d
-  const uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d
-  return [ux, uy]
+  const a2 = a.x * a.x + a.y * a.y
+  const b2 = b.x * b.x + b.y * b.y
+  const c2 = c.x * c.x + c.y * c.y
+  const x = (a2 * (b.y - c.y) + b2 * (c.y - a.y) + c2 * (a.y - b.y)) / d
+  const y = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d
+  return { x, y, r: Math.hypot(a.x - x, a.y - y) }
 }
 
-export default function VoronoiDemo() {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null)
-    const animRef = useRef<number>(0)
-    const lastTimeRef = useRef<number>(0)
-    const [wasmReady, setWasmReady] = useState(false)
+const at = (pts: Float32Array, i: number): Point => ({ x: pts[i * STRIDE], y: pts[i * STRIDE + 1] })
 
-    const [mode, setMode] = useState<Mode>('triangulation')
-    const [paused, setPaused] = useState(false)
-    const [seed, setSeed] = useState(1337)
-    const [count, setCount] = useState(100)
-    const [speed, setSpeed] = useState(5)
+/** Highlights the triangle under `m` with its circumcircle. Returns a description, or null. */
+function drawHoveredTriangle(ctx: CanvasRenderingContext2D, t: Theme, pts: Float32Array, tris: Uint32Array, m: Point) {
+  for (let i = 0; i + 2 < tris.length; i += 3) {
+    const a = at(pts, tris[i]), b = at(pts, tris[i + 1]), c = at(pts, tris[i + 2])
+    if (!pointInTriangle(m, a, b, c)) continue
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(a.x, a.y)
+    ctx.lineTo(b.x, b.y)
+    ctx.lineTo(c.x, c.y)
+    ctx.closePath()
+    ctx.fillStyle = t.signalFaint
+    ctx.fill()
+    ctx.lineWidth = 2
+    ctx.strokeStyle = t.signal
+    ctx.stroke()
+    const cc = circumcircle(a, b, c)
+    if (cc) {
+      ctx.beginPath()
+      ctx.arc(cc.x, cc.y, cc.r, 0, Math.PI * 2)
+      ctx.setLineDash([4, 4])
+      ctx.lineWidth = 1
+      ctx.stroke()
+      ctx.setLineDash([])
+      cross(ctx, cc, t.signal)
+    }
+    ctx.restore()
+    if (cc) label(ctx, t, 'empty circumcircle', { x: cc.x, y: cc.y - cc.r - 10 }, t.signal)
+    return 'Triangle'
+  }
+  return null
+}
 
-    // simulation buffer
-    const pointsRef = useRef<Float32Array>(new Float32Array())
+/** Highlights the Voronoi cell of the site nearest to `m`. Returns a description. */
+function drawHoveredCell(ctx: CanvasRenderingContext2D, t: Theme, pts: Float32Array, tris: Uint32Array, m: Point) {
+  let site = -1
+  let best = Infinity
+  for (let i = 0; i < pts.length / STRIDE; i++) {
+    const d = (pts[i * STRIDE] - m.x) ** 2 + (pts[i * STRIDE + 1] - m.y) ** 2
+    if (d < best) { best = d; site = i }
+  }
+  if (site < 0) return null
+  const s = at(pts, site)
 
-    // mouse tracking (CSS pixel coordinates in canvas local space)
-    const mouseRef = useRef<{ x: number; y: number; inside: boolean }>({x: 0, y: 0, inside: false})
+  // The cell's corners are the circumcenters of the triangles around the site.
+  // The cell is bounded only if those triangles close a full fan, i.e. every
+  // neighbor is shared by exactly two of them; hull sites have open cells.
+  const corners: Point[] = []
+  const neighborUses = new Map<number, number>()
+  for (let i = 0; i + 2 < tris.length; i += 3) {
+    const tri = [tris[i], tris[i + 1], tris[i + 2]]
+    if (!tri.includes(site)) continue
+    for (const v of tri) if (v !== site) neighborUses.set(v, (neighborUses.get(v) ?? 0) + 1)
+    const cc = circumcircle(at(pts, tri[0]), at(pts, tri[1]), at(pts, tri[2]))
+    if (cc) corners.push(cc)
+  }
+  const bounded = neighborUses.size > 0 && [...neighborUses.values()].every(n => n === 2)
 
-    useHiDPICanvas(canvasRef)
+  ctx.save()
+  if (bounded && corners.length >= 3) {
+    corners.sort((p, q) => Math.atan2(p.y - s.y, p.x - s.x) - Math.atan2(q.y - s.y, q.x - s.x))
+    ctx.beginPath()
+    ctx.moveTo(corners[0].x, corners[0].y)
+    for (const p of corners.slice(1)) ctx.lineTo(p.x, p.y)
+    ctx.closePath()
+    ctx.fillStyle = t.cobaltFaint
+    ctx.fill()
+    ctx.lineWidth = 2
+    ctx.strokeStyle = t.cobalt
+    ctx.stroke()
+  }
+  ctx.beginPath()
+  ctx.arc(s.x, s.y, 5, 0, Math.PI * 2)
+  ctx.fillStyle = t.paper
+  ctx.fill()
+  ctx.lineWidth = 2
+  ctx.strokeStyle = t.cobalt
+  ctx.stroke()
+  ctx.restore()
+  if (!bounded) label(ctx, t, 'unbounded cell', { x: s.x + 10, y: s.y - 12 }, t.cobalt, 'left')
+  return bounded ? `Cell of site ${site}` : `Open cell of site ${site}`
+}
 
-    // Init WASM
-    useEffect(() => {
-        let cancelled = false
-        ;(async () => {
-            try {
-                await init()
-                if (!cancelled) setWasmReady(true)
-            } catch (e) {
-                console.error('WASM init failed', e)
-            }
-        })()
-        return () => {
-            cancelled = true
-        }
-    }, [])
+function VoronoiDemo() {
+  const { wasm, error } = useWasm()
+  return wasm ? <Voronoi wasm={wasm} /> : <Loading error={error} />
+}
 
-    // (Re)create points upon param changes
-    useEffect(() => {
-        if (!wasmReady) return
-        const canvas = canvasRef.current
-        if (!canvas) return
-        const width = (canvas as any)._displayWidth || canvas.clientWidth || 800
-        const height = (canvas as any)._displayHeight || canvas.clientHeight || 600
+function Voronoi({ wasm }: { wasm: Wasm }) {
+  const theme = useTheme()
+  const [count, setCount] = useState(120)
+  const [speed, setSpeed] = useState(12)
+  const [seed, setSeed] = useState(1337)
+  const [running, setRunning] = useState(true)
+  const [showDelaunay, setShowDelaunay] = useState(true)
+  const [showVoronoi, setShowVoronoi] = useState(true)
+  const [stats, setStats] = useState<Stats>({ triangles: 0, edges: 0, hover: '–' })
 
-        const out = silly_demos.VoronoiTests?.voronoi_create_points?.(count, width, height, seed >>> 0, speed) || []
-        pointsRef.current = toF32(out)
-    }, [wasmReady, count, seed, speed])
+  const points = useRef<Float32Array>(new Float32Array())
+  const pointer = useRef<Point | null>(null)
+  const params = useRef({ count, speed, seed })
+  params.current = { count, speed, seed }
 
-    // Animation loop
-    useEffect(() => {
-        if (!wasmReady) return
-        const outerCanvas = canvasRef.current
-        if (!outerCanvas) return
-        const ctx = outerCanvas.getContext('2d')!
+  const spawn = (width: number, height: number) => {
+    const { count, speed, seed } = params.current
+    points.current = wasm.VoronoiTests.voronoi_create_points(count, width, height, seed >>> 0, speed)
+  }
 
-        // Mouse listeners
-        function onMove(e: MouseEvent) {
-            const c = canvasRef.current
-            if (!c) return
-            const rect = c.getBoundingClientRect()
-            mouseRef.current.x = e.clientX - rect.left
-            mouseRef.current.y = e.clientY - rect.top
-            mouseRef.current.inside = true
-        }
+  const { ref, size } = useCanvas(({ width, height }) => {
+    if (points.current.length === 0) spawn(width, height)
+  })
 
-        function onLeave() {
-            mouseRef.current.inside = false
-        }
+  useEffect(() => {
+    if (size.current.width > 0) spawn(size.current.width, size.current.height)
+    // `spawn` reads the latest params from a ref.
+  }, [count, speed, seed])
 
-        outerCanvas.addEventListener('mousemove', onMove)
-        outerCanvas.addEventListener('mouseleave', onLeave)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const move = (e: PointerEvent) => {
+      const rect = el.getBoundingClientRect()
+      pointer.current = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    }
+    const leave = () => { pointer.current = null }
+    el.addEventListener('pointermove', move)
+    el.addEventListener('pointerleave', leave)
+    return () => {
+      el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerleave', leave)
+    }
+  }, [ref])
 
-        function drawPoints(pts: Float32Array) {
-            ctx.fillStyle = '#ffffff'
-            const r = 2.2
-            for (let i = 0; i < pts.length; i += STRIDE) {
-                const x = pts[i]
-                const y = pts[i + 1]
-                ctx.beginPath()
-                ctx.arc(x, y, r, 0, Math.PI * 2)
-                ctx.fill()
-            }
-        }
+  useAnimationFrame((_, dt) => {
+    const ctx = ref.current?.getContext('2d')
+    const { width, height, dpr } = size.current
+    if (!ctx || width === 0 || points.current.length === 0) return
+    const t = theme.current
 
-        function drawTriangulation(pts: Float32Array, indices?: Uint32Array) {
-            const idxs = indices ?? (silly_demos.VoronoiTests?.delaunay_indices?.(pts) as (Uint32Array | number[] | undefined))
-            if (!idxs) return
-            const I = idxs instanceof Uint32Array ? idxs : new Uint32Array(idxs)
-            ctx.strokeStyle = '#66ccff'
-            ctx.lineWidth = 1
-            ctx.beginPath()
-            for (let i = 0; i + 2 < I.length; i += 3) {
-                const i0 = I[i] * STRIDE
-                const i1 = I[i + 1] * STRIDE
-                const i2 = I[i + 2] * STRIDE
-                const x0 = pts[i0], y0 = pts[i0 + 1]
-                const x1 = pts[i1], y1 = pts[i1 + 1]
-                const x2 = pts[i2], y2 = pts[i2 + 1]
-                ctx.moveTo(x0, y0);
-                ctx.lineTo(x1, y1)
-                ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y2)
-                ctx.moveTo(x2, y2);
-                ctx.lineTo(x0, y0)
-            }
-            ctx.stroke()
-            drawPoints(pts)
-        }
+    if (running) {
+      points.current = wasm.VoronoiTests.voronoi_step_points(points.current, width, height, Math.min(dt, 0.05))
+    }
+    const pts = points.current
+    const tris = wasm.VoronoiTests.delaunay_indices(pts)
+    const edges = showVoronoi ? wasm.VoronoiTests.voronoi_edges(pts) : new Float32Array()
 
-        function drawVoronoi(pts: Float32Array) {
-            const segs = silly_demos.VoronoiTests?.voronoi_edges?.(pts) as (Float32Array | number[] | undefined)
-            if (!segs) return
-            const S = segs instanceof Float32Array ? segs : new Float32Array(segs)
-            ctx.strokeStyle = '#ffaa66'
-            ctx.lineWidth = 1
-            ctx.beginPath()
-            for (let i = 0; i + 3 < S.length; i += 4) {
-                const x1 = S[i], y1 = S[i + 1]
-                const x2 = S[i + 2], y2 = S[i + 3]
-                ctx.moveTo(x1, y1)
-                ctx.lineTo(x2, y2)
-            }
-            ctx.stroke()
-            drawPoints(pts)
-        }
+    clear(ctx, dpr)
 
-        function frame(ts: number) {
-            const c = canvasRef.current
-            if (!c) {
-                animRef.current = requestAnimationFrame(frame)
-                return
-            }
-            const width = (c as any)._displayWidth || c.clientWidth || 800
-            const height = (c as any)._displayHeight || c.clientHeight || 600
-            const dt = lastTimeRef.current ? Math.min(0.05, (ts - lastTimeRef.current) / 1000) : 0
-            lastTimeRef.current = ts
+    if (showDelaunay) {
+      ctx.beginPath()
+      for (let i = 0; i + 2 < tris.length; i += 3) {
+        const a = at(pts, tris[i]), b = at(pts, tris[i + 1]), c = at(pts, tris[i + 2])
+        ctx.moveTo(a.x, a.y)
+        ctx.lineTo(b.x, b.y)
+        ctx.lineTo(c.x, c.y)
+        ctx.closePath()
+      }
+      ctx.lineWidth = 1
+      ctx.strokeStyle = t.inkFaint
+      ctx.stroke()
+    }
 
-            // Step
-            if (!paused && pointsRef.current.length > 0) {
-                const next = silly_demos.VoronoiTests?.voronoi_step_points?.(pointsRef.current, width, height, dt) || pointsRef.current
-                pointsRef.current = toF32(next)
-            }
+    if (showVoronoi) {
+      ctx.beginPath()
+      for (let i = 0; i + 3 < edges.length; i += 4) {
+        ctx.moveTo(edges[i], edges[i + 1])
+        ctx.lineTo(edges[i + 2], edges[i + 3])
+      }
+      ctx.lineWidth = 1.5
+      ctx.strokeStyle = t.cobalt
+      ctx.stroke()
+    }
 
-            // Clear
-            ctx.clearRect(0, 0, width, height)
+    ctx.beginPath()
+    for (let i = 0; i < pts.length; i += STRIDE) {
+      ctx.moveTo(pts[i] + 2.5, pts[i + 1])
+      ctx.arc(pts[i], pts[i + 1], 2.5, 0, Math.PI * 2)
+    }
+    ctx.fillStyle = t.ink
+    ctx.fill()
 
-            const pts = pointsRef.current
-            // Precompute delaunay indices if needed for highlighting
-            let I: Uint32Array | undefined
-            if (mouseRef.current.inside) {
-                const idxs = silly_demos.VoronoiTests?.delaunay_indices?.(pts) as (Uint32Array | number[] | undefined)
-                if (idxs) I = idxs instanceof Uint32Array ? idxs : new Uint32Array(idxs)
-            }
+    let hover = '–'
+    const m = pointer.current
+    if (m) {
+      // Prefer the triangle view when only the triangulation is shown.
+      hover = (showDelaunay && !showVoronoi
+        ? drawHoveredTriangle(ctx, t, pts, tris, m)
+        : drawHoveredCell(ctx, t, pts, tris, m)) ?? 'Outside the hull'
+    }
 
-            // Render base
-            if (mode === 'triangulation') drawTriangulation(pts, I)
-            else drawVoronoi(pts)
-
-            // Overlay highlight if mouse is inside
-            if (mouseRef.current.inside && pts.length >= STRIDE * 3) {
-                const mx = mouseRef.current.x
-                const my = mouseRef.current.y
-                if (mode === 'triangulation') {
-                    if (!I) {
-                        const idxs = silly_demos.VoronoiTests?.delaunay_indices?.(pts) as (Uint32Array | number[] | undefined)
-                        if (idxs) I = idxs instanceof Uint32Array ? idxs : new Uint32Array(idxs)
-                    }
-                    if (I) {
-                        // find the first triangle containing mouse
-                        for (let i = 0; i + 2 < I.length; i += 3) {
-                            const a = I[i] * STRIDE
-                            const b = I[i + 1] * STRIDE
-                            const cidx = I[i + 2] * STRIDE
-                            const ax = pts[a], ay = pts[a + 1]
-                            const bx = pts[b], by = pts[b + 1]
-                            const cx = pts[cidx], cy = pts[cidx + 1]
-                            if (pointInTriangle(mx, my, ax, ay, bx, by, cx, cy)) {
-                                ctx.save()
-                                ctx.beginPath()
-                                ctx.moveTo(ax, ay)
-                                ctx.lineTo(bx, by)
-                                ctx.lineTo(cx, cy)
-                                ctx.closePath()
-                                ctx.fillStyle = 'rgba(255, 215, 0, 0.18)'
-                                ctx.strokeStyle = '#ffd700'
-                                ctx.lineWidth = 2
-                                ctx.fill()
-                                ctx.stroke()
-                                ctx.restore()
-                                break
-                            }
-                        }
-                    }
-                } else {
-                    // Voronoi mode: highlight cell for nearest site
-                    let bestIdx = -1
-                    let bestD2 = Infinity
-                    for (let i = 0; i < pts.length; i += STRIDE) {
-                        const dx = pts[i] - mx
-                        const dy = pts[i + 1] - my
-                        const d2 = dx * dx + dy * dy
-                        if (d2 < bestD2) {
-                            bestD2 = d2;
-                            bestIdx = i / STRIDE | 0
-                        }
-                    }
-                    if (bestIdx >= 0) {
-                        if (!I) {
-                            const idxs = silly_demos.VoronoiTests?.delaunay_indices?.(pts) as (Uint32Array | number[] | undefined)
-                            if (idxs) I = idxs instanceof Uint32Array ? idxs : new Uint32Array(idxs)
-                        }
-                        if (I) {
-                            const cxys: [number, number][] = []
-                            for (let i = 0; i + 2 < I.length; i += 3) {
-                                const ia = I[i], ib = I[i + 1], ic = I[i + 2]
-                                if (ia === bestIdx || ib === bestIdx || ic === bestIdx) {
-                                    const a = ia * STRIDE, b = ib * STRIDE, c3 = ic * STRIDE
-                                    const cc = circumcenter(pts[a], pts[a + 1], pts[b], pts[b + 1], pts[c3], pts[c3 + 1])
-                                    if (cc) cxys.push(cc)
-                                }
-                            }
-                            // sort circumcenters around the site
-                            const sx = pts[bestIdx * STRIDE]
-                            const sy = pts[bestIdx * STRIDE + 1]
-                            cxys.sort((p, q) => Math.atan2(p[1] - sy, p[0] - sx) - Math.atan2(q[1] - sy, q[0] - sx))
-                            if (cxys.length >= 2) {
-                                ctx.save()
-                                ctx.beginPath()
-                                ctx.moveTo(cxys[0][0], cxys[0][1])
-                                for (let k = 1; k < cxys.length; k++) ctx.lineTo(cxys[k][0], cxys[k][1])
-                                ctx.closePath()
-                                ctx.fillStyle = 'rgba(102, 187, 255, 0.15)'
-                                ctx.strokeStyle = '#4af'
-                                ctx.lineWidth = 2
-                                ctx.fill()
-                                ctx.stroke()
-                                // also emphasize the site point
-                                ctx.beginPath()
-                                ctx.fillStyle = '#fff'
-                                ctx.strokeStyle = '#4af'
-                                ctx.lineWidth = 2
-                                ctx.arc(sx, sy, 3, 0, Math.PI * 2)
-                                ctx.fill()
-                                ctx.stroke()
-                                ctx.restore()
-                            }
-                        }
-                    }
-                }
-            }
-
-            animRef.current = requestAnimationFrame(frame)
-        }
-
-        animRef.current = requestAnimationFrame(frame)
-        return () => {
-            cancelAnimationFrame(animRef.current)
-            outerCanvas.removeEventListener('mousemove', onMove)
-            outerCanvas.removeEventListener('mouseleave', onLeave)
-        }
-    }, [wasmReady, mode, paused])
-
-    // UI
-    return (
-        <div className="demo-container">
-            <div className="controls glass-panel" style={{marginBottom: 12}}>
-                <div className="row" style={{display: 'flex', gap: 12, flexWrap: 'wrap'}}>
-                    <button className="control-button"
-                            onClick={() => setMode(m => m === 'triangulation' ? 'voronoi' : 'triangulation')}>
-                        Mode: {mode === 'triangulation' ? 'Delaunay (triangulation)' : 'Voronoi'}
-                    </button>
-                    <button className="control-button" onClick={() => setPaused(p => !p)}>
-                        {paused ? 'Resume' : 'Pause'}
-                    </button>
-                    <label className="pill">Seed
-                        <input type="number" value={seed} onChange={e => setSeed(parseInt(e.target.value || '0', 10))}
-                               style={{marginLeft: 8, width: 100}}/>
-                    </label>
-                    <label className="pill">Moving Points
-                        <input type="number" min={3} max={5000} value={count}
-                               onChange={e => setCount(Math.max(3, Math.min(5000, parseInt(e.target.value || '0', 10))))}
-                               style={{marginLeft: 8, width: 100}}/>
-                    </label>
-                    <label className="pill">Speed
-                        <input type="number" min={1} max={200} value={speed}
-                               onChange={e => setSpeed(Math.max(1, Math.min(200, parseInt(e.target.value || '0', 10))))}
-                               style={{marginLeft: 8, width: 100}}/>
-                    </label>
-                    <button className="control-button" onClick={() => {
-                        // Recreate points explicitly
-                        const canvas = canvasRef.current
-                        if (!canvas) return
-                        const width = (canvas as any)._displayWidth || canvas.clientWidth || 800
-                        const height = (canvas as any)._displayHeight || canvas.clientHeight || 600
-                        const out = silly_demos.VoronoiTests?.voronoi_create_points?.(count, width, height, seed >>> 0, speed) || []
-                        pointsRef.current = toF32(out)
-                    }}>Recreate
-                    </button>
-                </div>
-            </div>
-
-            <div className="canvas-wrapper glass-panel" style={{height: 600}}>
-                <canvas ref={canvasRef} style={{width: '100%', height: '100%', display: 'block'}}/>
-            </div>
-
-            {!wasmReady && (
-                <div className="glass-panel" style={{marginTop: 12}}>
-                    <em>Loading WASM…</em>
-                </div>
-            )}
-        </div>
+    const next = { triangles: tris.length / 3, edges: edges.length / 4, hover }
+    setStats(prev =>
+      prev.triangles === next.triangles && prev.edges === next.edges && prev.hover === next.hover ? prev : next,
     )
+  })
+
+  return (
+    <Sheet
+      title="Voronoi & Delaunay"
+      summary={
+        <>
+          The Delaunay triangulation connects points so that no point lies inside any triangle’s
+          circumcircle. Joining the circumcenters of neighboring triangles gives the Voronoi diagram:
+          each cell holds the area closest to one point. Hover to inspect a cell or triangle.
+        </>
+      }
+      readouts={[
+        { label: 'Moving points', value: count },
+        { label: 'Triangles', value: stats.triangles },
+        { label: 'Voronoi edges', value: showVoronoi ? stats.edges : '–', tone: 'cobalt' },
+        { label: 'Under pointer', value: stats.hover },
+      ]}
+      canvas={<canvas ref={ref} className="drawing-canvas" role="img" aria-label="Moving points with their Delaunay triangulation and Voronoi diagram" />}
+      notes={
+        <p>
+          Show only the triangulation to inspect triangles and their circumcircles; with the
+          Voronoi diagram shown, hovering picks the cell of the nearest point.
+        </p>
+      }
+    >
+      <div className="button-row">
+        <button type="button" className="button primary" onClick={() => setRunning(r => !r)}>
+          {running ? 'Pause' : 'Resume'}
+        </button>
+        <button type="button" className="button" onClick={() => setSeed(s => (s * 1103515245 + 12345) >>> 0)}>
+          New points
+        </button>
+      </div>
+      <Toggle label="Delaunay triangulation" checked={showDelaunay} onChange={setShowDelaunay} />
+      <Toggle label="Voronoi diagram" checked={showVoronoi} onChange={setShowVoronoi} />
+
+      <ControlGroup title="Points">
+        <Slider label="Count" value={count} min={3} max={2000} step={1} onChange={setCount} />
+        <Slider label="Speed" unit="px/s" value={speed} min={0} max={200} onChange={setSpeed} />
+      </ControlGroup>
+    </Sheet>
+  )
 }
+
+export default VoronoiDemo
