@@ -1,4 +1,8 @@
-<!-- @component Radio list whose options can carry a short description. -->
+<!--
+  @component
+  Radio list whose options can carry a short description. Place it in a
+  fieldset (e.g. ControlGroup), whose legend names the group.
+-->
 <script lang="ts" generics="T extends string">
   import type { Snippet } from 'svelte'
 
@@ -13,7 +17,7 @@
   } = $props()
 </script>
 
-<div class="choice" role="radiogroup">
+<div class="choice">
   {#each options as option (option.value)}
     <label class="option" data-checked={option.value === value || undefined}>
       <input type="radio" {name} value={option.value} bind:group={value} />

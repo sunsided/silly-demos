@@ -18,7 +18,7 @@
     format?: (v: number) => string
   } = $props()
 
-  let fill = $derived(`${((value - min) / (max - min)) * 100}%`)
+  let fill = $derived(`${max > min ? ((value - min) / (max - min)) * 100 : 0}%`)
 </script>
 
 <label class="slider">
