@@ -136,11 +136,17 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
       return next
     }, { replace: true })
 
+  // Bumped on every shape edit; the frame loop only recomputes when it changed.
+  const version = useRef(0)
+  /** Results for the last computed state, redrawn as-is while nothing changes. */
+  const computed = useRef<{ key: string; rows: Row[] } | null>(null)
+
   // Created in an effect so StrictMode's mount/unmount/mount cycle frees and recreates it.
   const lab = useRef<Lab | null>(null)
   useEffect(() => {
     const l = new wasm.CollisionLab()
     lab.current = l
+    computed.current = null
     return () => {
       lab.current = null
       l.free()
@@ -155,7 +161,10 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
   // A new kind replaces the shape in place.
   for (const slot of [0, 1]) {
     const s = shapes.current[slot]
-    if (s.kind !== kinds[slot]) shapes.current[slot] = defaultShape(kinds[slot], s.c, scale.current)
+    if (s.kind !== kinds[slot]) {
+      shapes.current[slot] = defaultShape(kinds[slot], s.c, scale.current)
+      version.current++
+    }
   }
   const outlines = useRef<Float32Array[]>([new Float32Array(), new Float32Array()])
 
@@ -168,6 +177,7 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
     if (k === 1) return
     scale.current = k
     shapes.current = shapes.current.map(s => defaultShape(s.kind, { x: s.c.x * k, y: s.c.y * k }, k))
+    version.current++
   })
   const toLocal = (p: Point) => ({ x: p.x - size.current.width / 2, y: p.y - size.current.height / 2 })
 
@@ -188,6 +198,7 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
     },
     (drag, d) => {
       const s = shapes.current[drag.slot]
+      version.current++
       if (drag.handle === null) return translate(s, d)
       drag.pos = { x: drag.pos.x + d.x, y: drag.pos.y + d.y }
       handles(s)[drag.handle].set(s, drag.pos)
@@ -231,25 +242,31 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
     const t = theme.current
     const [a, b] = shapes.current
 
-    l.set_shape(0, a.kind, params(a))
-    l.set_shape(1, b.kind, params(b))
-    outlines.current = [l.outline(0), l.outline(1)]
+    // Recompute only when the shapes, the broadphase or the selected method changed.
+    const poseKey = `${version.current}|${broadphase}`
+    const key = `${poseKey}|${method}`
+    if (computed.current?.key !== key) {
+      l.set_shape(0, a.kind, params(a))
+      l.set_shape(1, b.kind, params(b))
+      outlines.current = [l.outline(0), l.outline(1)]
 
-    const next: Row[] = []
-    for (const id of l.methods()) {
-      const r = l.run(id, broadphase)
-      if (!r) continue
-      next.push({ id, intersect: r.intersect, distance: r.distance, stage: r.stage, counts: Array.from(r.counts()) })
-      if (id === method || (!method && next.length === 1)) notes.current = { buf: r.notes(), labels: r.labels() }
-      r.free()
-    }
-    setRows(prev => (sameRows(prev, next) ? prev : next))
+      const rows: Row[] = []
+      for (const id of l.methods()) {
+        const r = l.run(id, broadphase)
+        if (!r) continue
+        rows.push({ id, intersect: r.intersect, distance: r.distance, stage: r.stage, counts: Array.from(r.counts()) })
+        if (id === method || (!method && rows.length === 1)) notes.current = { buf: r.notes(), labels: r.labels() }
+        r.free()
+      }
+      computed.current = { key, rows }
+      setRows(prev => (sameRows(prev, rows) ? prev : rows))
 
-    const key = JSON.stringify([shapes.current, broadphase])
-    if (key !== pose.current) {
-      pose.current = key
-      scheduleBench(next.map(r => r.id), broadphase)
+      if (poseKey !== pose.current) {
+        pose.current = poseKey
+        scheduleBench(rows.map(r => r.id), broadphase)
+      }
     }
+    const next = computed.current.rows
 
     clear(ctx, size.current.dpr)
     ctx.translate(size.current.width / 2, size.current.height / 2)
