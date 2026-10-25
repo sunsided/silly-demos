@@ -29,7 +29,8 @@
   // Fit the initial layout to narrow screens.
   let placed = false
   const canvas = new DrawingCanvas(({ width }) => {
-    if (placed) return
+    // A canvas laid out at zero width (e.g. hidden) would scale everything to the origin.
+    if (placed || width === 0) return
     placed = true
     const k = Math.min(1, width / 480)
     for (const q of Object.values(pts)) {

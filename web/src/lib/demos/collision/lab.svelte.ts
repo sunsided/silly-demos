@@ -102,7 +102,8 @@ export class CollisionLabState {
 
   /** Fits the initial layout to narrow screens, once. */
   fit({ width }: CanvasSize) {
-    if (this.#placed) return
+    // A canvas laid out at zero width (e.g. hidden) would scale everything to the origin.
+    if (this.#placed || width === 0) return
     this.#placed = true
     const k = Math.min(1, width / 700)
     if (k === 1) return
@@ -146,7 +147,8 @@ export class CollisionLabState {
     this.#version++
     if (drag.handle === null) return translate(s, d)
     drag.pos = { x: drag.pos.x + d.x, y: drag.pos.y + d.y }
-    handles(s)[drag.handle].set(s, drag.pos)
+    // The shape kind can change mid-drag (keyboard on the select); its handles change with it.
+    handles(s)[drag.handle]?.set(s, drag.pos)
   }
 
   /** Steps the crowd, recomputes results if anything changed, and draws. */
