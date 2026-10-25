@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link, NavLink, Route, Routes } from 'react-router-dom'
-import CircleCollisionDemo from './demos/CircleCollisionDemo'
+import { Link, NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import CollisionLabDemo from './demos/CollisionLabDemo'
 import PointLineDemo from './demos/PointLineDemo'
 import BoidsDemo from './demos/BoidsDemo'
 import VoronoiDemo from './demos/VoronoiDemo'
@@ -15,10 +15,10 @@ const DEMOS = [
     rust: 'BoidsSim::step',
   },
   {
-    path: '/circle-collision',
-    name: 'Circle collision',
-    blurb: 'Drag two circles and watch the center distance, the gap between them and how far they overlap.',
-    rust: 'CollisionTests::circle_collision',
+    path: '/collision',
+    name: 'Collision lab',
+    blurb: 'Pick two shapes and compare the collision tests that fit them: clamping, separating axes, GJK and EPA, with their costs.',
+    rust: 'CollisionLab::run',
   },
   {
     path: '/point-line',
@@ -50,7 +50,8 @@ function App() {
       <main className="main">
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/circle-collision" element={<CircleCollisionDemo />} />
+          <Route path="/collision" element={<CollisionLabDemo />} />
+          <Route path="/circle-collision" element={<Navigate to="/collision?a=circle&b=circle" replace />} />
           <Route path="/point-line" element={<PointLineDemo />} />
           <Route path="/boids" element={<BoidsDemo />} />
           <Route path="/voronoi" element={<VoronoiDemo />} />

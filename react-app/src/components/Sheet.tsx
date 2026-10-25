@@ -121,3 +121,49 @@ export function Toggle({
     </label>
   )
 }
+
+export function Select<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: readonly { value: T; label: string }[]
+  onChange: (v: T) => void
+}) {
+  return (
+    <label className="select">
+      <span className="select-label">{label}</span>
+      <select value={value} onChange={e => onChange(e.target.value as T)}>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </label>
+  )
+}
+
+/** A radio list whose options carry a short description. */
+export function Choice<T extends string>({
+  name,
+  value,
+  options,
+  onChange,
+}: {
+  name: string
+  value: T
+  options: readonly { value: T; label: string; detail?: ReactNode }[]
+  onChange: (v: T) => void
+}) {
+  return (
+    <div className="choice" role="radiogroup">
+      {options.map(o => (
+        <label key={o.value} className="choice-option" data-checked={o.value === value || undefined}>
+          <input type="radio" name={name} value={o.value} checked={o.value === value} onChange={() => onChange(o.value)} />
+          <span className="choice-label">{o.label}</span>
+          {o.detail && <span className="choice-detail">{o.detail}</span>}
+        </label>
+      ))}
+    </div>
+  )
+}
