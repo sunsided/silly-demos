@@ -15,12 +15,13 @@
 //!   pseudo-inverse.
 //!
 //! None of these know the arm has a body: left alone they happily fold it
-//! back through itself. With a clearance set, every iteration is checked
-//! afterwards, and a step that brings two links closer than the clearance is
-//! cut back by blending the joint angles towards the previous pose. When
-//! that leaves the arm stuck against itself, it reroutes: it swings over to
-//! an evenly curled arc, bent the other way, whose tip lies on the target.
-//! An arc that turns less than a full circle never touches itself.
+//! back through itself or sweep it through the floor. With [`Limits`] set,
+//! every iteration is checked afterwards, and a step that brings two links
+//! closer than the clearance, or a joint below the floor, is cut back by
+//! blending the joint angles towards the previous pose. When that leaves the
+//! arm stuck, it reroutes: it swings over to an evenly curled arc whose tip
+//! lies on the target, bent the other way unless only the other arc clears
+//! the floor. An arc that turns less than a full circle never touches itself.
 
 use crate::collision::methods::{closest_between_segments, closest_on_segment};
 use crate::collision::probe::Silent;
@@ -72,11 +73,26 @@ impl Solver {
     }
 }
 
+/// What the arm's body may not run into.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Limits {
+    /// Closest any two links may come, in px.
+    pub clearance: Option<f32>,
+    /// How far below the base (px, towards +y) the joints may go.
+    pub floor: Option<f32>,
+}
+
+impl Limits {
+    fn any(self) -> bool {
+        self.clearance.is_some() || self.floor.is_some()
+    }
+}
+
 /// What a call to [`Chain::solve`] did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Outcome {
     pub iterations: u32,
-    /// Whether a step was cut back to keep the links apart.
+    /// Whether a step was cut back to respect the limits.
     pub contact: bool,
     /// Whether the arm is swinging round to get unstuck.
     pub rerouting: bool,
@@ -89,6 +105,11 @@ struct Reroute {
     curl: f32,
     /// Whether the other curl was tried already.
     flipped: bool,
+    /// Heading for the straight-up pose first, because the direct way to
+    /// the arc is blocked.
+    via_up: bool,
+    /// Whether it has been straight up already.
+    been_up: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -97,7 +118,7 @@ pub struct Chain {
     pub lengths: Vec<f32>,
     reroute: Option<Reroute>,
     /// Target and error where the arm last got stuck, so it doesn't reroute
-    /// again and again for a target it can't reach without crossing.
+    /// again and again for a target it can't reach within the limits.
     stuck_at: Option<(Vec2, f32)>,
 }
 
@@ -160,37 +181,37 @@ impl Chain {
 
     /// Runs up to `iterations` iterations of `solver` towards `target`, stopping
     /// early once within [`TOLERANCE`] or when an iteration no longer helps.
-    /// `damping` (px) is the damped least-squares λ. With a `clearance` (px),
-    /// links are kept at least that far apart.
+    /// `damping` (px) is the damped least-squares λ. The arm keeps within `limits`.
     pub fn solve(
         &mut self,
         solver: Solver,
         target: Vec2,
         iterations: u32,
         damping: f32,
-        clearance: Option<f32>,
+        limits: Limits,
     ) -> Outcome {
         let mut out = Outcome::default();
         if self.lengths.is_empty() {
             return out;
         }
-        if clearance.is_none() {
+        let limits = limits.any().then_some(limits);
+        if limits.is_none() {
             self.reroute = None;
         }
-        // A pose that already overlaps (clearance just switched on, or the arm
-        // resized) untangles by rerouting, unchecked until the links clear.
-        if let Some(c) = clearance
+        // A pose that already breaks a limit (one just switched on, or the
+        // arm resized) gets out by rerouting, unchecked until it is clear.
+        if let Some(l) = limits
             && self.reroute.is_none()
-            && self.overlaps(c)
+            && self.blocked(l)
         {
-            self.start_reroute();
+            self.start_reroute(target, limits);
         }
         let mut error = self.error(target);
         while out.iterations < iterations && (error > TOLERANCE || self.reroute.is_some()) {
             out.iterations += 1;
-            let clearance = clearance.filter(|&c| !self.overlaps(c));
+            let checks = limits.filter(|&l| !self.blocked(l));
             if let Some(r) = self.reroute {
-                self.reroute(r, target, clearance);
+                self.reroute(r, target, checks);
                 error = self.error(target);
                 continue;
             }
@@ -202,20 +223,20 @@ impl Chain {
                 Solver::DampedLeastSquares => self.jacobian(target, Some(damping)),
             }
             let mut contact = false;
-            if let Some(c) = clearance
-                && self.overlaps(c)
+            if let Some(l) = checks
+                && self.blocked(l)
             {
                 contact = true;
                 out.contact = true;
                 let to = bends(&self.joints);
-                self.blend(&before, &to, 0.5, clearance, |ch| ch.error(target) < error);
+                self.blend(&before, &to, 0.5, checks, |ch| ch.error(target) < error);
             }
             let next = self.error(target);
             let gain = error - next;
             error = next;
             if contact && gain < STUCK_GAIN && self.worth_rerouting(target, next) {
                 self.stuck_at = Some((target, next));
-                self.start_reroute();
+                self.start_reroute(target, checks);
             } else if gain < 1e-3 {
                 break;
             }
@@ -224,13 +245,30 @@ impl Chain {
         out
     }
 
-    /// Starts rerouting, bent the other way than the arm is curled now.
-    fn start_reroute(&mut self) {
-        let curl: f32 = bends(&self.joints)[1..].iter().sum();
+    /// Starts rerouting, bent the other way than the arm is curled now,
+    /// unless only the arc bent this way keeps within `limits`.
+    fn start_reroute(&mut self, target: Vec2, limits: Option<Limits>) {
+        let curled: f32 = bends(&self.joints)[1..].iter().sum();
+        let mut curl = if curled > 0.0 { -1.0 } else { 1.0 };
+        if let Some(l) = limits
+            && self.arc_blocked(curl, target, l)
+            && !self.arc_blocked(-curl, target, l)
+        {
+            curl = -curl;
+        }
         self.reroute = Some(Reroute {
-            curl: if curl > 0.0 { -1.0 } else { 1.0 },
+            curl,
             flipped: false,
+            via_up: false,
+            been_up: false,
         });
+    }
+
+    /// Whether the arc pose for `target` bent by `curl` breaks `limits`.
+    fn arc_blocked(&self, curl: f32, target: Vec2, limits: Limits) -> bool {
+        let mut arc = self.clone();
+        arc.set_bends(&self.arc(curl, target - self.base()));
+        arc.blocked(limits)
     }
 
     /// Whether a stuck arm should reroute: not if it already tried for about
@@ -242,26 +280,44 @@ impl Chain {
     }
 
     /// One rerouting step towards the arc for the current target. If the way
-    /// there is blocked, tries the other curl, then gives up.
-    fn reroute(&mut self, r: Reroute, target: Vec2, clearance: Option<f32>) {
+    /// there is blocked, goes via the straight-up pose (a straight arm never
+    /// touches itself and stands clear of the floor), then tries the other
+    /// curl, then gives up.
+    fn reroute(&mut self, r: Reroute, target: Vec2, limits: Option<Limits>) {
         let before = self.joints.clone();
-        let to = self.arc(r.curl, target - self.base());
-        if self.blend(&before, &to, REROUTE_RATE, clearance, |_| true) {
+        let to = if r.via_up {
+            let mut up = vec![0.0; self.lengths.len()];
+            up[0] = -std::f32::consts::FRAC_PI_2;
+            up
+        } else {
+            self.arc(r.curl, target - self.base())
+        };
+        self.reroute = if self.blend(&before, &to, REROUTE_RATE, limits, |_| true) {
             let arrived = bends(&self.joints)
                 .iter()
                 .zip(&to)
                 .all(|(a, b)| wrap(b - a).abs() < ARRIVED);
-            if arrived {
-                self.reroute = None;
+            match (arrived, r.via_up) {
+                (false, _) => Some(r),
+                (true, true) => Some(Reroute {
+                    via_up: false,
+                    been_up: true,
+                    ..r
+                }),
+                (true, false) => None,
             }
+        } else if !r.via_up && !r.been_up {
+            Some(Reroute { via_up: true, ..r })
         } else if !r.flipped {
-            self.reroute = Some(Reroute {
+            Some(Reroute {
                 curl: -r.curl,
                 flipped: true,
-            });
+                via_up: false,
+                ..r
+            })
         } else {
-            self.reroute = None;
-        }
+            None
+        };
     }
 
     /// Joint angles (see [`bends`]) of an evenly bent arc with its tip at `d`
@@ -299,19 +355,27 @@ impl Chain {
     }
 
     /// Moves the pose a fraction `k` of the way towards `goal` in joint angles,
-    /// keeping the links `clearance` apart. Used to ease a shown pose after
-    /// the solved one.
-    pub fn follow(&mut self, goal: &Chain, k: f32, clearance: Option<f32>) {
+    /// keeping within `limits`. Used to ease a shown pose after the solved one.
+    pub fn follow(&mut self, goal: &Chain, k: f32, limits: Limits) {
         if self.lengths != goal.lengths || self.base() != goal.base() {
             self.joints.clone_from(&goal.joints);
             self.lengths.clone_from(&goal.lengths);
             return;
         }
-        let clearance = clearance.filter(|&c| !self.overlaps(c));
+        let checks = limits.any().then_some(limits).filter(|&l| !self.blocked(l));
         let before = self.joints.clone();
-        self.blend(&before, &bends(&goal.joints), k.min(1.0), clearance, |_| {
-            true
-        });
+        self.blend(&before, &bends(&goal.joints), k.min(1.0), checks, |_| true);
+    }
+
+    /// Whether the pose breaks `limits`: two links closer than the clearance,
+    /// or a joint below the floor. The links are straight, so keeping every
+    /// joint above the floor keeps them above it too.
+    pub fn blocked(&self, limits: Limits) -> bool {
+        let base = self.base();
+        limits.clearance.is_some_and(|c| self.overlaps(c))
+            || limits
+                .floor
+                .is_some_and(|f| self.joints[1..].iter().any(|p| p.y > base.y + f))
     }
 
     /// Whether any two links come closer than `clearance`. Neighbors share a
@@ -340,28 +404,38 @@ impl Chain {
         })
     }
 
+    /// Rebuilds the pose from its base with the given joint angles (see [`bends`]).
+    fn set_bends(&mut self, bends: &[f32]) {
+        let mut angle = 0.0;
+        for (i, b) in bends.iter().enumerate() {
+            angle += b;
+            self.joints[i + 1] =
+                self.joints[i] + Vec2::new(angle.cos(), angle.sin()) * self.lengths[i];
+        }
+    }
+
     /// Rebuilds the pose from `from` with its joint angles (see [`bends`])
-    /// moved a fraction `s` towards `to`, halving `s` until the links clear
-    /// `clearance` and `accept` holds. Keeps `from` and returns false if
+    /// moved a fraction `s` towards `to`, halving `s` until the pose keeps
+    /// within `limits` and `accept` holds. Keeps `from` and returns false if
     /// nothing works.
     fn blend(
         &mut self,
         from: &[Vec2],
         to: &[f32],
         mut s: f32,
-        clearance: Option<f32>,
+        limits: Option<Limits>,
         accept: impl Fn(&Self) -> bool,
     ) -> bool {
         let start = bends(from);
         for _ in 0..8 {
-            let mut angle = 0.0;
+            let mixed: Vec<f32> = start
+                .iter()
+                .zip(to)
+                .map(|(a, b)| a + wrap(b - a) * s)
+                .collect();
             self.joints[0] = from[0];
-            for (i, (a, b)) in start.iter().zip(to).enumerate() {
-                angle += a + wrap(b - a) * s;
-                self.joints[i + 1] =
-                    self.joints[i] + Vec2::new(angle.cos(), angle.sin()) * self.lengths[i];
-            }
-            if clearance.is_none_or(|c| !self.overlaps(c)) && accept(self) {
+            self.set_bends(&mixed);
+            if limits.is_none_or(|l| !self.blocked(l)) && accept(self) {
                 return true;
             }
             s *= 0.5;
@@ -524,10 +598,23 @@ fn direction(v: Vec2) -> Vec2 {
 mod tests {
     use super::*;
 
+    fn clear(c: f32) -> Limits {
+        Limits {
+            clearance: Some(c),
+            floor: None,
+        }
+    }
+
     /// Five 40 px segments, bent so no solver starts at a singularity.
     fn bent() -> Chain {
         let mut c = Chain::straight(Vec2::default(), 5, 40.0, Vec2::new(1.0, 0.0));
-        c.solve(Solver::Fabrik, Vec2::new(60.0, 90.0), 50, 0.0, None);
+        c.solve(
+            Solver::Fabrik,
+            Vec2::new(60.0, 90.0),
+            50,
+            0.0,
+            Limits::default(),
+        );
         c
     }
 
@@ -544,7 +631,7 @@ mod tests {
         for solver in Solver::ALL {
             let mut c = bent();
             for _ in 0..20 {
-                c.solve(solver, target, 100, 10.0, None);
+                c.solve(solver, target, 100, 10.0, Limits::default());
             }
             assert!(
                 c.error(target) < 1.0,
@@ -562,7 +649,7 @@ mod tests {
         for solver in Solver::ALL {
             let mut c = bent();
             for _ in 0..20 {
-                c.solve(solver, target, 100, 10.0, None);
+                c.solve(solver, target, 100, 10.0, Limits::default());
             }
             let e = c.error(target);
             assert!((e - 300.0).abs() < 1.0, "{solver:?}: error {e}");
@@ -587,7 +674,7 @@ mod tests {
             let mut c = bent();
             TANGLED.iter().any(|&t| {
                 (0..30).any(|_| {
-                    c.solve(solver, t, 10, 10.0, None);
+                    c.solve(solver, t, 10, 10.0, Limits::default());
                     c.overlaps(0.5)
                 })
             })
@@ -601,7 +688,7 @@ mod tests {
             let mut c = bent();
             for &t in &TANGLED {
                 for _ in 0..30 {
-                    c.solve(solver, t, 10, 10.0, Some(14.0));
+                    c.solve(solver, t, 10, 10.0, clear(14.0));
                     assert!(
                         !c.overlaps(14.0),
                         "{solver:?} overlapped reaching for {t:?}"
@@ -619,7 +706,7 @@ mod tests {
         for solver in Solver::ALL {
             let mut c = bent();
             for _ in 0..20 {
-                c.solve(solver, target, 100, 10.0, Some(14.0));
+                c.solve(solver, target, 100, 10.0, clear(14.0));
             }
             assert!(
                 c.error(target) < 1.0,
@@ -647,7 +734,7 @@ mod tests {
         for solver in Solver::ALL {
             let mut c = Chain::straight(Vec2::default(), 6, 45.0, Vec2::new(0.0, -1.0));
             for t in path.clone().chain(std::iter::repeat_n(target, 120)) {
-                c.solve(solver, t, 10, 20.0, Some(16.0));
+                c.solve(solver, t, 10, 20.0, clear(16.0));
                 assert!(
                     !c.overlaps(16.0),
                     "{solver:?} overlapped reaching for {t:?}"
@@ -669,7 +756,7 @@ mod tests {
             let mut crossed = None;
             'tangle: for &t in &TANGLED {
                 for _ in 0..30 {
-                    c.solve(solver, t, 10, 10.0, None);
+                    c.solve(solver, t, 10, 10.0, Limits::default());
                     if c.overlaps(14.0) {
                         crossed = Some(t);
                         break 'tangle;
@@ -678,7 +765,7 @@ mod tests {
             }
             let Some(t) = crossed else { continue };
             for _ in 0..120 {
-                c.solve(solver, t, 10, 10.0, Some(14.0));
+                c.solve(solver, t, 10, 10.0, clear(14.0));
             }
             assert!(!c.overlaps(14.0), "{solver:?} stayed tangled");
             assert!(lengths_kept(&c), "{solver:?} changed segment lengths");
@@ -690,16 +777,120 @@ mod tests {
         );
     }
 
+    const FLOOR: Limits = Limits {
+        clearance: Some(16.0),
+        floor: Some(11.0),
+    };
+
+    fn below_floor(c: &Chain) -> bool {
+        c.joints[1..].iter().any(|p| p.y > c.base().y + 11.0)
+    }
+
+    #[test]
+    fn the_floor_keeps_every_joint_above_it() {
+        // Low targets on both sides, which the solvers reach most directly
+        // by sweeping the arm under the base.
+        let targets = [
+            Vec2::new(150.0, 5.0),
+            Vec2::new(-150.0, 5.0),
+            Vec2::new(80.0, 0.0),
+        ];
+        for solver in Solver::ALL {
+            let mut c = Chain::straight(Vec2::default(), 6, 45.0, Vec2::new(0.0, -1.0));
+            for &t in &targets {
+                for _ in 0..120 {
+                    c.solve(solver, t, 10, 20.0, FLOOR);
+                    assert!(
+                        !below_floor(&c),
+                        "{solver:?} went through the floor for {t:?}"
+                    );
+                    assert!(!c.overlaps(16.0), "{solver:?} overlapped for {t:?}");
+                }
+                assert!(
+                    c.error(t) < 1.0,
+                    "{solver:?}: error {} for {t:?}",
+                    c.error(t)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_stuck_arm_reroutes_over_the_top_with_a_floor() {
+        let keys = [
+            Vec2::new(0.0, -200.0),
+            Vec2::new(-120.0, -80.0),
+            Vec2::new(-50.0, -15.0),
+            Vec2::new(60.0, -15.0),
+            Vec2::new(90.0, -30.0),
+        ];
+        let path = keys
+            .windows(2)
+            .flat_map(|w| (0..40).map(move |i| w[0].lerp(w[1], i as f32 / 40.0)));
+        let target = keys[keys.len() - 1];
+        for solver in Solver::ALL {
+            let mut c = Chain::straight(Vec2::default(), 6, 45.0, Vec2::new(0.0, -1.0));
+            for t in path.clone().chain(std::iter::repeat_n(target, 120)) {
+                c.solve(solver, t, 10, 20.0, FLOOR);
+                assert!(
+                    !below_floor(&c),
+                    "{solver:?} went through the floor for {t:?}"
+                );
+                assert!(!c.overlaps(16.0), "{solver:?} overlapped for {t:?}");
+            }
+            assert!(
+                c.error(target) < 1.0,
+                "{solver:?}: error {}",
+                c.error(target)
+            );
+        }
+    }
+
+    #[test]
+    fn a_target_under_the_floor_is_not_reached() {
+        let target = Vec2::new(80.0, 60.0);
+        for solver in Solver::ALL {
+            let mut c = Chain::straight(Vec2::default(), 6, 45.0, Vec2::new(0.0, -1.0));
+            for _ in 0..120 {
+                c.solve(solver, target, 10, 20.0, FLOOR);
+                assert!(!below_floor(&c), "{solver:?} went through the floor");
+            }
+            assert!(c.error(target) >= 60.0 - 11.0 - 1e-3);
+        }
+    }
+
+    #[test]
+    fn switching_the_floor_on_lifts_the_arm_out_of_it() {
+        for solver in Solver::ALL {
+            let mut c = Chain::straight(Vec2::default(), 6, 45.0, Vec2::new(0.0, -1.0));
+            let target = Vec2::new(100.0, 40.0);
+            for _ in 0..60 {
+                c.solve(solver, target, 10, 20.0, Limits::default());
+            }
+            assert!(below_floor(&c), "{solver:?} never went below the floor");
+            let target = Vec2::new(100.0, -40.0);
+            for _ in 0..120 {
+                c.solve(solver, target, 10, 20.0, FLOOR);
+            }
+            assert!(!below_floor(&c), "{solver:?} stayed below the floor");
+            assert!(
+                c.error(target) < 1.0,
+                "{solver:?}: error {}",
+                c.error(target)
+            );
+        }
+    }
+
     #[test]
     fn follow_eases_towards_the_goal() {
         let goal = bent();
         let mut shown = Chain::straight(Vec2::default(), 5, 40.0, Vec2::new(1.0, 0.0));
         let start = (shown.end() - goal.end()).length();
-        shown.follow(&goal, 0.5, None);
+        shown.follow(&goal, 0.5, Limits::default());
         let half = (shown.end() - goal.end()).length();
         assert!(half > 1.0 && half < start, "{start} -> {half}");
         for _ in 0..40 {
-            shown.follow(&goal, 0.5, None);
+            shown.follow(&goal, 0.5, Limits::default());
         }
         assert!((shown.end() - goal.end()).length() < 1e-2);
         assert!(lengths_kept(&shown));
@@ -709,7 +900,11 @@ mod tests {
     fn stops_once_on_target() {
         let mut c = bent();
         let target = c.end();
-        assert_eq!(c.solve(Solver::Ccd, target, 100, 10.0, None).iterations, 0);
+        assert_eq!(
+            c.solve(Solver::Ccd, target, 100, 10.0, Limits::default())
+                .iterations,
+            0
+        );
     }
 
     #[test]

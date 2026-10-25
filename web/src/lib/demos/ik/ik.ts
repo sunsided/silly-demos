@@ -50,25 +50,37 @@ const LINK_WIDTH = 14
 /** Closest the link center lines may come with self-crossing avoided: outlines never touch. */
 export const CLEARANCE = LINK_WIDTH + 2
 
+/** Height of the mount from the base pivot down to the ground line. */
+const MOUNT_HEIGHT = 18
+
+/** How far below the base the joints may go with the floor on: link outlines stop at the ground line. */
+export const FLOOR = MOUNT_HEIGHT - LINK_WIDTH / 2
+
 /** Joint `i` of a flat joint buffer. */
 export const joint = (joints: Float32Array, i: number): Point => ({ x: joints[i * 2], y: joints[i * 2 + 1] })
 
-/** The fixed mount: a hatched ground block under a triangular foot. */
-export function drawBase(ctx: CanvasRenderingContext2D, t: Theme, base: Point, dpr: number) {
+/**
+ * The fixed mount: a triangular foot on a hatched ground strip reaching
+ * `ground` px to either side, so a solid floor can span the drawing.
+ */
+export function drawBase(ctx: CanvasRenderingContext2D, t: Theme, base: Point, dpr: number, ground = 40) {
+  const floor = base.y + MOUNT_HEIGHT
   ctx.save()
   ctx.beginPath()
-  ctx.rect(base.x - 34, base.y + 18, 68, 10)
+  ctx.rect(base.x - ground + 6, floor, (ground - 6) * 2, 10)
   ctx.fillStyle = hatchPattern(ctx, t.inkSoft, dpr)
   ctx.fill()
-  ctx.beginPath()
-  ctx.moveTo(base.x - 40, base.y + 18)
-  ctx.lineTo(base.x + 40, base.y + 18)
-  ctx.moveTo(base.x, base.y)
-  ctx.lineTo(base.x - 16, base.y + 18)
-  ctx.lineTo(base.x + 16, base.y + 18)
-  ctx.closePath()
   ctx.lineWidth = 1.5
   ctx.strokeStyle = t.ink
+  ctx.beginPath()
+  ctx.moveTo(base.x - ground, floor)
+  ctx.lineTo(base.x + ground, floor)
+  ctx.stroke()
+  ctx.beginPath()
+  ctx.moveTo(base.x, base.y)
+  ctx.lineTo(base.x - 16, floor)
+  ctx.lineTo(base.x + 16, floor)
+  ctx.closePath()
   ctx.fillStyle = t.paper
   ctx.fill()
   ctx.stroke()

@@ -478,6 +478,7 @@ impl BoidsSim {
 pub struct IkChain {
     goal: ik::Chain,
     shown: ik::Chain,
+    limits: ik::Limits,
     outcome: ik::Outcome,
 }
 
@@ -490,6 +491,7 @@ impl IkChain {
         Self {
             shown: goal.clone(),
             goal,
+            limits: ik::Limits::default(),
             outcome: ik::Outcome::default(),
         }
     }
@@ -521,23 +523,22 @@ impl IkChain {
         self.shown.translate(d);
     }
 
+    /// What the arm may not run into from now on: with a `clearance` (px),
+    /// links never come closer than that; with a `floor` (px), no joint goes
+    /// further than that below the base.
+    pub fn set_limits(&mut self, clearance: Option<f32>, floor: Option<f32>) {
+        self.limits = ik::Limits { clearance, floor };
+    }
+
     /// Runs up to `iterations` iterations of solver `id` on the goal pose
-    /// towards `(x, y)`; `damping` is the damped least-squares λ in px. With a
-    /// `clearance` (px), links never come closer than that. Returns the
-    /// iterations run, or 0 for an unknown solver.
-    pub fn solve(
-        &mut self,
-        id: &str,
-        x: f32,
-        y: f32,
-        iterations: u32,
-        damping: f32,
-        clearance: Option<f32>,
-    ) -> u32 {
+    /// towards `(x, y)`; `damping` is the damped least-squares λ in px.
+    /// Returns the iterations run, or 0 for an unknown solver.
+    pub fn solve(&mut self, id: &str, x: f32, y: f32, iterations: u32, damping: f32) -> u32 {
+        let limits = self.limits;
         self.outcome = ik::Solver::from_id(id)
             .map(|s| {
                 self.goal
-                    .solve(s, Vec2::new(x, y), iterations, damping, clearance)
+                    .solve(s, Vec2::new(x, y), iterations, damping, limits)
             })
             .unwrap_or_default();
         self.outcome.iterations
@@ -545,16 +546,16 @@ impl IkChain {
 
     /// Eases the shown pose towards the goal over `dt` seconds, closing the
     /// gap exponentially with time constant `smoothing` seconds (0 = snap).
-    pub fn follow(&mut self, dt: f32, smoothing: f32, clearance: Option<f32>) {
+    pub fn follow(&mut self, dt: f32, smoothing: f32) {
         let k = if smoothing > 0.0 {
             1.0 - (-dt / smoothing).exp()
         } else {
             1.0
         };
-        self.shown.follow(&self.goal, k, clearance);
+        self.shown.follow(&self.goal, k, self.limits);
     }
 
-    /// Whether the last solve had to cut a step short to keep links apart.
+    /// Whether the last solve had to cut a step short to keep within the limits.
     pub fn contact(&self) -> bool {
         self.outcome.contact
     }
@@ -590,8 +591,9 @@ mod tests {
         c.straighten();
         c.resize(0, 10.0);
         c.straighten();
-        assert_eq!(c.solve("fabrik", 10.0, 10.0, 10, 1.0, Some(16.0)), 0);
-        c.follow(1.0 / 60.0, 0.08, Some(16.0));
+        c.set_limits(Some(16.0), Some(11.0));
+        assert_eq!(c.solve("fabrik", 10.0, 10.0, 10, 1.0), 0);
+        c.follow(1.0 / 60.0, 0.08);
         assert_eq!(c.joints(), vec![0.0, 0.0]);
     }
 }

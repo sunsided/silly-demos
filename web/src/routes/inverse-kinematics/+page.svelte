@@ -18,6 +18,7 @@
   let smoothing = $state(80)
   let animate = $state(false)
   let avoidCrossing = $state(true)
+  let floor = $state(true)
   let showReach = $state(true)
   let showAngles = $state(false)
   let straighten = $state(0)
@@ -37,7 +38,7 @@
         : stats.rerouting
           ? 'Rerouting'
           : stats.contact
-            ? 'Self-contact'
+            ? 'In contact'
             : 'Reachable',
       tone: stats.reachable && !stats.contact && !stats.rerouting ? 'ink' : 'amber',
     },
@@ -57,6 +58,7 @@
           {smoothing}
           {animate}
           {avoidCrossing}
+          {floor}
           {showReach}
           {showAngles}
           {straighten}
@@ -72,6 +74,7 @@
       <Button onclick={() => straighten++}>Straighten</Button>
     </ButtonRow>
     <Toggle label="No self-crossing" bind:checked={avoidCrossing} />
+    <Toggle label="Solid floor" bind:checked={floor} />
     <Toggle label="Reach circle" bind:checked={showReach} />
     <Toggle label="Joint angles" bind:checked={showAngles} />
 
@@ -100,10 +103,11 @@
       from the last pose, so a slowly moving target needs only an iteration or two.
     </p>
     <p>
-      The solvers know nothing about the arm’s body and will fold it through itself. With self-crossing off limits, a
-      step that brings two links too close is cut back by blending the joint angles towards the previous pose, so the
-      arm slides along itself. When that gets it stuck, it swings over to an evenly curled arc, bent the other way,
-      with its tip on the target, and the solver carries on from there.
+      The solvers know nothing about the arm’s body and will fold it through itself or sweep it through the ground.
+      With self-crossing and the floor off limits, a step that brings two links too close, or a joint below the ground,
+      is cut back by blending the joint angles towards the previous pose, so the arm slides along the obstacle. When
+      that gets it stuck, it swings over to an evenly curled arc with its tip on the target, going via straight up if
+      the direct way is blocked, and the solver carries on from there.
     </p>
   {/snippet}
 </SheetLayout>
