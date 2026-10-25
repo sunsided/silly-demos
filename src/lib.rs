@@ -3,6 +3,7 @@ mod collision;
 mod geometry;
 mod ik;
 mod rand;
+mod rover_lab;
 mod utils;
 mod vec2;
 mod voronoi;
