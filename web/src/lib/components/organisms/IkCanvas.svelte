@@ -10,6 +10,7 @@
   import { currentTheme } from '../../canvas/theme.svelte.ts'
   import {
     CLEARANCE,
+    FLOOR,
     HIT_RADIUS,
     drawBase,
     drawChain,
@@ -31,6 +32,7 @@
     smoothing,
     animate,
     avoidCrossing,
+    floor,
     showReach,
     showAngles,
     straighten = 0,
@@ -50,6 +52,8 @@
     animate: boolean
     /** Keeps the links from passing through each other. */
     avoidCrossing: boolean
+    /** Keeps the arm above the ground its mount stands on. */
+    floor: boolean
     showReach: boolean
     showAngles: boolean
     /** Changing this value straightens the chain. */
@@ -60,8 +64,8 @@
   // The chain lives in WASM memory; it is created once the canvas has a size.
   let chain: IkChain | null = null
   const pts: Record<HandleName, Point> = {
-    base: { x: 0, y: 40 },
-    target: { x: 110, y: -150 },
+    base: { x: 0, y: 110 },
+    target: { x: 110, y: -80 },
   }
   let clock = 0
   let last: IkStats = { error: 0, iterations: 0, reachable: true, reach: 0, contact: false, rerouting: false }
@@ -126,9 +130,9 @@
       target.y = base.y - reach * 0.55 - reach * 0.6 * Math.sin(clock * 1.1)
     }
 
-    const clearance = avoidCrossing ? CLEARANCE : undefined
-    const used = chain.solve(solver, target.x, target.y, iterations, damping, clearance)
-    chain.follow(Math.min(dt, 0.05), smoothing / 1000, clearance)
+    chain.set_limits(avoidCrossing ? CLEARANCE : undefined, floor ? FLOOR : undefined)
+    const used = chain.solve(solver, target.x, target.y, iterations, damping)
+    chain.follow(Math.min(dt, 0.05), smoothing / 1000)
     const contact = chain.contact()
     const rerouting = chain.rerouting()
     const error = chain.error(target.x, target.y)
@@ -155,17 +159,26 @@
     ctx.scale(k, k)
 
     if (showReach) {
+      ctx.save()
+      // With the floor on, only the part of the circle above it is reachable.
+      if (floor) {
+        ctx.beginPath()
+        ctx.rect(base.x - reach - 1, base.y - reach - 1, reach * 2 + 2, reach + 1 + FLOOR)
+        ctx.clip()
+      }
       ctx.beginPath()
       ctx.arc(base.x, base.y, reach, 0, Math.PI * 2)
       ctx.setLineDash([10, 6, 2, 6])
       ctx.lineWidth = 1
       ctx.strokeStyle = t.inkFaint
       ctx.stroke()
-      ctx.setLineDash([])
-      label(ctx, t, `reach ${Math.round(reach)}`, { x: base.x, y: base.y + reach + 12 }, t.inkSoft)
+      ctx.restore()
+      const y = floor ? base.y - reach - 12 : base.y + reach + 12
+      label(ctx, t, `reach ${Math.round(reach)}`, { x: base.x, y }, t.inkSoft)
     }
 
-    drawBase(ctx, t, base, dpr)
+    // With the floor on, the ground spans the visible drawing.
+    drawBase(ctx, t, base, dpr, floor ? Math.abs(base.x) + width / (2 * k) : undefined)
     drawChain(ctx, t, joints)
     if (showAngles) drawJointAngles(ctx, t, joints)
 
