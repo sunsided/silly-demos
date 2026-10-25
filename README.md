@@ -2,7 +2,7 @@
 
   <h1><code>silly-demos</code></h1>
 
-<strong>Interactive physics and collision detection demos built with Rust WebAssembly and React</strong>
+<strong>Small interactive geometry and simulation demos in Rust/WebAssembly, drawn as engineering sketches in the browser</strong>
 
   <p>
     <img src="https://img.shields.io/badge/rust-1.70+-orange.svg?style=flat-square" alt="Rust Version" />
@@ -16,9 +16,8 @@
 
 ## About
 
-This project demonstrates real-time physics simulations by combining the performance of Rust compiled to WebAssembly
-with a modern React frontend. The Rust core provides silly little algorithms, while the React/Vite
-frontend offers interactive visualizations and demos.
+A growing collection of small geometry, collision and simulation sketches. The math runs in Rust compiled to
+WebAssembly; a React/Vite frontend draws each demo as an annotated drafting sheet with live dimensions and readouts.
 
 See the demos at <https://sunsided.github.io/silly-demos/>
 
@@ -38,18 +37,22 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 
 ```
 silly-demos/
-├── src/                    # Rust WebAssembly core
-│   ├── lib.rs             # Main library with collision detection
-│   └── utils.rs           # Utility functions
-├── pkg/                   # Generated WebAssembly package
+├── src/                   # Rust WebAssembly core
+│   ├── lib.rs             # wasm-bindgen exports
+│   ├── collision.rs       # Collision tests
+│   ├── geometry.rs        # Point/segment geometry
+│   ├── boids.rs           # Flocking simulation
+│   ├── voronoi.rs         # Delaunay triangulation / Voronoi edges
+│   └── vec2.rs            # 2D vector math
+├── pkg/                   # Generated WebAssembly package (wasm-pack)
 ├── react-app/             # React frontend application
 │   ├── src/
-│   │   ├── components/    # React components
+│   │   ├── components/    # Sheet layout, shared canvases
 │   │   ├── demos/         # Interactive demos
-│   │   └── pkg/          # Copied WASM package
-│   └── vite.config.ts    # Vite configuration
-├── Cargo.toml            # Rust dependencies
-└── package.json          # NPM package metadata
+│   │   └── lib/           # Canvas, drafting, theme and WASM helpers
+│   └── vite.config.ts     # Vite configuration
+├── Cargo.toml             # Rust crate manifest
+└── Taskfile.dist.yaml     # Task runner entry point
 ```
 
 ## Getting Started
@@ -116,8 +119,6 @@ The application will be available at: `https://your-username.github.io/[reposito
 
 **Client-Side Routing**: The app uses a 404.html redirect solution to handle direct navigation to React Router routes on GitHub Pages, ensuring URLs like `/circle-collision` work correctly when accessed directly.
 
-For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
-
 ## Available Demos
 
 - **Boids**: Flocking simulation with live controls for every rule and a view of what a single boid perceives
@@ -130,7 +131,6 @@ For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
 
 - **wasm-bindgen**: Seamless interop between Rust and JavaScript
 - **console_error_panic_hook**: Enhanced error logging for development
-- **wee_alloc**: Memory-efficient allocator optimized for WebAssembly
 
 ### React Frontend
 
