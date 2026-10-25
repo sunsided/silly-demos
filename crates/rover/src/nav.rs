@@ -15,8 +15,9 @@ use crate::grid::{Cell, Grid, neighbours4, neighbours8, trace};
 use crate::map::Known;
 
 /// Distance in metres from every cell to the nearest known wall cell's
-/// edge (8-neighbour chamfer distance), capped at `cap`.
+/// edge (8-neighbour chamfer distance), capped at `cap` (at least 0).
 pub fn clearance(map: &Grid<Known>, cap: f32) -> Grid<f32> {
+    let cap = cap.max(0.0);
     let (w, h) = (map.width as usize, map.height as usize);
     let mut d: Vec<f32> = map
         .data

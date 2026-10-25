@@ -40,7 +40,11 @@ fn lerp_saturate(a: f32, b: f32, x: f32, min: f32, max: f32) -> f32 {
 }
 
 impl Reactive {
+    /// Stands still without a scan to go on.
     pub fn command(&self, laser: &Laser, ranges: &[f32]) -> Command {
+        if ranges.len() != laser.samples || ranges.is_empty() {
+            return Command::default();
+        }
         // Angles as the original wrote them: degrees, counter-clockwise, so
         // the beam is at the mirrored angle in this crate's clockwise frame.
         let at = |deg: f32| ranges[laser.beam_index(-deg.to_radians())];

@@ -15,12 +15,15 @@ pub struct Grid<T> {
 }
 
 impl<T: Clone> Grid<T> {
+    /// Negative dimensions count as 0.
     pub fn new(width: i32, height: i32, cell: f32, fill: T) -> Self {
+        let (width, height) = (width.max(0), height.max(0));
         Self {
             width,
             height,
             cell,
-            data: vec![fill; (width * height) as usize],
+            // In usize, so huge grids can't wrap the cell count around.
+            data: vec![fill; width as usize * height as usize],
         }
     }
 
@@ -91,7 +94,8 @@ pub fn neighbours8((x, y): Cell) -> [(Cell, f32); 8] {
 /// vector `dir` passes through, up to `max` m (Amanatides & Woo's grid
 /// traversal). `visit` gets each cell and the distance at which the ray
 /// enters it, and stops the walk by returning true. Returns that distance,
-/// or `None` if the walk ran out.
+/// or `None` if the walk ran out. Cells that aren't a positive size would
+/// never be left, so nothing is walked then.
 pub fn trace(
     cell: f32,
     from: Point,
@@ -99,6 +103,9 @@ pub fn trace(
     max: f32,
     mut visit: impl FnMut(Cell, f32) -> bool,
 ) -> Option<f32> {
+    if cell.is_nan() || cell <= 0.0 {
+        return None;
+    }
     let mut c = (
         (from.x / cell).floor() as i32,
         (from.y / cell).floor() as i32,
@@ -166,6 +173,24 @@ mod tests {
             seen,
             vec![((0, 0), 0.0), ((1, 0), 0.5), ((2, 0), 1.5), ((3, 0), 2.5)]
         );
+    }
+
+    #[test]
+    fn degenerate_cells_and_grids_are_harmless() {
+        let mut visits = 0;
+        let hit = trace(
+            0.0,
+            Point::new(0.5, 0.5),
+            Point::new(1.0, 0.0),
+            3.0,
+            |_, _| {
+                visits += 1;
+                false
+            },
+        );
+        assert_eq!((hit, visits), (None, 0));
+        let g = Grid::new(-3, 5, 0.1, false);
+        assert_eq!((g.width, g.data.len()), (0, 0));
     }
 
     #[test]

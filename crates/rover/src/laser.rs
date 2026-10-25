@@ -34,8 +34,12 @@ impl Laser {
         -self.fov * 0.5 + self.fov * i as f32 / (self.samples - 1) as f32
     }
 
-    /// Index of the beam closest to `angle` (relative to the heading, clockwise).
+    /// Index of the beam closest to `angle` (relative to the heading,
+    /// clockwise); 0 with fewer than two beams.
     pub fn beam_index(&self, angle: f32) -> usize {
+        if self.samples < 2 {
+            return 0;
+        }
         let f = (angle + self.fov * 0.5) / self.fov * (self.samples - 1) as f32;
         (f.round().max(0.0) as usize).min(self.samples - 1)
     }
@@ -86,5 +90,8 @@ mod tests {
         assert!((laser.beam_angle(laser.samples - 1) - laser.fov / 2.0).abs() < 1e-6);
         assert_eq!(laser.beam_index(0.0), laser.samples / 2);
         assert_eq!(laser.beam_index(10.0), laser.samples - 1);
+        for samples in [0, 1] {
+            assert_eq!(Laser { samples, ..laser }.beam_index(0.5), 0);
+        }
     }
 }
