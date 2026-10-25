@@ -2,7 +2,7 @@ import { arrowhead, cross, dimension, label } from '../lib/draft'
 import type { Theme } from '../lib/theme'
 
 /** Palette order matches `Tone` in `src/collision/report.rs`. */
-const tones = (t: Theme) => [t.ink, t.inkSoft, t.inkFaint, t.cobalt, t.signal, t.verdigris]
+const tones = (t: Theme) => [t.ink, t.inkSoft, t.inkFaint, t.cobalt, t.signal, t.verdigris, t.amber]
 
 /** `Tone::Faint` */
 const FAINT = 2

@@ -99,7 +99,8 @@ pub fn boxes(a: &Body, b: &Body, crowd: &Crowd) -> (Vec<Aabb>, Aabb) {
 
 /// Builds the quadtree over the whole scene. Returns whether A and B share
 /// a leaf (and so must be tested), the stats, and notes for drawing: the leaf
-/// cells, with A's and B's filled, and the crowd bodies they pair with.
+/// cells (amber where A and B share one, verdigris where only one sits), and
+/// the crowd bodies they pair with.
 pub fn quadtree_stage(
     a: &Body,
     b: &Body,
@@ -116,16 +117,18 @@ pub fn quadtree_stage(
     // Leaves only: inner cells are drawn by their children's edges anyway.
     for leaf in tree.leaves() {
         let (lo, hi) = leaf.bounds;
-        let holds_ab = leaf.items.iter().any(|&i| i < 2);
+        let (has_a, has_b) = (leaf.items.contains(&0), leaf.items.contains(&1));
+        // Leaves holding both make A–B a candidate pair; those holding one show where each sits.
+        let tone = match (has_a, has_b) {
+            (true, true) => Tone::Amber,
+            (true, false) | (false, true) => Tone::Verdigris,
+            _ => Tone::Faint,
+        };
         notes.push(Note::Polygon {
             points: vec![lo, Vec2::new(hi.x, lo.y), hi, Vec2::new(lo.x, hi.y)],
-            tone: if holds_ab {
-                Tone::Verdigris
-            } else {
-                Tone::Faint
-            },
+            tone,
             dashed: false,
-            fill: holds_ab,
+            fill: has_a || has_b,
         });
     }
     // Outline the crowd bodies A or B would still be tested against; the rest stay ghosted.

@@ -11,6 +11,7 @@ export interface Theme {
   signal: string
   signalFaint: string
   verdigris: string
+  amber: string
   font: string
 }
 
@@ -27,6 +28,7 @@ function readTheme(): Theme {
     signal: v('--signal'),
     signalFaint: v('--signal-faint'),
     verdigris: v('--verdigris'),
+    amber: v('--amber'),
     font: v('--font-sans'),
   }
 }

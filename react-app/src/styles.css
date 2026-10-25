@@ -17,6 +17,7 @@
     --signal: #cc1f63;
     --signal-faint: rgb(204 31 99 / 0.12);
     --verdigris: #0f7f67;
+    --amber: #b8860b;
 
     --font-sans: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
     --font-code: 'Fira Code', ui-monospace, 'SF Mono', Consolas, monospace;
@@ -42,6 +43,7 @@
         --signal: #ff5c93;
         --signal-faint: rgb(255 92 147 / 0.14);
         --verdigris: #3cc7a4;
+        --amber: #f2c14e;
     }
 }
 
