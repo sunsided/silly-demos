@@ -8,10 +8,10 @@ wasm-pack build --target web --out-dir react-app/src/pkg
 
 echo "📦 Installing React app dependencies..."
 cd react-app
-npm install
+yarn install --frozen-lockfile
 
 echo "🏗️  Building React app for local testing..."
-npm run build:local
+yarn build:local
 
 echo "✅ Local build complete! You can now serve the dist/ folder directly."
 echo "📁 Built files are in: react-app/dist/"
@@ -24,4 +24,4 @@ echo ""
 echo "🌐 To test locally, run one of these commands:"
 echo "   cd react-app/dist && python -m http.server 8001"
 echo "   OR"
-echo "   cd react-app && npm run preview:local"
+echo "   cd react-app && yarn preview:local"
