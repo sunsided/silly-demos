@@ -92,14 +92,13 @@ function timePerRun(run: (n: number) => void) {
 }
 
 function drawCrowd(ctx: CanvasRenderingContext2D, t: Theme, buf: Float32Array) {
+  // Ghosted: only the quadtree's notes pick out the bodies that matter to A and B.
   ctx.save()
-  ctx.strokeStyle = t.inkSoft
-  ctx.fillStyle = t.cobaltFaint
+  ctx.strokeStyle = t.inkFaint
   ctx.lineWidth = 1
   for (let i = 0; i < buf.length;) {
     const n = buf[i]
     tracePath(ctx, buf.subarray(i + 1, i + 1 + n * 2))
-    ctx.fill()
     ctx.stroke()
     i += 1 + n * 2
   }
@@ -177,7 +176,7 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
   const [broadphase, setBroadphase] = useState(0)
   const [rows, setRows] = useState<Row[]>([])
   const [timings, setTimings] = useState<Record<string, number>>({})
-  const [crowd, setCrowd] = useState(0)
+  const [crowdSetting, setCrowd] = useState(150)
   const [scene, setScene] = useState<SceneStats | null>(null)
   const [sceneTimes, setSceneTimes] = useState<{ quadtree: number; brute: number } | null>(null)
   const [reducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -280,6 +279,10 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
 
   const notes = useRef<{ buf: Float32Array; labels: string[] }>({ buf: new Float32Array(), labels: [] })
 
+  // The crowd only exists for the quadtree stage; without it there is nothing to prune.
+  const quadtreeOn = (broadphase & QUADTREE) !== 0
+  const crowd = quadtreeOn ? crowdSetting : 0
+
   // The crowd is rebuilt when its size changes and keeps drifting afterwards.
   useEffect(() => {
     const l = lab.current
@@ -288,7 +291,6 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
   }, [crowd, size, wasm])
 
   // The scene keeps moving, so the quadtree is re-timed on an interval rather than on settle.
-  const quadtreeOn = (broadphase & QUADTREE) !== 0
   useEffect(() => {
     if (!quadtreeOn) {
       setSceneTimes(null)
@@ -471,7 +473,9 @@ function CollisionLab({ wasm }: { wasm: Wasm }) {
         <Toggle label="Bounding circles first" checked={(broadphase & BOUNDING_CIRCLE) !== 0} onChange={toggle(BOUNDING_CIRCLE)} />
         <Toggle label="Bounding boxes first" checked={(broadphase & BOUNDING_BOX) !== 0} onChange={toggle(BOUNDING_BOX)} />
         <Toggle label="Quadtree over the scene" checked={quadtreeOn} onChange={toggle(QUADTREE)} />
-        <Slider label="Crowd" unit="shapes" value={crowd} min={0} max={400} step={10} onChange={setCrowd} />
+        {quadtreeOn && (
+          <Slider label="Crowd" unit="shapes" value={crowdSetting} min={0} max={400} step={10} onChange={setCrowd} />
+        )}
       </ControlGroup>
     </Sheet>
   )
