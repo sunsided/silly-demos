@@ -10,7 +10,7 @@
 
 <section class="hero grid-paper">
   <div class="flock">
-    <WasmGate>
+    <WasmGate quiet>
       {#snippet children(wasm)}
         <FlockCanvas
           {wasm}
@@ -43,11 +43,6 @@
   .flock {
     position: absolute;
     inset: 0;
-  }
-
-  /* The loading status stays invisible behind the title. */
-  .flock :global([role='status']) {
-    display: none;
   }
 
   .flock :global(canvas) {
