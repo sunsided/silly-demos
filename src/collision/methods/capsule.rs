@@ -61,11 +61,73 @@ pub fn capsule_capsule<P: Probe>(a: &Shape, b: &Shape, p: &mut P) -> Contact {
     sketch_core(b0, b1, p);
     let (ca, cb) = closest_between_segments(a0, a1, b0, b1, p);
     if (cb - ca).length_squared() <= f32::EPSILON {
-        // Crossing cores: overlapping, but the depth needs a different method.
-        p.note(|| Note::label(ca + Vec2::new(10.0, -14.0), Tone::Signal, "cores cross"));
-        return Contact::boolean(true);
+        return crossing_cores(a0, a1, b0, b1, ra, rb, p);
     }
     inflate(ca, cb, ra, rb, p)
+}
+
+/// Crossing cores: the Minkowski difference of two segments is a
+/// parallelogram that now contains the origin. The distance to its nearest
+/// edge is how far the cores must move apart; both radii add on top.
+fn crossing_cores<P: Probe>(
+    a0: Vec2,
+    a1: Vec2,
+    b0: Vec2,
+    b1: Vec2,
+    ra: f32,
+    rb: f32,
+    p: &mut P,
+) -> Contact {
+    // Corners as (point on A, point on B); consecutive corners differ in one end point.
+    let corners = [(a0, b0), (a1, b0), (a1, b1), (a0, b1)];
+    let mut best = (f32::MAX, Vec2::default(), a0, b0);
+    for i in 0..4 {
+        let ((ai, bi), (aj, bj)) = (corners[i], corners[(i + 1) % 4]);
+        let (q, t) = closest_on_segment(Vec2::default(), ai - bi, aj - bj, p);
+        let d2 = q.length_squared();
+        p.dots(1);
+        if d2 < best.0 {
+            best = (d2, q, ai.lerp(aj, t), bi.lerp(bj, t));
+        }
+    }
+    let (d2, q, ca, cb) = best;
+    let d = d2.sqrt();
+    p.sqrt();
+    if p.sketching() {
+        let outline: Vec<Vec2> = corners.iter().map(|&(a, b)| a - b).collect();
+        p.note(|| Note::Polygon {
+            points: outline,
+            tone: Tone::Soft,
+            dashed: true,
+            fill: false,
+        });
+        p.note(|| Note::label(Vec2::new(0.0, -16.0), Tone::Soft, "core A − core B"));
+        p.note(|| Note::Point {
+            p: Vec2::default(),
+            tone: Tone::Ink,
+        });
+        p.note(|| Note::label(ca + Vec2::new(10.0, -14.0), Tone::Signal, "cores cross"));
+    }
+    // On the boundary (or a flat parallelogram for collinear cores) the
+    // shortest way out is sideways, across the core.
+    let normal = if d > f32::EPSILON {
+        p.div();
+        Some(q / d)
+    } else {
+        let e = a1 - a0;
+        (e.length_squared() > f32::EPSILON).then(|| {
+            p.sqrt();
+            p.div();
+            e.perp().normalized()
+        })
+    };
+    let depth = d + ra + rb;
+    let Some(n) = normal else {
+        return Contact::signed(-depth, None, None);
+    };
+    let (pa, pb) = (ca + n * ra, cb - n * rb);
+    p.note(|| gap_dimension(pa, pb, 24.0, -depth));
+    Contact::signed(-depth, Some(n), Some((pa, pb)))
 }
 
 /// Capsule against a polygon: the core segment's distance to the polygon,

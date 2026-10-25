@@ -111,7 +111,7 @@ pub static METHODS: &[Method] = &[
     method!(
         "capsule-capsule",
         "Segment to segment",
-        "Closest points between the two core segments, minus both radii.",
+        "Closest points between the two core segments, minus both radii; crossing cores take the depth from the segments' Minkowski parallelogram.",
         |a, b| a == Capsule && b == Capsule,
         capsule::capsule_capsule
     ),
