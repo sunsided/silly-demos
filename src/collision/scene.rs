@@ -98,7 +98,8 @@ pub fn boxes(a: &Body, b: &Body, crowd: &Crowd) -> (Vec<Aabb>, Aabb) {
 }
 
 /// Builds the quadtree over the whole scene. Returns whether A and B share
-/// a leaf (and so must be tested), the stats, and notes for drawing.
+/// a leaf (and so must be tested), the stats, and notes for drawing: the leaf
+/// cells, with A's and B's filled, and the crowd bodies they pair with.
 pub fn quadtree_stage(
     a: &Body,
     b: &Body,
@@ -112,9 +113,10 @@ pub fn quadtree_stage(
     let shared = pairs.binary_search(&(0, 1)).is_ok();
     let partners: Vec<(u32, u32)> = pairs.iter().copied().filter(|&(i, _)| i < 2).collect();
 
-    for node in &tree.nodes {
-        let (lo, hi) = node.bounds;
-        let holds_ab = node.is_leaf() && node.items.iter().any(|&i| i < 2);
+    // Leaves only: inner cells are drawn by their children's edges anyway.
+    for leaf in tree.leaves() {
+        let (lo, hi) = leaf.bounds;
+        let holds_ab = leaf.items.iter().any(|&i| i < 2);
         notes.push(Note::Polygon {
             points: vec![lo, Vec2::new(hi.x, lo.y), hi, Vec2::new(lo.x, hi.y)],
             tone: if holds_ab {
@@ -126,19 +128,21 @@ pub fn quadtree_stage(
             fill: holds_ab,
         });
     }
-    // Who A and B would still have to be tested against.
-    let center = |i: u32| match i {
-        0 => a.shape.center(),
-        1 => b.shape.center(),
-        _ => crowd.bodies[i as usize - 2].shape.center(),
-    };
-    for &(i, j) in &partners {
-        let tone = if (i, j) == (0, 1) {
-            Tone::Signal
-        } else {
-            Tone::Verdigris
-        };
-        notes.push(Note::dashed(center(i), center(j), tone));
+    // Outline the crowd bodies A or B would still be tested against; the rest stay ghosted.
+    let mut partner_bodies: Vec<u32> = partners
+        .iter()
+        .map(|&(_, j)| j)
+        .filter(|&j| j >= 2)
+        .collect();
+    partner_bodies.sort_unstable();
+    partner_bodies.dedup();
+    for j in partner_bodies {
+        notes.push(Note::Polygon {
+            points: crowd.bodies[j as usize - 2].shape.outline(),
+            tone: Tone::Verdigris,
+            dashed: false,
+            fill: false,
+        });
     }
 
     let stats = SceneStats {
