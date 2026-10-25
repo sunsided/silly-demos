@@ -6,9 +6,12 @@ mod utils;
 mod vec2;
 mod voronoi;
 
+use crate::collision::broadphase::{QUADTREE, Stage};
 use crate::collision::probe::{Counts, Recorder, Silent};
+use crate::collision::quadtree::{self, Quadtree};
 use crate::collision::registry;
 use crate::collision::report::Contact;
+use crate::collision::scene::{self, Crowd, SceneStats};
 use crate::collision::shape::{Body, Shape, ShapeKind};
 use crate::utils::set_panic_hook;
 use crate::vec2::Vec2;
@@ -32,6 +35,7 @@ pub struct GeometryTests;
 #[wasm_bindgen]
 pub struct CollisionLab {
     bodies: [Body; 2],
+    crowd: Crowd,
 }
 
 #[wasm_bindgen]
@@ -46,6 +50,7 @@ impl CollisionLab {
         };
         Self {
             bodies: [circle(-140.0), circle(140.0)],
+            crowd: Crowd::default(),
         }
     }
 
@@ -100,27 +105,40 @@ impl CollisionLab {
     }
 
     /// Runs method `id` with the broadphase stages in `broadphase`
-    /// (1 = bounding circles, 2 = bounding boxes), recording counts and notes.
+    /// (1 = bounding circles, 2 = bounding boxes, 4 = scene quadtree), recording counts and notes.
     pub fn run(&self, id: &str, broadphase: u32) -> Option<CollisionReport> {
         let m = self.resolve(id)?;
+        let [a, b] = &self.bodies;
         let mut rec = Recorder::default();
-        let (contact, stage) =
-            collision::test(&m, &self.bodies[0], &self.bodies[1], broadphase, &mut rec);
+        let mut scene_notes = Vec::new();
+        let (shared, scene) = if broadphase & QUADTREE != 0 {
+            let (shared, stats) = scene::quadtree_stage(a, b, &self.crowd, &mut scene_notes);
+            (shared, Some(stats))
+        } else {
+            (true, None)
+        };
+        let (contact, stage) = if shared {
+            collision::test(&m, a, b, broadphase, &mut rec)
+        } else {
+            (Contact::boolean(false), Stage::Quadtree)
+        };
         let mut notes = Vec::new();
         let mut labels = Vec::new();
-        for note in &rec.notes {
+        for note in scene_notes.iter().chain(&rec.notes) {
             note.encode(&mut notes, &mut labels);
         }
         Some(CollisionReport {
             contact,
             stage: stage as u32,
             counts: rec.counts,
+            scene,
             notes,
             labels,
         })
     }
 
     /// Runs method `id` `n` times without instrumentation, for timing from JS.
+    /// The quadtree stage is left out: it is a scene-wide cost, timed by `bench_quadtree`.
     /// Returns how many runs reported an intersection so the work can't be optimized away.
     pub fn bench(&self, id: &str, broadphase: u32, n: u32) -> u32 {
         let Some(m) = self.resolve(id) else {
@@ -129,11 +147,60 @@ impl CollisionLab {
         let mut hits = 0;
         for _ in 0..n {
             let (a, b) = std::hint::black_box((&self.bodies[0], &self.bodies[1]));
-            hits += collision::test(&m, a, b, broadphase, &mut Silent)
+            hits += collision::test(&m, a, b, broadphase & !QUADTREE, &mut Silent)
                 .0
                 .intersect as u32;
         }
         hits
+    }
+
+    /// Fills the scene with `count` small drifting shapes inside a
+    /// `width` × `height` area centered on the origin.
+    pub fn set_crowd(&mut self, count: usize, width: f32, height: f32, seed: u32) {
+        let half = Vec2::new(
+            (width * 0.5 - 12.0).max(1.0),
+            (height * 0.5 - 12.0).max(1.0),
+        );
+        self.crowd = Crowd::new(count, half, seed);
+    }
+
+    /// Advances the crowd by `dt` seconds.
+    pub fn step_crowd(&mut self, dt: f32) {
+        self.crowd.step(dt);
+    }
+
+    /// Crowd outlines as `[n, x0, y0, ..., x(n-1), y(n-1)]` per body, back to back.
+    pub fn crowd_outlines(&self) -> Vec<f32> {
+        let mut out = Vec::new();
+        for body in &self.crowd.bodies {
+            let outline = body.shape.outline();
+            out.push(outline.len() as f32);
+            out.extend(outline.iter().flat_map(|v| [v.x, v.y]));
+        }
+        out
+    }
+
+    /// Builds the scene quadtree and collects its candidate pairs `n` times,
+    /// for timing from JS. Returns the candidate count.
+    pub fn bench_quadtree(&self, n: u32) -> u32 {
+        let mut found = 0;
+        for _ in 0..n {
+            let [a, b] = std::hint::black_box(&self.bodies);
+            let (boxes, root) = scene::boxes(a, b, &self.crowd);
+            found = Quadtree::build(root, &boxes).pairs().0.len() as u32;
+        }
+        found
+    }
+
+    /// Tests every pair of bounding boxes in the scene `n` times, for timing from JS.
+    pub fn bench_brute_force(&self, n: u32) -> u32 {
+        let mut found = 0;
+        for _ in 0..n {
+            let [a, b] = std::hint::black_box(&self.bodies);
+            let (boxes, _) = scene::boxes(a, b, &self.crowd);
+            found = quadtree::brute_force(&boxes).len() as u32;
+        }
+        found
     }
 }
 
@@ -156,6 +223,7 @@ pub struct CollisionReport {
     contact: Contact,
     stage: u32,
     counts: Counts,
+    scene: Option<SceneStats>,
     notes: Vec<f32>,
     labels: Vec<String>,
 }
@@ -189,7 +257,8 @@ impl CollisionReport {
             .unwrap_or_default()
     }
 
-    /// 0 = rejected by bounding circles, 1 = by bounding boxes, 2 = reached the narrowphase.
+    /// 0 = rejected by bounding circles, 1 = by bounding boxes, 2 = reached the narrowphase,
+    /// 3 = rejected by the quadtree (A and B share no leaf).
     #[wasm_bindgen(getter)]
     pub fn stage(&self) -> u32 {
         self.stage
@@ -199,6 +268,24 @@ impl CollisionReport {
     pub fn counts(&self) -> Vec<u32> {
         let c = self.counts;
         vec![c.dots, c.sqrts, c.divs, c.axes, c.supports, c.iterations]
+    }
+
+    /// Quadtree stats `[bodies, nodes, depth, checks, candidates, all_pairs, partners]`,
+    /// or empty when the quadtree stage is off.
+    pub fn scene(&self) -> Vec<u32> {
+        self.scene
+            .map(|s| {
+                vec![
+                    s.bodies,
+                    s.nodes,
+                    s.depth,
+                    s.checks,
+                    s.candidates,
+                    s.all_pairs,
+                    s.partners,
+                ]
+            })
+            .unwrap_or_default()
     }
 
     /// Construction notes; see `Note::encode` for the layout.

@@ -510,6 +510,15 @@ a {
     font-size: 13px;
 }
 
+.scene-stats {
+    margin: 0 0 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.scene-stats strong {
+    color: var(--ink);
+}
+
 .compare {
     width: 100%;
     border-collapse: collapse;
