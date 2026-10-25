@@ -7,6 +7,9 @@ use super::shape::{Body, Shape, ShapeKind};
 use crate::rand::frand01;
 use crate::vec2::Vec2;
 
+/// How far the quadtree's root reaches past the area the crowd bounces in.
+const ROOT_MARGIN: f32 = 12.0;
+
 /// Small random shapes drifting inside a rectangle centered on the origin.
 #[derive(Default)]
 pub struct Crowd {
@@ -86,15 +89,10 @@ pub fn boxes(a: &Body, b: &Body, crowd: &Crowd) -> (Vec<Aabb>, Aabb) {
         .chain(&crowd.bodies)
         .map(|body| body.aabb)
         .collect();
-    let root = boxes
-        .iter()
-        .fold((-crowd.half, crowd.half), |(lo, hi), (bl, bh)| {
-            (
-                Vec2::new(lo.x.min(bl.x), lo.y.min(bl.y)),
-                Vec2::new(hi.x.max(bh.x), hi.y.max(bh.y)),
-            )
-        });
-    (boxes, root)
+    // A fixed root keeps the cells still while things move; bodies poking
+    // out are clamped into the border cells by the tree.
+    let margin = Vec2::new(ROOT_MARGIN, ROOT_MARGIN);
+    (boxes, (-crowd.half - margin, crowd.half + margin))
 }
 
 /// Builds the quadtree over the whole scene. Returns whether A and B share
