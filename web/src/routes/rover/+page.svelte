@@ -20,6 +20,7 @@
   let showScan = $state(true)
   let showPlan = $state(true)
   let showTrail = $state(true)
+  let showClearance = $state(false)
   let restart = $state(0)
   let stats = $state<RoverStats>({ coverage: 0, distance: 0, time: 0, frontiers: 0, status: 'exploring' })
 
@@ -53,6 +54,7 @@
           {showScan}
           {showPlan}
           {showTrail}
+          {showClearance}
           {restart}
           onstats={s => (stats = s)}
         />
@@ -84,6 +86,7 @@
       <Toggle label="Laser scan" bind:checked={showScan} />
       <Toggle label="Plan and frontiers given up" bind:checked={showPlan} />
       <Toggle label="Trail" bind:checked={showTrail} />
+      <Toggle label="Clearance field" bind:checked={showClearance} />
     </ControlGroup>
   {/snippet}
 
@@ -96,6 +99,13 @@
         { tone: 'verdigris', label: 'Home' },
       ]}
     />
+    {#if showClearance}
+      <p>
+        Clearance field: each free cell's distance to the nearest wall the rover knows of, darker nearer the wall, in
+        10 cm bands. The red edge is as close as the rover's centre may get; inside the blue edge, paths cost extra, so
+        plans keep to the middle of corridors. Hover to read a value.
+      </p>
+    {/if}
     <p>
       {stats.frontiers} frontier {stats.frontiers === 1 ? 'cluster' : 'clusters'} reachable. The explorer drives,
       through free space it has seen and with room for its body, to the nearest spot with a clear view into the

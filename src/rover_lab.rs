@@ -2,6 +2,7 @@
 
 use rover::floorplan::FloorPlan;
 use rover::map::Known;
+use rover::nav;
 use rover::sim::{Mode, Sim, Status};
 use wasm_bindgen::prelude::*;
 
@@ -86,6 +87,27 @@ impl RoverLab {
             out[g.index(*c)] = 3;
         }
         out
+    }
+
+    /// Clearance per cell in metres, row by row: the distance to the nearest
+    /// wall the robot knows of, capped at 2 m, as the explorer plans with
+    /// it; −1 for cells not known to be free. Computed on each call.
+    pub fn clearance(&self) -> Vec<f32> {
+        let map = &self.sim.map.grid;
+        let clear = nav::clearance(map, 2.0);
+        map.data
+            .iter()
+            .zip(&clear.data)
+            .map(|(&k, &d)| if k == Known::Free { d } else { -1.0 })
+            .collect()
+    }
+
+    /// The explorer's clearance thresholds `[hard, soft]` in metres: its
+    /// centre never comes closer to a wall than `hard`, and paths cost extra
+    /// within `soft`.
+    pub fn room(&self) -> Vec<f32> {
+        let r = self.sim.explorer.room();
+        vec![r.hard, r.soft]
     }
 
     /// Robot pose `[x, y, heading]`; heading clockwise from +x.
@@ -174,3 +196,25 @@ impl Default for RoverLab {
 // Keeps the byte encoding in `knowledge` in step with the map's.
 const _: () =
     assert!(Known::Unknown as u8 == 0 && Known::Free as u8 == 1 && Known::Wall as u8 == 2);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clearance_covers_the_grid_and_marks_cells_not_known_free() {
+        let mut lab = RoverLab::new("explorer");
+        lab.step(2.0);
+        let clear = lab.clearance();
+        let g = lab.grid();
+        assert_eq!(clear.len(), (g[0] * g[1]) as usize);
+        let k = lab.knowledge();
+        for (d, k) in clear.iter().zip(&k) {
+            let free = *k == Known::Free as u8 || *k == 3;
+            assert_eq!(*d >= 0.0, free);
+            assert!(*d <= 2.0);
+        }
+        let room = lab.room();
+        assert!(room[0] < room[1]);
+    }
+}

@@ -102,6 +102,98 @@ export class KnowledgeImage {
   }
 }
 
+/** Width of one clearance band, m. */
+const BAND = 0.1
+/** Clearance at which the shading fades out, m; the field is capped there. */
+const CLEARANCE_CAP = 2
+
+/**
+ * Renders the clearance field into an offscreen canvas, one pixel per cell:
+ * known free cells shaded in cobalt, darker nearer to a wall, in 0.1 m bands;
+ * the edge where it drops below the hard limit (the robot's centre can't go
+ * nearer) outlined in signal red, and where it drops below the soft limit
+ * (paths cost extra) in cobalt.
+ */
+export class ClearanceImage {
+  // Created on first use: there is no document while prerendering.
+  private canvas: HTMLCanvasElement | null = null
+  private image: ImageData | null = null
+
+  update(t: Theme, clear: Float32Array, columns: number, rows: number, room: ArrayLike<number>) {
+    this.canvas ??= document.createElement('canvas')
+    if (!this.image || this.image.width !== columns || this.image.height !== rows) {
+      this.canvas.width = columns
+      this.canvas.height = rows
+      this.image = new ImageData(columns, rows)
+    }
+    const hard = room[0]
+    const soft = room[1]
+    const fill = rgba(t.cobalt)
+    const hardEdge = rgba(t.signal)
+    const bands = CLEARANCE_CAP / BAND
+    const px = this.image.data
+    // Whether cell i is free but below `limit` while an edge neighbour is free at or above it.
+    const edge = (i: number, x: number, y: number, limit: number) => {
+      const d = clear[i]
+      if (d < 0 || d >= limit) return false
+      const above = (j: number) => clear[j] >= limit
+      return (x > 0 && above(i - 1)) || (x + 1 < columns && above(i + 1)) ||
+        (y > 0 && above(i - columns)) || (y + 1 < rows && above(i + columns))
+    }
+    for (let y = 0, i = 0; y < rows; y++) {
+      for (let x = 0; x < columns; x++, i++) {
+        const d = clear[i]
+        let c: readonly number[] = [0, 0, 0, 0]
+        if (edge(i, x, y, hard)) c = hardEdge
+        else if (edge(i, x, y, soft)) c = fill
+        else if (d >= 0) {
+          const band = Math.min(bands, Math.floor(d / BAND))
+          c = [fill[0], fill[1], fill[2], Math.round(150 * (1 - band / bands) ** 1.6)]
+        }
+        px[i * 4] = c[0]
+        px[i * 4 + 1] = c[1]
+        px[i * 4 + 2] = c[2]
+        px[i * 4 + 3] = c[3]
+      }
+    }
+    this.canvas.getContext('2d')!.putImageData(this.image, 0, 0)
+  }
+
+  draw(ctx: CanvasRenderingContext2D, view: View, cell: number) {
+    if (!this.canvas) return
+    ctx.save()
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(
+      this.canvas,
+      view.x,
+      view.y,
+      this.canvas.width * cell * view.scale,
+      this.canvas.height * cell * view.scale,
+    )
+    ctx.restore()
+  }
+}
+
+/** The clearance under the pointer, labelled beside it. */
+export function drawClearanceAt(
+  ctx: CanvasRenderingContext2D,
+  t: Theme,
+  view: View,
+  pointer: Point,
+  clear: Float32Array,
+  grid: ArrayLike<number>,
+) {
+  const columns = grid[0]
+  const rows = grid[1]
+  const cell = grid[2]
+  const x = Math.floor((pointer.x - view.x) / view.scale / cell)
+  const y = Math.floor((pointer.y - view.y) / view.scale / cell)
+  if (x < 0 || y < 0 || x >= columns || y >= rows) return
+  const d = clear[y * columns + x]
+  const text = d < 0 ? 'not known free' : d >= CLEARANCE_CAP ? `≥ ${CLEARANCE_CAP} m clear` : `${d.toFixed(2)} m clear`
+  label(ctx, t, text, { x: pointer.x + 12, y: pointer.y - 12 }, t.ink, 'left')
+}
+
 const at = (view: View, x: number, y: number): Point => ({ x: view.x + x * view.scale, y: view.y + y * view.scale })
 
 /** The true floor plan, as faint dashed lines. */

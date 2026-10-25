@@ -218,6 +218,11 @@ impl Explorer {
         }
     }
 
+    /// How much room it keeps to the walls when planning.
+    pub fn room(&self) -> Room {
+        self.room
+    }
+
     /// Where it returns to once nothing is left to explore.
     pub fn home(&self) -> Pose {
         self.home
