@@ -1,6 +1,7 @@
 mod boids;
 mod collision;
 mod geometry;
+mod ik;
 mod rand;
 mod utils;
 mod vec2;
@@ -466,5 +467,131 @@ impl BoidsSim {
             out.extend_from_slice(&[b.pos.x, b.pos.y, b.vel.x, b.vel.y, b.neighbors as f32]);
         }
         out
+    }
+}
+
+/// A planar IK chain pinned at its base. Coordinates in px.
+///
+/// The solvers work on a goal pose; the pose shown eases after it (see
+/// `follow`), so the arm moves smoothly even when the goal jumps.
+#[wasm_bindgen]
+pub struct IkChain {
+    goal: ik::Chain,
+    shown: ik::Chain,
+    outcome: ik::Outcome,
+}
+
+#[wasm_bindgen]
+impl IkChain {
+    /// A straight chain from the origin, pointing up (−y).
+    #[wasm_bindgen(constructor)]
+    pub fn new(segments: usize, length: f32) -> Self {
+        let goal = ik::Chain::straight(Vec2::default(), segments, length, Vec2::new(0.0, -1.0));
+        Self {
+            shown: goal.clone(),
+            goal,
+            outcome: ik::Outcome::default(),
+        }
+    }
+
+    /// Solver ids, in menu order.
+    pub fn solvers() -> Vec<String> {
+        ik::Solver::ALL.iter().map(|s| s.id().to_owned()).collect()
+    }
+
+    /// Changes the segment count and length, keeping the pose where it can.
+    pub fn resize(&mut self, segments: usize, length: f32) {
+        self.goal.resize(segments, length);
+        self.shown = self.goal.clone();
+    }
+
+    /// Straightens the goal pose upwards from its base; the shown pose follows.
+    pub fn straighten(&mut self) {
+        let c = &self.goal;
+        let Some(&length) = c.lengths.first() else {
+            return;
+        };
+        self.goal = ik::Chain::straight(c.base(), c.lengths.len(), length, Vec2::new(0.0, -1.0));
+    }
+
+    /// Moves the whole chain so its base is at `(x, y)`.
+    pub fn set_base(&mut self, x: f32, y: f32) {
+        let d = Vec2::new(x, y) - self.goal.base();
+        self.goal.translate(d);
+        self.shown.translate(d);
+    }
+
+    /// Runs up to `iterations` iterations of solver `id` on the goal pose
+    /// towards `(x, y)`; `damping` is the damped least-squares λ in px. With a
+    /// `clearance` (px), links never come closer than that. Returns the
+    /// iterations run, or 0 for an unknown solver.
+    pub fn solve(
+        &mut self,
+        id: &str,
+        x: f32,
+        y: f32,
+        iterations: u32,
+        damping: f32,
+        clearance: Option<f32>,
+    ) -> u32 {
+        self.outcome = ik::Solver::from_id(id)
+            .map(|s| {
+                self.goal
+                    .solve(s, Vec2::new(x, y), iterations, damping, clearance)
+            })
+            .unwrap_or_default();
+        self.outcome.iterations
+    }
+
+    /// Eases the shown pose towards the goal over `dt` seconds, closing the
+    /// gap exponentially with time constant `smoothing` seconds (0 = snap).
+    pub fn follow(&mut self, dt: f32, smoothing: f32, clearance: Option<f32>) {
+        let k = if smoothing > 0.0 {
+            1.0 - (-dt / smoothing).exp()
+        } else {
+            1.0
+        };
+        self.shown.follow(&self.goal, k, clearance);
+    }
+
+    /// Whether the last solve had to cut a step short to keep links apart.
+    pub fn contact(&self) -> bool {
+        self.outcome.contact
+    }
+
+    /// Whether the arm is swinging round after getting stuck against itself.
+    pub fn rerouting(&self) -> bool {
+        self.outcome.rerouting
+    }
+
+    /// Distance from the shown end effector to `(x, y)`.
+    pub fn error(&self, x: f32, y: f32) -> f32 {
+        self.shown.error(Vec2::new(x, y))
+    }
+
+    /// Length of the fully stretched chain.
+    pub fn reach(&self) -> f32 {
+        self.goal.reach()
+    }
+
+    /// Shown joint positions `[x0, y0, ..., xn, yn]`, base first, end effector last.
+    pub fn joints(&self) -> Vec<f32> {
+        self.shown.joints.iter().flat_map(|p| [p.x, p.y]).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_ik_chain_without_segments_survives_every_call() {
+        let mut c = IkChain::new(0, 40.0);
+        c.straighten();
+        c.resize(0, 10.0);
+        c.straighten();
+        assert_eq!(c.solve("fabrik", 10.0, 10.0, 10, 1.0, Some(16.0)), 0);
+        c.follow(1.0 / 60.0, 0.08, Some(16.0));
+        assert_eq!(c.joints(), vec![0.0, 0.0]);
     }
 }
