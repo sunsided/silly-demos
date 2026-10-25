@@ -14,6 +14,12 @@ export const DEMOS = [
     rust: 'CollisionLab::run',
   },
   {
+    route: '/inverse-kinematics',
+    name: 'Inverse kinematics',
+    blurb: 'A jointed arm reaching for a target, solved with FABRIK, CCD or the Jacobian, with the error and iterations each needs.',
+    rust: 'IkChain::solve',
+  },
+  {
     route: '/point-line',
     name: 'Point to segment',
     blurb: 'The shortest distance from a point to a line segment, and which side of the line the point is on.',

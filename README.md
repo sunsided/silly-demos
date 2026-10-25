@@ -26,6 +26,7 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 ### Features
 
 - **Collision Lab**: Pick two shapes (circle, boxes, triangle, convex polygon, ellipse, capsule) and switch between the methods that can test them, from pair-specific shortcuts to SAT and GJK/EPA, each with its own construction drawing, operation counts and timing; a quadtree over a drifting crowd of shapes shows scene-wide pair pruning against brute force
+- **Inverse Kinematics**: A planar arm reaching for a draggable or animated target, solved by FABRIK, CCD, Jacobian transpose or damped least squares, with the remaining error and iterations per frame
 - **Point-Line Distance Demo**: Visualizes the shortest distance from a point to a line segment
 - **Boids Simulation**: Reynolds flocking (separation, alignment, cohesion) with field of view, look-ahead edge avoidance and a spatial grid for neighbor lookups; the flock state lives in WASM
 - **Voronoi / Delaunay**: Interactive Voronoi diagram / Delaunay triangulation
@@ -44,6 +45,7 @@ silly-demos/
 │   ├── lib.rs             # wasm-bindgen exports
 │   ├── collision/         # Shapes, collision methods, broadphase, method registry
 │   ├── geometry.rs        # Point/segment geometry
+│   ├── ik.rs              # Inverse kinematics solvers
 │   ├── boids.rs           # Flocking simulation
 │   ├── voronoi.rs         # Delaunay triangulation / Voronoi edges
 │   └── vec2.rs            # 2D vector math
@@ -111,6 +113,7 @@ BASE_PATH=/my-custom-path task build
 
 - **Boids**: Flocking simulation with live controls for every rule and a view of what a single boid perceives
 - **Collision Lab**: Two shapes, every applicable collision method, its construction and its cost
+- **Inverse Kinematics**: FABRIK, CCD and Jacobian solvers moving a jointed arm onto a target
 - **Voronoi / Delaunay**: Moving points with their Delaunay triangulation and Voronoi diagram
 - **Point to Segment**: Shortest distance from a point to a line segment versus the perpendicular distance to the infinite line
 
