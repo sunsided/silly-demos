@@ -50,6 +50,7 @@ pub enum Tone {
     Cobalt = 3,
     Signal = 4,
     Verdigris = 5,
+    Amber = 6,
 }
 
 /// A construction mark drawn on top of the shapes to explain what a method did.
