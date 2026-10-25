@@ -1,11 +1,11 @@
-# Rust/WASM core at the root, React frontend in react-app/ (included as `web`).
+# Rust/WASM core at the root, SvelteKit frontend in web/ (included as `web`).
 # https://taskfile.dev
 version: '3'
 
 includes:
   web:
-    taskfile: react-app/Taskfile.dist.yaml
-    dir: react-app
+    taskfile: web/Taskfile.dist.yaml
+    dir: web
 
 vars:
   # The default cargo target is wasm32 (.cargo/config.toml); unit tests and

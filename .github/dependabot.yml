@@ -13,7 +13,7 @@ updates:
 
   # Enable version updates for npm (React app)
   - package-ecosystem: "npm"
-    directory: "/react-app"
+    directory: "/web"
     schedule:
       interval: "weekly"
     cooldown:

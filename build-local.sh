@@ -6,22 +6,23 @@ set -e
 echo "🦀 Building WASM module..."
 wasm-pack build --target web
 
-echo "📦 Installing React app dependencies..."
-cd react-app
-yarn install --frozen-lockfile
+echo "📦 Installing web dependencies..."
+cd web
+corepack enable
+yarn install --immutable
 
-echo "🏗️  Building React app for local testing..."
-yarn build:local
+echo "🏗️  Prerendering the site for local testing..."
+yarn build
 
-echo "✅ Local build complete! You can now serve the dist/ folder directly."
-echo "📁 Built files are in: react-app/dist/"
+echo "✅ Local build complete! You can now serve the build/ folder directly."
+echo "📁 Built files are in: web/build/"
 
 # List the contents to verify
 echo "📋 Build contents:"
-ls -la dist/
+ls -la build/
 
 echo ""
 echo "🌐 To test locally, run one of these commands:"
-echo "   cd react-app/dist && python -m http.server 8001"
+echo "   cd web/build && python -m http.server 8001"
 echo "   OR"
-echo "   cd react-app && yarn preview:local"
+echo "   cd web && yarn preview"

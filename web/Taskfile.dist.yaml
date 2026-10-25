@@ -1,0 +1,81 @@
+# SvelteKit frontend, prerendered to static pages in build/. Expects the WASM
+# package in ../pkg (run `task build:wasm` at the root).
+# https://taskfile.dev
+version: '3'
+
+vars:
+  RUN: yarn   # Yarn 4 via corepack (pinned in package.json) — not npm
+
+tasks:
+  default:
+    cmds:
+      - task --list --sort=none
+    silent: true
+
+  tooling:check:
+    internal: true
+    preconditions:
+      - sh: printf '%s\n' v22.17.0 "$(node --version)" | sort -VC
+        msg: "Node.js 22.17 or later required (SvelteKit 3) — install from https://nodejs.org/"
+      - sh: yarn --version | grep -q '^4\.'
+        msg: "Yarn 4 not active — run: corepack enable (package.json pins the version)"
+
+  install:
+    desc: Install frontend dependencies from yarn.lock
+    deps: [tooling:check]
+    sources:
+      - package.json
+      - yarn.lock
+      - .yarnrc.yml
+    generates:
+      - node_modules/.yarn-state.yml
+    cmds:
+      - '{{.RUN}} install --immutable'
+
+  wasm:check:
+    internal: true
+    preconditions:
+      - sh: test -f ../pkg/silly_demos.js
+        msg: "WASM package missing — run `task build:wasm` in the repository root"
+
+  tokens:
+    desc: Generate CSS and TS from the design tokens (tokens/tokens.json)
+    deps: [install]
+    sources:
+      - tokens/tokens.json
+      - scripts/build-tokens.js
+    generates:
+      - src/lib/tokens/generated/tokens.css
+      - src/lib/tokens/generated/tokens.ts
+    cmds:
+      - '{{.RUN}} tokens'
+
+  dev:
+    desc: Start the Vite dev server (port 3000)
+    deps: [install, wasm:check]
+    cmds:
+      - '{{.RUN}} dev {{.CLI_ARGS}}'
+
+  build:
+    desc: Prerender the static site into build/ (set BASE_PATH for a sub-path, e.g. /silly-demos)
+    deps: [install, wasm:check]
+    cmds:
+      - '{{.RUN}} build'
+
+  preview:
+    desc: Serve the production build from build/
+    deps: [install]
+    cmds:
+      - '{{.RUN}} preview {{.CLI_ARGS}}'
+
+  check:
+    desc: Typecheck the Svelte components and TypeScript (svelte-check)
+    aliases: [lint]
+    deps: [install, wasm:check]
+    cmds:
+      - '{{.RUN}} check'
+
+  clean:
+    desc: Remove the build output, SvelteKit and Vite caches and generated tokens
+    cmds:
+      - rm -rf build .svelte-kit node_modules/.vite src/lib/tokens/generated

@@ -6,18 +6,19 @@ set -e
 echo "🦀 Building WASM module..."
 wasm-pack build --target web
 
-echo "📦 Installing React app dependencies..."
-cd react-app
-yarn install --frozen-lockfile
+echo "📦 Installing web dependencies..."
+cd web
+corepack enable
+yarn install --immutable
 
-echo "🏗️  Building React app for GitHub Pages..."
-# Set the base path to the repository name for GitHub Pages deployment
-export VITE_BASE_PATH=/silly-demos
+echo "🏗️  Prerendering the site for GitHub Pages..."
+# The site is served from /<repository name> on GitHub Pages.
+export BASE_PATH=/silly-demos
 yarn build
 
-echo "✅ Build complete! The dist/ folder is ready for GitHub Pages deployment."
-echo "📁 Built files are in: react-app/dist/"
+echo "✅ Build complete! The build/ folder is ready for GitHub Pages deployment."
+echo "📁 Built files are in: web/build/"
 
 # List the contents to verify
 echo "📋 Build contents:"
-ls -la dist/
+ls -la build/

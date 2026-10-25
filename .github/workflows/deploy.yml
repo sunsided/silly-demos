@@ -44,22 +44,37 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
-          cache: yarn
-          cache-dependency-path: react-app/yarn.lock
+          node-version: 24
+
+      # Yarn 4 comes from corepack, pinned by `packageManager` in web/package.json.
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Cache Yarn packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('web/yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
 
       - name: Install dependencies
-        run: cd react-app && yarn install --frozen-lockfile
+        working-directory: web
+        run: yarn install --immutable
 
-      - name: Build React app
+      - name: Typecheck
+        working-directory: web
+        run: yarn check
+
+      - name: Build site
+        working-directory: web
         env:
-          VITE_BASE_PATH: /${{ github.event.repository.name }}
-        run: cd react-app && yarn build
+          BASE_PATH: /${{ github.event.repository.name }}
+        run: yarn build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: ./react-app/dist
+          path: ./web/build
 
   deploy:
     name: Deploy to GitHub Pages

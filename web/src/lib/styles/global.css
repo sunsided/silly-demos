@@ -1,0 +1,61 @@
+/*
+ * Base styles. Colors, type and spacing come from the design tokens
+ * (tokens/tokens.json -> lib/tokens/generated/tokens.css); components style
+ * themselves and only rely on these element defaults.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-root {
+  height: 100%;
+}
+
+code {
+  font-family: var(--font-family-code);
+  font-size: 0.85em;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: var(--border-accent) solid var(--color-cobalt);
+  outline-offset: var(--border-accent);
+}
+
+/* Graph paper behind drawings: minor and major grid lines. */
+.grid-paper {
+  background-color: var(--color-paper);
+  background-image:
+    linear-gradient(var(--color-grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-grid-major) 1px, transparent 1px),
+    linear-gradient(var(--color-grid-minor) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-grid-minor) 1px, transparent 1px);
+  background-size:
+    var(--size-grid-major) var(--size-grid-major),
+    var(--size-grid-major) var(--size-grid-major),
+    var(--size-grid-minor) var(--size-grid-minor),
+    var(--size-grid-minor) var(--size-grid-minor);
+  background-position: center;
+}

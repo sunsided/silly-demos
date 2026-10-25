@@ -1,0 +1,8 @@
+node_modules/
+/.svelte-kit/
+/build/
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+# Generated from tokens/tokens.json by scripts/build-tokens.js
+/src/lib/tokens/generated/
