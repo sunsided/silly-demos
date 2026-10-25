@@ -59,46 +59,27 @@ silly-demos/
 - [Rust](https://rustup.rs/) (1.70 or later)
 - [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
 - [Node.js](https://nodejs.org/) (18 or later)
-- [just](https://github.com/casey/just) command runner
+- [Yarn](https://classic.yarnpkg.com/) (classic, e.g. via `corepack enable`)
+- [Task](https://taskfile.dev/installation/) runner
 
 ### Quick Start
 
-For a full development setup (builds WASM, sets up React app, and starts dev server):
+Build the WASM package, install frontend dependencies and start the dev server:
 
 ```bash
-just react-full-dev
+task dev
 ```
 
-### Building the Rust/WASM Core
-
-```bash
-# Build the WebAssembly package
-just build
-
-# Or build with optimizations for production
-just build --release
-```
-
-### Running the React Frontend
-
-```bash
-# Setup React dependencies (first time only)
-just react-setup
-
-# Copy WASM package to React app
-just react-copy-wasm
-
-# Start the development server
-just react-dev
-```
-
-The application will be available at `http://localhost:5173`.
+The application will be available at `http://localhost:3000`.
 
 ### Building for Production
 
 ```bash
-# Full production build (WASM + React)
-just react-full-build
+# WASM package (pkg/) and frontend bundle (react-app/dist/)
+task build
+
+# Build and serve the production bundle
+task preview
 ```
 
 ## Current Status
@@ -107,7 +88,7 @@ just react-full-build
 - **Base Path Handling**: The React app's base path is set automatically in CI to match the repository name, ensuring assets and routing work correctly on GitHub Pages.
 - **Client-Side Routing**: SPA routing is supported on GitHub Pages using a `404.html` redirect solution in `react-app/public/404.html`.
 - **Project Structure**: The workspace is organized with a Rust core (`src/`), a React frontend (`react-app/`), and the generated WASM package (`pkg/`).
-- **Development & Build**: Use the provided `just` commands and scripts for local development, building, and testing. The workflow and scripts are up-to-date and stable.
+- **Development & Build**: Use the provided Task commands and scripts for local development, building, and testing. The workflow and scripts are up-to-date and stable.
 - **Actively Maintained**: The project is maintained and the deployment pipeline is stable and reproducible.
 
 ## GitHub Pages Deployment
@@ -163,37 +144,25 @@ For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
 ### Testing
 
 ```bash
-# Test the Rust core (natively; the default build target is wasm32)
-just test-native
+# Rust unit tests, run natively (the default build target is wasm32)
+task test
 
-# Test WebAssembly bindings in headless browsers
-just test
+# wasm-bindgen tests in headless Firefox
+task test:wasm
 
-# Lint the React frontend
-just react-lint
+# Everything CI cares about: formatting, clippy, typecheck, tests, build
+task ci
 ```
 
 ### Hot Reloading
 
-The development setup supports hot reloading for both Rust and React code:
+`task dev` hot reloads React changes. After changing Rust code, run `task build:wasm`;
+Vite picks up the rebuilt `pkg/`.
 
-1. Run `just react-full-dev` for the complete development setup
-2. Changes to React code will hot reload automatically
-3. Changes to Rust code require rebuilding with `just build` and copying with `just react-copy-wasm`
+### Available Tasks
 
-### Available Just Commands
-
-Run `just` to see all available commands:
-
-- `just build` - Build WASM package
-- `just test` - Run WASM tests
-- `just react-setup` - Install React dependencies
-- `just react-dev` - Start React development server
-- `just react-build` - Build React for production
-- `just react-copy-wasm` - Copy WASM package to React app
-- `just react-full-dev` - Complete development setup
-- `just react-full-build` - Complete production build
-- `just react-clean` - Clean React build artifacts
+Run `task` to list everything. Frontend tasks live in `react-app/Taskfile.dist.yaml` and are
+available from the root with a `web:` prefix (e.g. `task web:check`).
 
 ## License
 

@@ -1,139 +1,122 @@
-version: "3"
+# Rust/WASM core at the root, React frontend in react-app/ (included as `web`).
+# https://taskfile.dev
+version: '3'
+
+includes:
+  web:
+    taskfile: react-app/Taskfile.dist.yaml
+    dir: react-app
+
+vars:
+  # The default cargo target is wasm32 (.cargo/config.toml); unit tests and
+  # clippy for tests run on the host instead.
+  HOST:
+    sh: "rustc -vV | sed -n 's/host: //p'"
 
 tasks:
-
   default:
     cmds:
-      - task --list
+      - task --list --sort=none
+    silent: true
 
-  rust:build:
-    desc: Build WASM
-    vars:
-      ARGS: ""
+  build:wasm:
+    desc: Build the WASM package into pkg/ (pass extra wasm-pack flags after --)
+    aliases: [wasm]
     preconditions:
       - sh: command -v wasm-pack
-        msg: "wasm-pack is not installed"
+        msg: "wasm-pack not found — install from https://rustwasm.github.io/wasm-pack/installer/"
+    sources:
+      - Cargo.toml
+      - Cargo.lock
+      - src/**/*.rs
+    generates:
+      - pkg/silly_demos.js
+      - pkg/silly_demos_bg.wasm
     cmds:
-      - wasm-pack build --target=web {{.ARGS}}
+      - wasm-pack build --target web {{.CLI_ARGS}}
 
-  wasm:test:
-    desc: Run WASM tests
-    aliases:
-      - test
-      - rust:test
-    vars:
-      ARGS: ""
+  build:
+    desc: Production build of WASM package and frontend
+    cmds:
+      - task: build:wasm
+      - task: web:build
+
+  dev:
+    desc: Build WASM and start the frontend dev server
+    deps: [build:wasm]
+    cmds:
+      - task: web:dev
+
+  preview:
+    desc: Build everything and preview the production bundle
+    cmds:
+      - task: build
+      - task: web:preview
+
+  test:
+    desc: Run Rust unit tests natively
+    preconditions:
+      - sh: command -v cargo
+        msg: "cargo not found — install Rust from https://rustup.rs/"
+    cmds:
+      - cargo test --lib --target {{.HOST}} {{.CLI_ARGS}}
+
+  test:wasm:
+    desc: Run wasm-bindgen tests in headless Firefox
     preconditions:
       - sh: command -v wasm-pack
-        msg: "wasm-pack is not installed"
+        msg: "wasm-pack not found — install from https://rustwasm.github.io/wasm-pack/installer/"
       - sh: command -v firefox
-        msg: "Firefox is required for wasm-pack test --firefox"
+        msg: "firefox not found — wasm-pack needs it for headless browser tests"
     cmds:
-      - wasm-pack test --headless --firefox {{.ARGS}}
+      - wasm-pack test --headless --firefox {{.CLI_ARGS}}
+
+  fmt:
+    desc: Format Rust code
+    aliases: [format]
+    cmds:
+      - cargo fmt --all
+
+  lint:
+    desc: Lint Rust code (including tests) and typecheck the frontend
+    cmds:
+      - cargo clippy --lib --tests --target {{.HOST}} -- -D warnings
+      - task: web:check
+
+  lint:fix:
+    desc: Auto-fix Rust lint issues and format
+    aliases: [fix]
+    cmds:
+      - cargo clippy --lib --tests --target {{.HOST}} --fix --allow-staged
+      - cargo fmt --all
+
+  check:
+    desc: Run static checks (formatting, typecheck)
+    cmds:
+      - cargo fmt --all --check
+      - task: web:check
+
+  ci:
+    desc: Full CI sequence — checks, lint, tests, production build
+    cmds:
+      - task: check
+      - task: lint
+      - task: test
+      - task: build
 
   serve:
-    desc: Serve current directory on a given port
-    vars:
-      PORT: "{{.PORT}}"
+    desc: Serve the repository root over HTTP (e.g. for wasm-test.html)
     preconditions:
       - sh: command -v python3
-        msg: "python3 is required for serving files"
+        msg: "python3 not found"
+    vars:
+      PORT: '{{ .PORT | default "8000" }}'
     cmds:
       - python3 -m http.server {{.PORT}}
 
-  yarn:setup:
-    desc: Setup React dependencies
-    aliases:
-      - yarn:install
-    dir: react-app
-    preconditions:
-      - sh: command -v yarn
-        msg: "yarn is not installed"
+  clean:
+    desc: Remove Rust, WASM and frontend build artifacts
+    deps: [web:clean]
     cmds:
-      - yarn install
-
-  dev:
-    desc: Start React dev server
-    aliases:
-      - yarn:dev
-    dir: react-app
-    preconditions:
-      - sh: command -v yarn
-        msg: "yarn is not installed"
-    cmds:
-      - yarn dev
-
-  yarn:build:
-    desc: Build React app
-    aliases:
-      - react:build
-    dir: react-app
-    preconditions:
-      - sh: command -v yarn
-        msg: "yarn is not installed"
-    cmds:
-      - yarn build
-
-  yarn:preview:
-    desc: Preview React production build
-    aliases:
-      - react:preview
-    dir: react-app
-    preconditions:
-      - sh: command -v yarn
-        msg: "yarn is not installed"
-    cmds:
-      - yarn preview
-
-  yarn:lint:
-    desc: Run React TypeScript checks
-    aliases:
-      - react:lint
-    dir: react-app
-    preconditions:
-      - sh: command -v yarn
-        msg: "yarn is not installed"
-    cmds:
-      - yarn lint
-
-  yarn:build:dev:
-    desc: Build WASM + setup + dev
-    aliases:
-      - react-build-dev
-    deps:
-      - build
-      - yarn:setup
-    cmds:
-      - task: yarn:dev
-
-  build:
-    desc: Build WASM + setup + prod build
-    aliases:
-      - react:build:full
-      - build:react
-      - build:react-full
-      - react-full-build
-    deps:
-      - rust:build
-      - yarn:setup
-    cmds:
-      - task: yarn:build
-
-  build:dev:
-    desc: Build WASM + setup + prod build
-    deps:
-      - build
-    cmds:
-      - task: yarn:dev
-
-  yarn:clean:
-    desc: Clean React build artifacts
-    aliases:
-      - clean:react
-      - react:clean
-    dir: react-app
-    preconditions:
-      - sh: command -v rm
-        msg: "rm command missing? Something is very wrong."
-    cmds:
-      - rm -rf dist node_modules yarn.lock
+      - cargo clean
+      - rm -rf pkg

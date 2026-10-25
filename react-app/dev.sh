@@ -49,7 +49,7 @@ case "${1:-help}" in
       echo "✅ WASM package copied successfully!"
     else
       echo "❌ WASM package not found at ../pkg/"
-      echo "Build the Rust project first with: just build-wasm"
+      echo "Build the Rust project first with: task build:wasm"
       exit 1
     fi
     ;;
