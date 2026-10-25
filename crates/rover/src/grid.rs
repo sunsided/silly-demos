@@ -16,14 +16,21 @@ pub struct Grid<T> {
 
 impl<T: Clone> Grid<T> {
     /// Negative dimensions count as 0.
+    ///
+    /// # Panics
+    ///
+    /// If the cell count doesn't fit in `usize` (on 32-bit targets such as
+    /// WASM, past about 65 000 × 65 000), rather than wrapping it around.
     pub fn new(width: i32, height: i32, cell: f32, fill: T) -> Self {
         let (width, height) = (width.max(0), height.max(0));
+        let cells = (width as usize)
+            .checked_mul(height as usize)
+            .expect("grid cell count overflows usize");
         Self {
             width,
             height,
             cell,
-            // In usize, so huge grids can't wrap the cell count around.
-            data: vec![fill; width as usize * height as usize],
+            data: vec![fill; cells],
         }
     }
 
