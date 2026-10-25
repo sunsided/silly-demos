@@ -6,7 +6,12 @@ mod utils;
 mod vec2;
 mod voronoi;
 
+use crate::collision::probe::{Counts, Recorder, Silent};
+use crate::collision::registry;
+use crate::collision::report::Contact;
+use crate::collision::shape::{Body, Shape, ShapeKind};
 use crate::utils::set_panic_hook;
+use crate::vec2::Vec2;
 use wasm_bindgen::prelude::*;
 
 // Called by our JS entry point to run the example,
@@ -17,46 +22,192 @@ pub fn run() -> Result<(), JsValue> {
     Ok(())
 }
 
-/// Namespace for collision detection tests
-/// This empty struct serves as a namespace for collision-related functions
-/// when exported to WASM, allowing for better organization and avoiding
-/// global namespace pollution in JavaScript/TypeScript
-#[wasm_bindgen]
-pub struct CollisionTests;
-
-/// Namespace for geometry tests  
+/// Namespace for geometry tests
 /// This empty struct serves as a namespace for geometry-related functions
 /// when exported to WASM, providing clear module separation
 #[wasm_bindgen]
 pub struct GeometryTests;
 
+/// Two shapes and the collision methods that apply to them.
 #[wasm_bindgen]
-pub struct CircleCollisionResult {
-    #[wasm_bindgen(readonly)]
-    pub intersect: bool,
-    #[wasm_bindgen(readonly)]
-    pub distance: f32,
-    #[wasm_bindgen(readonly)]
-    pub dx: f32,
-    #[wasm_bindgen(readonly)]
-    pub dy: f32,
-    #[wasm_bindgen(readonly)]
-    pub penetration: f32,
+pub struct CollisionLab {
+    bodies: [Body; 2],
 }
 
-/// Circle–circle collision with distance and penetration.
-/// Inputs and outputs are all f32 to keep the boundary cheap.
 #[wasm_bindgen]
-impl CollisionTests {
-    pub fn circle_collision(
-        x1: f32,
-        y1: f32,
-        r1: f32,
-        x2: f32,
-        y2: f32,
-        r2: f32,
-    ) -> CircleCollisionResult {
-        collision::circle_collision_impl(x1, y1, r1, x2, y2, r2)
+impl CollisionLab {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        let circle = |x| {
+            Body::new(Shape::Circle {
+                c: Vec2::new(x, 0.0),
+                r: 80.0,
+            })
+        };
+        Self {
+            bodies: [circle(-140.0), circle(140.0)],
+        }
+    }
+
+    /// Shape kind ids, in menu order.
+    pub fn shape_kinds() -> Vec<String> {
+        ShapeKind::ALL.iter().map(|k| k.id().to_owned()).collect()
+    }
+
+    /// Replaces shape `slot` (0 = A, 1 = B). See `Shape::from_params` for the
+    /// parameter layout per kind. Returns false (and keeps the old shape) on bad input.
+    pub fn set_shape(&mut self, slot: usize, kind: &str, params: &[f32]) -> bool {
+        let shape = ShapeKind::from_id(kind).and_then(|k| Shape::from_params(k, params));
+        match (self.bodies.get_mut(slot), shape) {
+            (Some(body), Some(shape)) => {
+                *body = Body::new(shape);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Boundary of shape `slot` as a flat closed polyline `[x0, y0, x1, y1, ...]`.
+    pub fn outline(&self, slot: usize) -> Vec<f32> {
+        self.bodies
+            .get(slot)
+            .map(|b| b.shape.outline().iter().flat_map(|v| [v.x, v.y]).collect())
+            .unwrap_or_default()
+    }
+
+    /// Ids of the methods for the current pair, pair-specific ones first.
+    pub fn methods(&self) -> Vec<String> {
+        let [a, b] = self.bodies.map(|b| b.shape.kind());
+        registry::methods_for(a, b)
+            .map(|m| m.method.id.to_owned())
+            .collect()
+    }
+
+    pub fn method_name(id: &str) -> String {
+        registry::METHODS
+            .iter()
+            .find(|m| m.id == id)
+            .map(|m| m.name.to_owned())
+            .unwrap_or_default()
+    }
+
+    pub fn method_summary(id: &str) -> String {
+        registry::METHODS
+            .iter()
+            .find(|m| m.id == id)
+            .map(|m| m.summary.to_owned())
+            .unwrap_or_default()
+    }
+
+    /// Runs method `id` with the broadphase stages in `broadphase`
+    /// (1 = bounding circles, 2 = bounding boxes), recording counts and notes.
+    pub fn run(&self, id: &str, broadphase: u32) -> Option<CollisionReport> {
+        let m = self.resolve(id)?;
+        let mut rec = Recorder::default();
+        let (contact, stage) =
+            collision::test(&m, &self.bodies[0], &self.bodies[1], broadphase, &mut rec);
+        let mut notes = Vec::new();
+        let mut labels = Vec::new();
+        for note in &rec.notes {
+            note.encode(&mut notes, &mut labels);
+        }
+        Some(CollisionReport {
+            contact,
+            stage: stage as u32,
+            counts: rec.counts,
+            notes,
+            labels,
+        })
+    }
+
+    /// Runs method `id` `n` times without instrumentation, for timing from JS.
+    /// Returns how many runs reported an intersection so the work can't be optimized away.
+    pub fn bench(&self, id: &str, broadphase: u32, n: u32) -> u32 {
+        let Some(m) = self.resolve(id) else {
+            return 0;
+        };
+        let mut hits = 0;
+        for _ in 0..n {
+            let (a, b) = std::hint::black_box((&self.bodies[0], &self.bodies[1]));
+            hits += collision::test(&m, a, b, broadphase, &mut Silent)
+                .0
+                .intersect as u32;
+        }
+        hits
+    }
+}
+
+impl CollisionLab {
+    fn resolve(&self, id: &str) -> Option<registry::Resolved> {
+        let [a, b] = self.bodies.map(|b| b.shape.kind());
+        registry::find(id, a, b)
+    }
+}
+
+impl Default for CollisionLab {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Result of one recorded collision test.
+#[wasm_bindgen]
+pub struct CollisionReport {
+    contact: Contact,
+    stage: u32,
+    counts: Counts,
+    notes: Vec<f32>,
+    labels: Vec<String>,
+}
+
+#[wasm_bindgen]
+impl CollisionReport {
+    #[wasm_bindgen(getter)]
+    pub fn intersect(&self) -> bool {
+        self.contact.intersect
+    }
+
+    /// Signed distance (negative = penetration depth), if the method measures it.
+    #[wasm_bindgen(getter)]
+    pub fn distance(&self) -> Option<f32> {
+        self.contact.distance
+    }
+
+    /// Unit normal from A towards B as `[x, y]`, or empty.
+    pub fn normal(&self) -> Vec<f32> {
+        self.contact
+            .normal
+            .map(|n| vec![n.x, n.y])
+            .unwrap_or_default()
+    }
+
+    /// Witness points `[ax, ay, bx, by]`, or empty.
+    pub fn points(&self) -> Vec<f32> {
+        self.contact
+            .points
+            .map(|(a, b)| vec![a.x, a.y, b.x, b.y])
+            .unwrap_or_default()
+    }
+
+    /// 0 = rejected by bounding circles, 1 = by bounding boxes, 2 = reached the narrowphase.
+    #[wasm_bindgen(getter)]
+    pub fn stage(&self) -> u32 {
+        self.stage
+    }
+
+    /// `[dots, sqrts, divs, axes, supports, iterations]`.
+    pub fn counts(&self) -> Vec<u32> {
+        let c = self.counts;
+        vec![c.dots, c.sqrts, c.divs, c.axes, c.supports, c.iterations]
+    }
+
+    /// Construction notes; see `Note::encode` for the layout.
+    pub fn notes(&self) -> Vec<f32> {
+        self.notes.clone()
+    }
+
+    pub fn labels(&self) -> Vec<String> {
+        self.labels.clone()
     }
 }
 

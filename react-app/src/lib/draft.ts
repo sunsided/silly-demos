@@ -31,7 +31,7 @@ export function label(
   ctx.restore()
 }
 
-function arrowhead(ctx: CanvasRenderingContext2D, tip: Point, ux: number, uy: number, size = 7) {
+export function arrowhead(ctx: CanvasRenderingContext2D, tip: Point, ux: number, uy: number, size = 7) {
   ctx.beginPath()
   ctx.moveTo(tip.x, tip.y)
   ctx.lineTo(tip.x - ux * size - uy * size * 0.35, tip.y - uy * size + ux * size * 0.35)
@@ -119,4 +119,31 @@ export function cross(ctx: CanvasRenderingContext2D, p: Point, color: string, si
   ctx.lineTo(p.x + size, p.y - size)
   ctx.stroke()
   ctx.restore()
+}
+
+const patterns = new Map<string, CanvasPattern>()
+
+/** Diagonal section hatching, as drawn on cut faces. Cached per color and pixel ratio. */
+export function hatchPattern(ctx: CanvasRenderingContext2D, color: string, dpr: number) {
+  const key = `${color}|${dpr}`
+  const cached = patterns.get(key)
+  if (cached) return cached
+  const size = Math.round(8 * dpr)
+  const tile = document.createElement('canvas')
+  tile.width = tile.height = size
+  const t = tile.getContext('2d')!
+  t.strokeStyle = color
+  t.lineWidth = dpr
+  t.beginPath()
+  t.moveTo(0, size)
+  t.lineTo(size, 0)
+  t.moveTo(-size / 2, size / 2)
+  t.lineTo(size / 2, -size / 2)
+  t.moveTo(size / 2, size * 1.5)
+  t.lineTo(size * 1.5, size / 2)
+  t.stroke()
+  const pattern = ctx.createPattern(tile, 'repeat')!
+  pattern.setTransform(new DOMMatrix().scale(1 / dpr))
+  patterns.set(key, pattern)
+  return pattern
 }

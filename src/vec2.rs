@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Vec2 {
@@ -56,6 +56,26 @@ impl Vec2 {
         self.x * other.x + self.y * other.y
     }
 
+    /// 2D cross product (z component of the 3D cross product).
+    pub const fn cross(&self, other: Self) -> f32 {
+        self.x * other.y - self.y * other.x
+    }
+
+    /// Rotated by +90°.
+    pub const fn perp(&self) -> Self {
+        Self {
+            x: -self.y,
+            y: self.x,
+        }
+    }
+
+    pub const fn lerp(&self, other: Self, t: f32) -> Self {
+        Self {
+            x: self.x + (other.x - self.x) * t,
+            y: self.y + (other.y - self.y) * t,
+        }
+    }
+
     pub fn limit(&self, max: f32) -> Self {
         let len = self.length();
         if len > max {
@@ -72,6 +92,16 @@ impl Add for Vec2 {
         Self {
             x: self.x + rhs.x,
             y: self.y + rhs.y,
+        }
+    }
+}
+
+impl Neg for Vec2 {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        Self {
+            x: -self.x,
+            y: -self.y,
         }
     }
 }

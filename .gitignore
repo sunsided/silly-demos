@@ -43,3 +43,6 @@ yarn-error.log*
 
 # go-task checksum cache
 .task/
+
+# Playwright MCP screenshots and snapshots
+.playwright-mcp/

@@ -2,7 +2,7 @@
 
   <h1><code>silly-demos</code></h1>
 
-<strong>Interactive physics and collision detection demos built with Rust WebAssembly and React</strong>
+<strong>Small interactive geometry and simulation demos in Rust/WebAssembly, drawn as engineering sketches in the browser</strong>
 
   <p>
     <img src="https://img.shields.io/badge/rust-1.70+-orange.svg?style=flat-square" alt="Rust Version" />
@@ -16,15 +16,14 @@
 
 ## About
 
-This project demonstrates real-time physics simulations by combining the performance of Rust compiled to WebAssembly
-with a modern React frontend. The Rust core provides silly little algorithms, while the React/Vite
-frontend offers interactive visualizations and demos.
+A growing collection of small geometry, collision and simulation sketches. The math runs in Rust compiled to
+WebAssembly; a React/Vite frontend draws each demo as an annotated drafting sheet with live dimensions and readouts.
 
 See the demos at <https://sunsided.github.io/silly-demos/>
 
 ### Features
 
-- **Circle-Circle Collision Detection**: Fast collision detection with distance and penetration calculations
+- **Collision Lab**: Pick two shapes (circle, boxes, triangle, convex polygon, ellipse, capsule) and switch between the methods that can test them, from pair-specific shortcuts to SAT and GJK/EPA, each with its own construction drawing, operation counts and timing
 - **Point-Line Distance Demo**: Visualizes the shortest distance from a point to a line segment
 - **Boids Simulation**: Reynolds flocking (separation, alignment, cohesion) with field of view, look-ahead edge avoidance and a spatial grid for neighbor lookups; the flock state lives in WASM
 - **Voronoi / Delaunay**: Interactive Voronoi diagram / Delaunay triangulation
@@ -38,18 +37,23 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 
 ```
 silly-demos/
-├── src/                    # Rust WebAssembly core
-│   ├── lib.rs             # Main library with collision detection
-│   └── utils.rs           # Utility functions
-├── pkg/                   # Generated WebAssembly package
+├── src/                   # Rust WebAssembly core
+│   ├── lib.rs             # wasm-bindgen exports
+│   ├── collision/         # Shapes, collision methods, broadphase, method registry
+│   ├── geometry.rs        # Point/segment geometry
+│   ├── boids.rs           # Flocking simulation
+│   ├── voronoi.rs         # Delaunay triangulation / Voronoi edges
+│   └── vec2.rs            # 2D vector math
+├── pkg/                   # Generated WebAssembly package (wasm-pack)
 ├── react-app/             # React frontend application
 │   ├── src/
-│   │   ├── components/    # React components
+│   │   ├── collision/     # Shape editors and the construction-note renderer
+│   │   ├── components/    # Sheet layout, shared canvases
 │   │   ├── demos/         # Interactive demos
-│   │   └── pkg/          # Copied WASM package
-│   └── vite.config.ts    # Vite configuration
-├── Cargo.toml            # Rust dependencies
-└── package.json          # NPM package metadata
+│   │   └── lib/           # Canvas, drafting, theme and WASM helpers
+│   └── vite.config.ts     # Vite configuration
+├── Cargo.toml             # Rust crate manifest
+└── Taskfile.dist.yaml     # Task runner entry point
 ```
 
 ## Getting Started
@@ -114,14 +118,13 @@ The application will be available at: `https://your-username.github.io/[reposito
 
 **Automatic Deployment**: Push to the main branch triggers automatic build and deployment via GitHub Actions, with the base path automatically configured to match the repository name.
 
-**Client-Side Routing**: The app uses a 404.html redirect solution to handle direct navigation to React Router routes on GitHub Pages, ensuring URLs like `/circle-collision` work correctly when accessed directly.
-
-For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
+**Client-Side Routing**: The app uses a 404.html redirect solution to handle direct navigation to React Router routes on GitHub Pages, ensuring URLs like `/collision` work correctly when accessed directly.
 
 ## Available Demos
 
 - **Boids**: Flocking simulation with live controls for every rule and a view of what a single boid perceives
-- **Circle Collision**: Drag two circles; dimensions show center distance, gap and overlap
+- **Collision Lab**: Two shapes, every applicable collision method, its construction and its cost
+- **Voronoi / Delaunay**: Moving points with their Delaunay triangulation and Voronoi diagram
 - **Point to Segment**: Shortest distance from a point to a line segment versus the perpendicular distance to the infinite line
 
 ## Technology Stack
@@ -130,7 +133,6 @@ For detailed deployment instructions, see [GITHUB_PAGES.md](GITHUB_PAGES.md).
 
 - **wasm-bindgen**: Seamless interop between Rust and JavaScript
 - **console_error_panic_hook**: Enhanced error logging for development
-- **wee_alloc**: Memory-efficient allocator optimized for WebAssembly
 
 ### React Frontend
 

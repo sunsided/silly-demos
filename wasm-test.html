@@ -38,15 +38,16 @@
         <div class="stat-row">Distance: <span id="dist" class="pill">0</span></div>
         <div class="stat-row">Penetration: <span id="pen" class="pill">0</span></div>
         <p class="description-text">Drag the circles. Colors switch on intersection.<br/>
-            Call boundary: <code class="code-highlight">circle_collision(x1,y1,r1,x2,y2,r2)</code> (1 call/frame).</p>
+            Call boundary: <code class="code-highlight">CollisionLab.set_shape</code> + <code class="code-highlight">run("circle-distance")</code> per frame.</p>
     </div>
 </div>
 
 <script type="module">
-    import init, {run, circle_collision} from "./pkg/silly_demos.js";
+    import init, {run, CollisionLab} from "./pkg/silly_demos.js";
 
     await init();
     await run();
+    const lab = new CollisionLab();
 
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
@@ -167,10 +168,19 @@
     }
 
     function draw() {
-        const res = circle_collision(A.x, A.y, A.r, B.x, B.y, B.r);
+        lab.set_shape(0, "circle", new Float32Array([A.x, A.y, A.r]));
+        lab.set_shape(1, "circle", new Float32Array([B.x, B.y, B.r]));
+        const report = lab.run("circle-distance", 0);
+        if (!report) {
+            console.error('CollisionLab has no "circle-distance" method for two circles');
+            return;
+        }
+        const gap = report.distance ?? 0;
+        const res = { intersect: report.intersect };
+        report.free();
         interEl.textContent = res.intersect ? "yes" : "no";
-        distEl.textContent = res.distance.toFixed(2);
-        penEl.textContent = res.penetration.toFixed(2);
+        distEl.textContent = Math.hypot(B.x - A.x, B.y - A.y).toFixed(2);
+        penEl.textContent = Math.max(0, -gap).toFixed(2);
 
         // Clear the entire canvas using stored dimensions
         const width = canvas._displayWidth || canvas.getBoundingClientRect().width;

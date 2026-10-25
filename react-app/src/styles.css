@@ -94,6 +94,8 @@ a {
 
 .app {
     display: grid;
+    /* minmax keeps the scrolling nav from widening the page on small screens. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: var(--masthead) 1fr;
     height: 100%;
 }
@@ -449,6 +451,109 @@ a {
     height: 16px;
     margin: 0;
     accent-color: var(--ink);
+}
+
+.select {
+    display: grid;
+    gap: 4px;
+    font-size: 13px;
+}
+
+.select-label {
+    color: var(--ink-soft);
+}
+
+.select select {
+    padding: 6px 8px;
+    border: 1px solid var(--ink-faint);
+    border-radius: 2px;
+    background: var(--paper);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+}
+
+.choice {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.choice-option {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 8px;
+    padding: 6px 8px;
+    border-left: 2px solid transparent;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.choice-option[data-checked] {
+    border-left-color: var(--ink);
+    background: var(--cobalt-faint);
+}
+
+.choice-option input {
+    margin: 2px 0 0;
+    accent-color: var(--ink);
+}
+
+.choice-label {
+    font-weight: 600;
+}
+
+.choice-detail {
+    grid-column: 2;
+    margin-top: 2px;
+    color: var(--ink-soft);
+    font-size: 13px;
+}
+
+.compare {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.compare caption {
+    margin-bottom: 6px;
+    text-align: left;
+    color: var(--ink);
+    font-weight: 700;
+}
+
+.compare th,
+.compare td {
+    padding: 4px 6px 4px 0;
+    text-align: left;
+    vertical-align: top;
+    font-weight: 400;
+}
+
+.compare thead th {
+    border-bottom: 1px solid var(--ink-faint);
+}
+
+.compare tbody th {
+    color: var(--ink);
+}
+
+.compare tbody tr {
+    cursor: pointer;
+}
+
+.compare tbody tr:hover th {
+    text-decoration: underline;
+}
+
+.compare tbody tr[data-selected] th {
+    font-weight: 700;
+}
+
+.compare td[data-tone='signal'] {
+    color: var(--signal);
 }
 
 /* ---------- Home ---------- */
