@@ -6,7 +6,7 @@ use super::shape::{Shape, ShapeKind};
 use crate::rand::frand01;
 
 /// Contacts closer than this are skipped: touching is ambiguous within float precision.
-const GRAZING: f32 = 0.05;
+const GRAZING: f32 = 0.001;
 /// Largest accepted distance difference to GJK + EPA, in px.
 const TOLERANCE: f32 = 0.01;
 
@@ -101,6 +101,53 @@ fn recorder_and_silent_agree() {
                     m.method.id
                 );
             }
+        }
+    }
+}
+
+/// Shapes that touch exactly (zero gap, representable in f32) must count as
+/// intersecting for every method; the random test skips this band.
+#[test]
+fn touching_shapes_intersect_for_every_method() {
+    use ShapeKind::*;
+    let cases: &[(ShapeKind, &[f32], ShapeKind, &[f32])] = &[
+        (Circle, &[0.0, 0.0, 10.0], Circle, &[20.0, 0.0, 10.0]),
+        (
+            Aabb,
+            &[0.0, 0.0, 10.0, 10.0],
+            Aabb,
+            &[20.0, 4.0, 10.0, 10.0],
+        ),
+        (Circle, &[0.0, 0.0, 10.0], Aabb, &[20.0, 0.0, 10.0, 10.0]),
+        (
+            Aabb,
+            &[0.0, 0.0, 10.0, 10.0],
+            Triangle,
+            &[10.0, -5.0, 30.0, 0.0, 10.0, 5.0],
+        ),
+        (
+            Capsule,
+            &[0.0, 0.0, 20.0, 0.0, 5.0],
+            Capsule,
+            &[0.0, 10.0, 20.0, 10.0, 5.0],
+        ),
+        (
+            Circle,
+            &[0.0, 0.0, 10.0],
+            Capsule,
+            &[0.0, 15.0, 20.0, 15.0, 5.0],
+        ),
+    ];
+    for &(ka, pa, kb, pb) in cases {
+        let a = Shape::from_params(ka, pa).expect("valid");
+        let b = Shape::from_params(kb, pb).expect("valid");
+        for m in registry::methods_for(ka, kb) {
+            let got = m.run(&a, &b, &mut Silent);
+            assert!(
+                got.intersect,
+                "{} {ka:?}/{kb:?} misses a touching contact",
+                m.method.id
+            );
         }
     }
 }
