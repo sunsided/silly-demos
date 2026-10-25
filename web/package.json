@@ -1,0 +1,32 @@
+{
+  "name": "silly-demos-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT OR Apache-2.0",
+  "packageManager": "yarn@4.18.1",
+  "engines": {
+    "node": ">=22.17"
+  },
+  "imports": {
+    "#lib": "./src/lib/index.ts",
+    "#lib/*": "./src/lib/*"
+  },
+  "scripts": {
+    "tokens": "node scripts/build-tokens.js",
+    "dev": "yarn tokens && vite dev",
+    "build": "yarn tokens && vite build",
+    "preview": "vite preview",
+    "check": "yarn tokens && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^4.0.0",
+    "@sveltejs/kit": "^3.1.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "^26.6.5",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.7",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.5"
+  }
+}

@@ -7,7 +7,8 @@
   <p>
     <img src="https://img.shields.io/badge/rust-1.70+-orange.svg?style=flat-square" alt="Rust Version" />
     <img src="https://img.shields.io/badge/wasm--bindgen-0.2-blue.svg?style=flat-square" alt="wasm-bindgen" />
-    <img src="https://img.shields.io/badge/react-19.3-61dafb.svg?style=flat-square" alt="React" />
+    <img src="https://img.shields.io/badge/sveltekit-3.1-ff3e00.svg?style=flat-square" alt="SvelteKit" />
+    <img src="https://img.shields.io/badge/svelte-5-ff3e00.svg?style=flat-square" alt="Svelte" />
     <img src="https://img.shields.io/badge/vite-8.3-646cff.svg?style=flat-square" alt="Vite" />
     <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg?style=flat-square" alt="License" />
   </p>
@@ -17,7 +18,8 @@
 ## About
 
 A growing collection of small geometry, collision and simulation sketches. The math runs in Rust compiled to
-WebAssembly; a React/Vite frontend draws each demo as an annotated drafting sheet with live dimensions and readouts.
+WebAssembly; a SvelteKit frontend, prerendered to static pages, draws each demo as an annotated drafting sheet with
+live dimensions and readouts.
 
 See the demos at <https://sunsided.github.io/silly-demos/>
 
@@ -27,11 +29,12 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 - **Point-Line Distance Demo**: Visualizes the shortest distance from a point to a line segment
 - **Boids Simulation**: Reynolds flocking (separation, alignment, cohesion) with field of view, look-ahead edge avoidance and a spatial grid for neighbor lookups; the flock state lives in WASM
 - **Voronoi / Delaunay**: Interactive Voronoi diagram / Delaunay triangulation
-- **Real-time Visualization**: Interactive demos built with React and HTML5 Canvas
+- **Real-time Visualization**: Interactive demos drawn on HTML5 Canvas from Svelte 5 components
 - **High Performance**: Rust WebAssembly core for computational heavy lifting
-- **Modern Frontend**: Vite-powered React application with TypeScript support
+- **Static Site**: SvelteKit 3 with `adapter-static` prerenders every page; the WASM module loads after hydration
+- **Design Tokens**: Colors, type, spacing and sizes defined once in W3C Design Tokens format and generated into CSS custom properties and a typed module the canvas code reads
+- **Atomic Design**: Components organised as atoms, molecules, organisms and templates; routes are the pages
 - **Seamless Rust-JS Interop**: Uses wasm-bindgen for efficient communication between Rust and JavaScript
-- **SPA Routing**: Supports client-side routing for multi-page demos on GitHub Pages
 
 ## Project Structure
 
@@ -45,13 +48,18 @@ silly-demos/
 │   ├── voronoi.rs         # Delaunay triangulation / Voronoi edges
 │   └── vec2.rs            # 2D vector math
 ├── pkg/                   # Generated WebAssembly package (wasm-pack)
-├── react-app/             # React frontend application
+├── web/                   # SvelteKit frontend (static site)
+│   ├── tokens/tokens.json # Design tokens (W3C DTCG format)
+│   ├── scripts/           # Token generator
 │   ├── src/
-│   │   ├── collision/     # Shape editors and the construction-note renderer
-│   │   ├── components/    # Sheet layout, shared canvases
-│   │   ├── demos/         # Interactive demos
-│   │   └── lib/           # Canvas, drafting, theme and WASM helpers
-│   └── vite.config.ts     # Vite configuration
+│   │   ├── routes/        # Pages: home and one route per demo
+│   │   └── lib/
+│   │       ├── components/  # atoms/, molecules/, organisms/, templates/
+│   │       ├── demos/       # Per-demo drawing code and state
+│   │       ├── canvas/      # Canvas sizing, dragging, drafting helpers, theme
+│   │       ├── styles/      # Global base styles
+│   │       └── wasm/        # WASM loader
+│   └── vite.config.ts     # SvelteKit and Vite configuration
 ├── Cargo.toml             # Rust crate manifest
 └── Taskfile.dist.yaml     # Task runner entry point
 ```
@@ -62,8 +70,8 @@ silly-demos/
 
 - [Rust](https://rustup.rs/) (1.70 or later)
 - [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
-- [Node.js](https://nodejs.org/) (20.19 or later)
-- [Yarn](https://classic.yarnpkg.com/) (classic, e.g. via `corepack enable`)
+- [Node.js](https://nodejs.org/) (22.17 or later)
+- [Yarn](https://yarnpkg.com/) 4, via `corepack enable` (pinned in `web/package.json`; on Node 25+, install corepack first with `npm i -g corepack`)
 - [Task](https://taskfile.dev/installation/) runner
 
 ### Quick Start
@@ -79,46 +87,25 @@ The application will be available at `http://localhost:3000`.
 ### Building for Production
 
 ```bash
-# WASM package (pkg/) and frontend bundle (react-app/dist/)
+# WASM package (pkg/) and prerendered site (web/build/)
 task build
 
-# Build and serve the production bundle
+# Build and serve the production site
 task preview
 ```
 
-## Current Status
-
-- **Automated Deployment**: Every push to `main` triggers a GitHub Actions workflow that builds the Rust WASM core, installs frontend dependencies, builds the React app with the correct base path, and deploys to GitHub Pages. No manual steps are required for deployment.
-- **Base Path Handling**: The React app's base path is set automatically in CI to match the repository name, ensuring assets and routing work correctly on GitHub Pages.
-- **Client-Side Routing**: SPA routing is supported on GitHub Pages using a `404.html` redirect solution in `react-app/public/404.html`.
-- **Project Structure**: The workspace is organized with a Rust core (`src/`), a React frontend (`react-app/`), and the generated WASM package (`pkg/`).
-- **Development & Build**: Use the provided Task commands and scripts for local development, building, and testing. The workflow and scripts are up-to-date and stable.
-- **Actively Maintained**: The project is maintained and the deployment pipeline is stable and reproducible.
-
 ## GitHub Pages Deployment
 
-The project uses GitHub Actions for fully automated deployment:
+Every push to `main` runs `.github/workflows/deploy.yml`: it builds the WASM package, installs the frontend with
+Yarn 4, typechecks, prerenders the site with `BASE_PATH` set to `/<repository name>`, and deploys `web/build/` to
+GitHub Pages. Each route is its own static HTML file, so direct links such as `/collision?a=obb&b=triangle` work
+without a single-page-app redirect; `404.html` is SvelteKit's fallback for unknown paths.
 
-- On every push to `main`, the workflow builds the Rust WASM, installs frontend dependencies, builds the React app with the correct base path, and deploys to GitHub Pages.
-- The base path (`VITE_BASE_PATH`) is set automatically in CI to `/${{ github.event.repository.name }}`.
-- For local builds, you can set `VITE_BASE_PATH` manually if needed.
-- SPA routing is handled by `react-app/public/404.html` for compatibility with GitHub Pages.
-
-See `.github/workflows/deploy.yml` for details.
-
-**Configuration**: The base path is automatically set to the repository name in CI. For manual builds, set the `VITE_BASE_PATH` environment variable:
+For a manual build under a sub-path, set `BASE_PATH`:
 
 ```bash
-# Custom base path
-export VITE_BASE_PATH=/my-custom-path
-./build-github-pages.sh
+BASE_PATH=/my-custom-path task build
 ```
-
-The application will be available at: `https://your-username.github.io/[repository-name]/`
-
-**Automatic Deployment**: Push to the main branch triggers automatic build and deployment via GitHub Actions, with the base path automatically configured to match the repository name.
-
-**Client-Side Routing**: The app uses a 404.html redirect solution to handle direct navigation to React Router routes on GitHub Pages, ensuring URLs like `/collision` work correctly when accessed directly.
 
 ## Available Demos
 
@@ -134,12 +121,15 @@ The application will be available at: `https://your-username.github.io/[reposito
 - **wasm-bindgen**: Seamless interop between Rust and JavaScript
 - **console_error_panic_hook**: Enhanced error logging for development
 
-### React Frontend
+### Web Frontend
 
-- **Vite**: Fast build tool and development server
-- **TypeScript**: Type-safe JavaScript development
-- **React Router**: Client-side routing for multi-page demos
-- **HTML5 Canvas**: High-performance 2D graphics rendering
+- **SvelteKit 3** with **Svelte 5** runes, prerendered by `@sveltejs/adapter-static`
+- **Vite 8**: Build tool and development server
+- **TypeScript 6**: Type-checked with `svelte-check`
+- **Yarn 4** via corepack, with the `node-modules` linker
+- **Design tokens**: `web/tokens/tokens.json` → `src/lib/tokens/generated/` (`yarn tokens`, run automatically by
+  `dev`, `build` and `check`)
+- **HTML5 Canvas**: 2D drawing for every demo
 
 ## Development
 
@@ -158,12 +148,13 @@ task ci
 
 ### Hot Reloading
 
-`task dev` hot reloads React changes. After changing Rust code, run `task build:wasm`;
-Vite picks up the rebuilt `pkg/`.
+`task dev` hot reloads Svelte changes. After changing Rust code, run `task build:wasm`;
+Vite picks up the rebuilt `pkg/`. After editing `web/tokens/tokens.json`, run `task web:tokens` (or restart the dev
+server) to regenerate the CSS and TS.
 
 ### Available Tasks
 
-Run `task` to list everything. Frontend tasks live in `react-app/Taskfile.dist.yaml` and are
+Run `task` to list everything. Frontend tasks live in `web/Taskfile.dist.yaml` and are
 available from the root with a `web:` prefix (e.g. `task web:check`).
 
 ## License
