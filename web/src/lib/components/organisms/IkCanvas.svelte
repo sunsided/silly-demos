@@ -87,8 +87,9 @@
     if (straighten) chain?.straighten()
   })
 
-  // Shrink the drawing on screens too small for a full reach circle.
-  const scale = () => Math.min(1, canvas.size.width / 700, canvas.size.height / 700)
+  // Shrink the drawing on screens too small for a full reach circle. Until
+  // the canvas is laid out its size is 0; use 1 then, so dragging never divides by it.
+  const scale = () => Math.min(1, canvas.size.width / 700, canvas.size.height / 700) || 1
 
   const drag = draggable<HandleName>({
     toLocal: p => {

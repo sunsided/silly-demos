@@ -508,12 +508,10 @@ impl IkChain {
     /// Straightens the goal pose upwards from its base; the shown pose follows.
     pub fn straighten(&mut self) {
         let c = &self.goal;
-        self.goal = ik::Chain::straight(
-            c.base(),
-            c.lengths.len(),
-            c.lengths[0],
-            Vec2::new(0.0, -1.0),
-        );
+        let Some(&length) = c.lengths.first() else {
+            return;
+        };
+        self.goal = ik::Chain::straight(c.base(), c.lengths.len(), length, Vec2::new(0.0, -1.0));
     }
 
     /// Moves the whole chain so its base is at `(x, y)`.
@@ -579,5 +577,21 @@ impl IkChain {
     /// Shown joint positions `[x0, y0, ..., xn, yn]`, base first, end effector last.
     pub fn joints(&self) -> Vec<f32> {
         self.shown.joints.iter().flat_map(|p| [p.x, p.y]).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_ik_chain_without_segments_survives_every_call() {
+        let mut c = IkChain::new(0, 40.0);
+        c.straighten();
+        c.resize(0, 10.0);
+        c.straighten();
+        assert_eq!(c.solve("fabrik", 10.0, 10.0, 10, 1.0, Some(16.0)), 0);
+        c.follow(1.0 / 60.0, 0.08, Some(16.0));
+        assert_eq!(c.joints(), vec![0.0, 0.0]);
     }
 }
