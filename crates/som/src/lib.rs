@@ -9,7 +9,9 @@
 
 pub mod codebook;
 pub mod density;
+pub mod init;
 pub mod lattice;
 pub mod metrics;
 pub mod rng;
 pub mod schedule;
+pub mod train;

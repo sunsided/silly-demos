@@ -33,13 +33,14 @@ pub struct Schedule {
 }
 
 impl Schedule {
-    /// All values finite and positive, and at least one step. An end above
-    /// its start is allowed: it grows instead.
+    /// All values finite and positive, α at most 1, and at least one step.
+    /// An end above its start is allowed: it grows instead.
     pub fn is_valid(&self) -> bool {
         let ok = |v: f32| v.is_finite() && v > 0.0;
+        let fraction = |v: f32| ok(v) && v <= 1.0;
         self.steps >= 1
-            && ok(self.alpha.0)
-            && ok(self.alpha.1)
+            && fraction(self.alpha.0)
+            && fraction(self.alpha.1)
             && ok(self.sigma.0)
             && ok(self.sigma.1)
     }
@@ -131,6 +132,14 @@ mod tests {
         assert!(
             !Schedule {
                 sigma: (1.0, f32::INFINITY),
+                ..base.clone()
+            }
+            .is_valid()
+        );
+        // α is a fraction of the way to the sample; above 1 overshoots.
+        assert!(
+            !Schedule {
+                alpha: (1.5, 0.1),
                 ..base.clone()
             }
             .is_valid()
