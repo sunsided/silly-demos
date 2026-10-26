@@ -8,6 +8,7 @@
   import Choice from '#lib/components/molecules/Choice.svelte'
   import ControlGroup from '#lib/components/molecules/ControlGroup.svelte'
   import Legend from '#lib/components/molecules/Legend.svelte'
+  import ImagePicker from '#lib/components/molecules/ImagePicker.svelte'
   import MetricChart from '#lib/components/molecules/MetricChart.svelte'
   import SomCanvas from '#lib/components/organisms/SomCanvas.svelte'
   import SheetLayout from '#lib/components/templates/SheetLayout.svelte'
@@ -17,20 +18,23 @@
     DENSITIES,
     INITS,
     LATTICES,
+    MODES,
     SCENARIOS,
     TRAININGS,
     type DecayId,
     type DensityId,
     type InitId,
     type LatticeId,
+    type ModeId,
     type Scenario,
     type SomConfig,
     type SomStats,
     type TrainingId,
   } from '#lib/demos/kohonen/kohonen.ts'
+  import { BUNDLED, loadImage, toDensity } from '#lib/demos/kohonen/image.ts'
   import WasmGate from '#lib/wasm/WasmGate.svelte'
 
-  let mode = $state<'unfolding'>('unfolding')
+  let mode = $state<ModeId>('unfolding')
   let scenario = $state<Scenario | null>(SCENARIOS[0])
 
   let lattice = $state<LatticeId>('grid')
@@ -48,6 +52,30 @@
   let seed = $state(1)
   let density = $state<DensityId>('uniform')
   let training = $state<TrainingId>('online')
+
+  // Images: the one picked for the density, and whether dark or light pixels count.
+  let densityImageId = $state('')
+  let densityImageEl = $state.raw<HTMLImageElement | null>(null)
+  let invertImage = $state(false)
+  let imageError = $state('')
+  let densityImage = $derived(
+    densityImageEl ? { cells: toDensity(densityImageEl, 128, invertImage), side: 128 } : null,
+  )
+
+  function pickDensityImage(img: HTMLImageElement, id: string) {
+    densityImageEl = img
+    densityImageId = id
+    imageError = ''
+  }
+
+  // Picking "Image…" starts with the first bundled image.
+  $effect(() => {
+    if (density !== 'image' || densityImageEl) return
+    loadImage(BUNDLED[0].src).then(
+      img => pickDensityImage(img, BUNDLED[0].id),
+      () => (imageError = "Couldn't read that image"),
+    )
+  })
 
   let running = $state(true)
   let onlineSpeed = $state(25)
@@ -129,20 +157,25 @@
   {#snippet drawing()}
     <WasmGate>
       {#snippet children(wasm)}
-        <SomCanvas
-          {wasm}
-          {config}
-          {density}
-          {training}
-          {running}
-          speed={training === 'online' ? onlineSpeed : batchSpeed}
-          brush={{ mode: brushMode, radius: brushRadius }}
-          show={{ density: showDensity, voronoi: showVoronoi, lattice: showLattice, trace: showTrace }}
-          {restart}
-          {densityReset}
-          {stepRequest}
-          onstats={s => (stats = s)}
-        />
+        {#if mode === 'unfolding'}
+          <SomCanvas
+            {wasm}
+            {config}
+            {density}
+            {training}
+            {running}
+            speed={training === 'online' ? onlineSpeed : batchSpeed}
+            brush={{ mode: brushMode, radius: brushRadius }}
+            show={{ density: showDensity, voronoi: showVoronoi, lattice: showLattice, trace: showTrace }}
+            image={densityImage}
+            {restart}
+            {densityReset}
+            {stepRequest}
+            onstats={s => (stats = s)}
+          />
+        {:else}
+          <StatusMessage>This mode is on its way.</StatusMessage>
+        {/if}
       {/snippet}
     </WasmGate>
   {/snippet}
@@ -156,16 +189,22 @@
     </ButtonRow>
 
     <ControlGroup title="Mode">
-      <Choice name="mode" bind:value={mode} options={[{ value: 'unfolding', label: 'Unfolding' }]} />
+      <Choice
+        name="mode"
+        bind:value={mode}
+        options={MODES.map(m => ({ ...m, detail: m.value === mode ? m.detail : undefined }))}
+      />
     </ControlGroup>
 
-    <ControlGroup title="Scenario">
-      <ButtonRow>
-        {#each SCENARIOS as s (s.id)}
-          <Button variant={scenario?.id === s.id ? 'primary' : 'default'} onclick={() => pick(s)}>{s.label}</Button>
-        {/each}
-      </ButtonRow>
-    </ControlGroup>
+    {#if mode === 'unfolding'}
+      <ControlGroup title="Scenario">
+        <ButtonRow>
+          {#each SCENARIOS as s (s.id)}
+            <Button variant={scenario?.id === s.id ? 'primary' : 'default'} onclick={() => pick(s)}>{s.label}</Button>
+          {/each}
+        </ButtonRow>
+      </ControlGroup>
+    {/if}
 
     <ControlGroup title="Lattice">
       <Select label="Kind" bind:value={lattice} options={LATTICES} />
@@ -201,28 +240,37 @@
       <Toggle label="Continuous (keep learning at the end values)" bind:checked={continuous} />
     </ControlGroup>
 
-    <ControlGroup title="Density">
-      <Select label="Preset" bind:value={density} options={DENSITIES} />
-      <Choice
-        name="brush"
-        bind:value={brushMode}
-        options={[
-          { value: 'add', label: 'Paint' },
-          { value: 'erase', label: 'Erase' },
-        ]}
-      />
-      <Slider label="Brush radius" bind:value={brushRadius} min={0.02} max={0.25} step={0.01} />
-      <ButtonRow>
-        <Button onclick={() => densityReset++}>Reset painting</Button>
-      </ButtonRow>
-    </ControlGroup>
+    {#if mode === 'unfolding'}
+      <ControlGroup title="Density">
+        <Select label="Preset" bind:value={density} options={DENSITIES} />
+        {#if density === 'image'}
+          <ImagePicker selected={densityImageId} onpick={pickDensityImage} onerror={m => (imageError = m)} />
+          <Toggle label="Light pixels are dense" bind:checked={invertImage} />
+          {#if imageError}
+            <StatusMessage>{imageError}</StatusMessage>
+          {/if}
+        {/if}
+        <Choice
+          name="brush"
+          bind:value={brushMode}
+          options={[
+            { value: 'add', label: 'Paint' },
+            { value: 'erase', label: 'Erase' },
+          ]}
+        />
+        <Slider label="Brush radius" bind:value={brushRadius} min={0.02} max={0.25} step={0.01} />
+        <ButtonRow>
+          <Button onclick={() => densityReset++}>Reset painting</Button>
+        </ButtonRow>
+      </ControlGroup>
 
-    <ControlGroup title="Show">
-      <Toggle label="Density" bind:checked={showDensity} />
-      <Toggle label="Voronoi regions" bind:checked={showVoronoi} />
-      <Toggle label="Lattice" bind:checked={showLattice} />
-      <Toggle label="Last update, while paused" bind:checked={showTrace} />
-    </ControlGroup>
+      <ControlGroup title="Show">
+        <Toggle label="Density" bind:checked={showDensity} />
+        <Toggle label="Voronoi regions" bind:checked={showVoronoi} />
+        <Toggle label="Lattice" bind:checked={showLattice} />
+        <Toggle label="Last update, while paused" bind:checked={showTrace} />
+      </ControlGroup>
+    {/if}
   {/snippet}
 
   {#snippet notes()}

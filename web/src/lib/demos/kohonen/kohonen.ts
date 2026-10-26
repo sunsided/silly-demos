@@ -7,8 +7,27 @@ export type LatticeId = 'chain' | 'ring' | 'grid' | 'hex'
 export type InitId = 'random' | 'cluster' | 'pca'
 export type TrainingId = 'online' | 'batch'
 export type DecayId = 'exp' | 'linear'
-export type DensityId = 'uniform' | 'annulus' | 'moons' | 'blobs' | 'lshape' | 'gradient' | 'blank'
+export type DensityId = 'uniform' | 'annulus' | 'moons' | 'blobs' | 'lshape' | 'gradient' | 'blank' | 'image'
+export type ModeId = 'unfolding' | 'colours' | 'countries'
 export type StatusId = 'training' | 'converged' | 'empty'
+
+export const MODES: readonly { value: ModeId; label: string; detail: string }[] = [
+  {
+    value: 'unfolding',
+    label: 'Unfolding',
+    detail: 'A lattice of nodes spreads over a 2D density you pick, paint or load from an image.',
+  },
+  {
+    value: 'colours',
+    label: 'Colours',
+    detail: 'The map sorts colours onto a 2D sheet: random colours, or the pixels of an image, which it turns into a palette.',
+  },
+  {
+    value: 'countries',
+    label: 'Countries',
+    detail: 'Countries by ten development indicators in 1992 and 2022, after Kaski and Kohonen’s 1996 world poverty map.',
+  },
+]
 
 export const LATTICES: readonly { value: LatticeId; label: string }[] = [
   { value: 'grid', label: 'Grid' },
@@ -51,6 +70,7 @@ export const DENSITIES: readonly { value: DensityId; label: string }[] = [
   { value: 'lshape', label: 'L-shape' },
   { value: 'gradient', label: 'Gradient' },
   { value: 'blank', label: 'Blank (paint)' },
+  { value: 'image', label: 'Image…' },
 ]
 
 /** Everything that, when changed, starts the map over. */
