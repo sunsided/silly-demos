@@ -20,6 +20,8 @@ use crate::collision::shape::{Body, Shape, ShapeKind};
 use crate::utils::set_panic_hook;
 use crate::vec2::Vec2;
 pub use rover_lab::RoverLab;
+pub use som_data::SomData;
+pub use som_lab::SomLab;
 pub use voronoi::VoronoiTests;
 use wasm_bindgen::prelude::*;
 
