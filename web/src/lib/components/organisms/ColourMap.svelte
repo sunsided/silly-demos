@@ -103,11 +103,14 @@
     return c
   }
 
+  // Only the seed, not the whole config: the data needn't be rebuilt on every slider tick.
+  let dataSeed = $derived(config.seed)
+
   // The data: random colours (seeded by the config's seed) or the image's pixels.
   $effect(() => {
     const s = source
     const p = pixels
-    const seed = config.seed
+    const seed = dataSeed
     if (!lab) {
       lab = new wasm.SomData(seed)
       lab.set_normalise(false)

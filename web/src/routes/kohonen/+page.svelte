@@ -426,6 +426,12 @@
       {#if scenario}
         <p><strong>{scenario.label}.</strong> {scenario.note}</p>
       {/if}
+      {#if density === 'image'}
+        {@const bundled = BUNDLED.find(b => b.id === densityImageId)}
+        {#if bundled}
+          <p class="credit">Image: <a href={bundled.source}>{bundled.credit}</a>, public domain.</p>
+        {/if}
+      {/if}
     {:else}
       <MetricChart history={stats.history} />
     {/if}
@@ -460,8 +466,10 @@
         cell sits on the map, as in Kaski and Kohonen's 1996 figure, so similar countries share a colour.
       </p>
       <p class="credit">
-        Data: World Bank, World Development Indicators (CC BY 4.0); values nearest 1992 (1990–1995) and 2022
-        (2019–2023). Shapes: Natural Earth (public domain).
+        Data: <a href="https://data.worldbank.org">World Bank, World Development Indicators</a>, licensed under
+        <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Changed: for each country, the value
+        nearest 1992 (from 1990–1995) and nearest 2022 (from 2019–2023), rounded to four significant digits. Shapes:
+        <a href="https://www.naturalearthdata.com">Natural Earth</a> (public domain), projected and simplified.
       </p>
     {/if}
     {#if mode === 'colours'}
@@ -471,6 +479,10 @@
         neighbourhood together, the U-matrix shows a ridge.
       </p>
       {#if colourSource === 'image'}
+        {@const bundled = BUNDLED.find(b => b.id === colourImageId)}
+        {#if bundled}
+          <p class="credit">Image: <a href={bundled.source}>{bundled.credit}</a>, public domain.</p>
+        {/if}
         <p>
           Trained on an image's pixels, the nodes settle where the image has many pixels of similar colour: the map
           becomes the image's palette. On the right, every pixel is replaced by its nearest node's colour, so a map of
