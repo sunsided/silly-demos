@@ -64,14 +64,23 @@ tasks:
       - cargo test --workspace --lib --target {{.HOST}} {{.CLI_ARGS}}
 
   test:wasm:
-    desc: Run wasm-bindgen tests in headless Firefox
+    desc: Run the exported API compiled to wasm32 in Node (tests/web.rs)
     preconditions:
       - sh: command -v wasm-pack
         msg: "wasm-pack not found — install from https://rustwasm.github.io/wasm-pack/installer/"
-      - sh: command -v firefox
-        msg: "firefox not found — wasm-pack needs it for headless browser tests"
+      - sh: command -v node
+        msg: "node not found — wasm-pack runs the wasm32 tests in Node"
     cmds:
-      - wasm-pack test --headless --firefox {{.CLI_ARGS}}
+      - wasm-pack test --node {{.CLI_ARGS}}
+
+  test:pkg:
+    desc: Check the generated JS package from Node, as the frontend uses it (tests/js)
+    deps: [build:wasm]
+    preconditions:
+      - sh: command -v node
+        msg: "node not found — install from https://nodejs.org/"
+    cmds:
+      - node --test 'tests/js/*.test.mjs'
 
   fmt:
     desc: Format Rust code
@@ -83,6 +92,8 @@ tasks:
     desc: Lint Rust code (including tests) and typecheck the frontend
     cmds:
       - cargo clippy --workspace --lib --tests --target {{.HOST}} -- -D warnings
+      # tests/web.rs only compiles for wasm32.
+      - cargo clippy --tests --target wasm32-unknown-unknown -- -D warnings
       - task: web:check
 
   lint:fix:
@@ -104,6 +115,8 @@ tasks:
       - task: check
       - task: lint
       - task: test
+      - task: test:wasm
+      - task: test:pkg
       - task: build
 
   serve:

@@ -1,0 +1,100 @@
+// The generated package as the frontend sees it: run with `node --test tests/js/*.test.mjs`
+// (`task test:pkg`) after `task build:wasm`.
+//
+// tests/web.rs drives the API from Rust; this checks what crosses the JS
+// boundary: the exported class names, typed-array return types, Option
+// arguments passed as undefined, string returns, and freed objects.
+
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import { before, test } from 'node:test'
+
+const pkg = new URL('../../pkg/', import.meta.url)
+const wasm = await import(new URL('silly_demos.js', pkg))
+
+let memory
+before(async () => {
+  const exports = await wasm.default({ module_or_path: await readFile(new URL('silly_demos_bg.wasm', pkg)) })
+  memory = exports.memory
+})
+
+test('the classes and functions the pages use are exported', () => {
+  for (const name of ['BoidsParams', 'BoidsSim', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'VoronoiTests']) {
+    assert.equal(typeof wasm[name], 'function', name)
+  }
+  assert.equal(typeof wasm.run, 'function')
+})
+
+test('numeric arrays come back as typed-array copies', () => {
+  const lab = new wasm.RoverLab('explorer')
+  lab.step(1)
+  assert.ok(lab.knowledge() instanceof Uint8Array)
+  assert.ok(lab.pose() instanceof Float32Array)
+  const walls = lab.walls()
+  assert.ok(walls instanceof Float32Array)
+  const length = walls.length
+  // A copy owned by JS, not a view into WASM memory: growing the memory (each
+  // lab allocates its grids) would leave a view detached and empty.
+  const size = memory.buffer.byteLength
+  const view = new Float32Array(memory.buffer, 0, 4)
+  const more = []
+  while (memory.buffer.byteLength === size && more.length < 500) more.push(new wasm.RoverLab('explorer'))
+  assert.ok(memory.buffer.byteLength > size, 'memory grew')
+  assert.equal(view.length, 0, 'a view into the old memory detached')
+  assert.ok(length > 0)
+  assert.equal(walls.length, length)
+  assert.ok(walls.every(Number.isFinite))
+  for (const m of more) m.free()
+  const tris = wasm.VoronoiTests.delaunay_indices(wasm.VoronoiTests.voronoi_create_points(20, 400, 300, 1, 10))
+  assert.ok(tris instanceof Uint32Array && tris.length % 3 === 0)
+  lab.free()
+})
+
+test('strings and string arrays cross as JS strings', () => {
+  const lab = new wasm.RoverLab('reactive')
+  assert.equal(lab.status(), 'exploring')
+  lab.free()
+  const kinds = wasm.CollisionLab.shape_kinds()
+  assert.ok(Array.isArray(kinds) && kinds.includes('circle'))
+  assert.ok(wasm.IkChain.solvers().includes('fabrik'))
+})
+
+test('Option arguments accept undefined', () => {
+  const chain = new wasm.IkChain(6, 45)
+  chain.set_limits(undefined, undefined)
+  chain.set_limits(16, undefined)
+  chain.set_limits(16, 11)
+  assert.ok(chain.solve('fabrik', 100, -80, 10, 20) > 0)
+  chain.free()
+})
+
+test('Option returns are undefined or a value', () => {
+  const lab = new wasm.CollisionLab()
+  const id = lab.methods()[0]
+  const report = lab.run(id, 0)
+  assert.equal(typeof report.intersect, 'boolean')
+  assert.ok(report.distance === undefined || typeof report.distance === 'number')
+  assert.equal(lab.run('no-such-method', 0), undefined)
+  report.free()
+  lab.free()
+})
+
+test('struct fields read as numbers, and writes reach the simulation', () => {
+  const params = new wasm.BoidsParams()
+  assert.equal(typeof params.max_speed, 'number')
+  params.max_speed = 50
+  params.min_speed = 0
+  const sim = new wasm.BoidsSim(40, 400, 300, 9)
+  sim.set_params(params)
+  for (let i = 0; i < 60; i++) sim.step(1 / 60)
+  const state = sim.state()
+  for (let i = 0; i < state.length; i += 5) assert.ok(Math.hypot(state[i + 2], state[i + 3]) <= 50 + 1e-3)
+  sim.free()
+  params.free()
+})
+
+test('a freed object refuses further use instead of touching freed memory', () => {
+  const lab = new wasm.RoverLab('explorer')
+  lab.free()
+  assert.throws(() => lab.step(1))
+})

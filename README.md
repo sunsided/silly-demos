@@ -151,8 +151,11 @@ BASE_PATH=/my-custom-path task build
 # Rust unit tests, run natively (the default build target is wasm32)
 task test
 
-# wasm-bindgen tests in headless Firefox
+# The exported API compiled to wasm32, run in Node (tests/web.rs)
 task test:wasm
+
+# The generated JS package as the frontend uses it (tests/js)
+task test:pkg
 
 # Everything CI cares about: formatting, clippy, typecheck, tests, build
 task ci
