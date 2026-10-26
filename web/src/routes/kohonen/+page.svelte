@@ -43,13 +43,13 @@
 
   let lattice = $state<LatticeId>('grid')
   let nodes = $state(60)
-  let gridWidth = $state(20)
-  let gridHeight = $state(20)
+  let gridWidth = $state(8)
+  let gridHeight = $state(8)
   let init = $state<InitId>('random')
   let steps = $state(30_000)
   let alphaStart = $state(0.5)
   let alphaEnd = $state(0.01)
-  let sigmaStart = $state(10)
+  let sigmaStart = $state(4)
   let sigmaEnd = $state(0.5)
   let decay = $state<DecayId>('exp')
   let continuous = $state(false)
@@ -97,7 +97,7 @@
     t: 0,
     steps: 30_000,
     alpha: 0.5,
-    sigma: 10,
+    sigma: 4,
     qe: 0,
     te: 0,
     status: 'training',
@@ -140,7 +140,7 @@
   }
 
   // Colours: random colours or an image's pixels.
-  let colourSource = $state<'rgb' | 'image'>('rgb')
+  let colourSource = $state<'rgb' | 'image'>('image')
   let colourImageId = $state('')
   let colourPixels = $state.raw<Pixels | null>(null)
   let showUmatrix = $state(false)
@@ -174,17 +174,18 @@
   function setColourSource(source: 'rgb' | 'image') {
     colourSource = source
     if (source === 'rgb') dataDefaults('grid', 20, 20)
-    else {
-      dataDefaults('grid', 8, 8)
-      if (!colourPixels) {
-        const first = BUNDLED[1]
-        loadImage(first.src).then(
-          img => pickColourImage(img, first.id),
-          () => (imageError = "Couldn't read that image"),
-        )
-      }
-    }
+    else dataDefaults('grid', 8, 8)
   }
+
+  // The image source starts with The Starry Night.
+  $effect(() => {
+    if (mode !== 'colours' || colourSource !== 'image' || colourPixels) return
+    const first = BUNDLED.find(b => b.id === 'starry-night') ?? BUNDLED[0]
+    loadImage(first.src).then(
+      img => pickColourImage(img, first.id),
+      () => (imageError = "Couldn't read that image"),
+    )
+  })
 
   function setMode(next: ModeId) {
     if (next === mode) return
