@@ -1,6 +1,6 @@
 import type { RoverLab } from 'silly_demos'
 import type { Point } from '../../canvas/canvas.svelte.ts'
-import { cross, label } from '../../canvas/draft.ts'
+import { cross, label, rgba } from '../../canvas/draft.ts'
 import type { Theme } from '../../canvas/theme.svelte.ts'
 
 export type ModeId = 'explorer' | 'reactive'
@@ -39,23 +39,6 @@ export interface View {
 export function fit(width: number, height: number, size: ArrayLike<number>, margin = 16): View {
   const scale = Math.max(0.01, Math.min((width - 2 * margin) / size[0], (height - 2 * margin) / size[1]))
   return { scale, x: (width - size[0] * scale) / 2, y: (height - size[1] * scale) / 2 }
-}
-
-const rgbaCache = new Map<string, [number, number, number, number]>()
-
-/** A CSS color as RGBA bytes, for writing pixels. */
-function rgba(color: string): [number, number, number, number] {
-  const cached = rgbaCache.get(color)
-  if (cached) return cached
-  const c = document.createElement('canvas')
-  c.width = c.height = 1
-  const ctx = c.getContext('2d', { willReadFrequently: true })!
-  ctx.fillStyle = color
-  ctx.fillRect(0, 0, 1, 1)
-  const d = ctx.getImageData(0, 0, 1, 1).data
-  const value: [number, number, number, number] = [d[0], d[1], d[2], d[3]]
-  rgbaCache.set(color, value)
-  return value
 }
 
 /**
