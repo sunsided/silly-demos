@@ -35,6 +35,7 @@ pub struct SomLab {
     init: Init,
     training: Training,
     density: Density,
+    seed: u64,
     rng: Rng,
     batch: Vec<f32>,
     eval: Vec<f32>,
@@ -70,6 +71,7 @@ impl SomLab {
             init: Init::Random,
             training: Training::Online,
             density: Density::preset("uniform").expect("a known preset"),
+            seed: seed as u64,
             rng: Rng::new(seed as u64),
             batch: Vec::new(),
             eval: Vec::new(),
@@ -77,7 +79,6 @@ impl SomLab {
             history: Vec::new(),
             errors: (0.0, 0.0),
         };
-        lab.draw_samples();
         lab.restart();
         lab
     }
@@ -157,21 +158,33 @@ impl SomLab {
         };
         self.density = density;
         self.draw_samples();
+        self.measure(false);
         true
     }
 
     /// Adds density within `radius` of (x, y) in the unit square; a negative
-    /// `amount` erases.
+    /// `amount` erases. The first stroke on an empty sheet starts over, so
+    /// the map starts from the painted samples.
     pub fn paint(&mut self, x: f32, y: f32, radius: f32, amount: f32) {
         let version = self.density.version();
+        let was_empty = self.eval.is_empty();
         self.density.paint(x, y, radius, amount);
-        if self.density.version() != version {
+        if self.density.version() == version {
+            return;
+        }
+        if was_empty {
+            self.restart();
+        } else {
             self.draw_samples();
+            self.measure(false);
         }
     }
 
-    /// Back to t = 0 with a freshly initialised map.
+    /// Back to t = 0 with a freshly initialised map. The random numbers
+    /// start over from the seed too, so a restart replays the same run.
     pub fn restart(&mut self) {
+        self.rng = Rng::new(self.seed);
+        self.draw_samples();
         self.som.codebook = initialise(self.init, &self.som.lattice, &self.eval, 2, &mut self.rng);
         self.som.t = 0;
         self.trace = None;
@@ -318,8 +331,7 @@ impl SomLab {
 }
 
 impl SomLab {
-    /// New batch and evaluation sets from the current density, and the
-    /// errors on the new evaluation set.
+    /// New batch and evaluation sets from the current density.
     fn draw_samples(&mut self) {
         let mut draw = |n: usize| -> Vec<f32> {
             (0..n)
@@ -329,7 +341,6 @@ impl SomLab {
         };
         self.batch = draw(BATCH_SAMPLES);
         self.eval = draw(EVAL_SAMPLES);
-        self.measure(false);
     }
 
     /// Updates the errors, and records them when `record`.
@@ -368,6 +379,9 @@ impl Default for SomLab {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A seed whose bow-tie run freezes a twist in.
+    const BOW_TIE_SEED: u32 = 17;
 
     fn finite(v: &[f32]) -> bool {
         v.iter().all(|v| v.is_finite())
@@ -507,5 +521,62 @@ mod tests {
         let w = lab.weights();
         let (mx, my) = (0.5, 0.5);
         assert!(w.chunks(2).all(|p| (p[0] - mx).hypot(p[1] - my) < 0.05));
+    }
+
+    /// The page's bow-tie scenario (kohonen.ts).
+    fn bow_tie(seed: u32) -> SomLab {
+        let mut lab = SomLab::new(seed);
+        assert!(lab.set_density("uniform"));
+        assert!(lab.set_schedule(10_000, 0.5, 0.01, 1.0, 0.3, "exp", false));
+        assert!(lab.set_init("cluster"));
+        assert!(lab.set_lattice("grid", 12, 12));
+        lab.restart();
+        lab
+    }
+
+    #[test]
+    fn restart_replays_the_same_run() {
+        let mut a = SomLab::new(9);
+        a.step(300);
+        a.restart();
+        a.step(1000);
+        // Same seed, other calls in between: the run depends only on the seed and settings.
+        let mut b = SomLab::new(9);
+        assert!(b.set_init("random"));
+        b.paint(0.5, 0.5, 0.1, 0.0001);
+        assert!(b.set_density("uniform"));
+        b.restart();
+        b.step(1000);
+        assert_eq!(a.weights(), b.weights());
+    }
+
+    #[test]
+    fn the_bow_tie_scenario_keeps_its_twist() {
+        let mut lab = bow_tie(BOW_TIE_SEED);
+        while lab.step(1000) > 0 {}
+        assert_eq!(lab.status(), "converged");
+        let te = lab.progress()[5];
+        assert!(te > 0.1, "TE {te}");
+    }
+
+    #[test]
+    fn the_first_stroke_on_an_empty_sheet_starts_over() {
+        let mut lab = SomLab::new(1);
+        lab.step(20_000);
+        assert_eq!(lab.status(), "converged");
+        assert!(lab.set_density("blank"));
+        lab.paint(0.8, 0.8, 0.1, 1.0);
+        assert_eq!(lab.status(), "training");
+        assert_eq!(lab.progress()[0], 0.0);
+        // Initialised from the painted samples, not piled up in the middle.
+        assert!(
+            lab.weights()
+                .chunks(2)
+                .all(|p| (p[0] - 0.8).hypot(p[1] - 0.8) < 0.12)
+        );
+        // Later strokes don't start over.
+        lab.step(10);
+        lab.paint(0.2, 0.2, 0.1, 1.0);
+        assert_eq!(lab.progress()[0], 10.0);
     }
 }
