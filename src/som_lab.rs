@@ -180,6 +180,13 @@ impl SomLab {
         }
     }
 
+    /// Starts over with other random numbers; the density, painted
+    /// strokes included, stays.
+    pub fn set_seed(&mut self, seed: u32) {
+        self.seed = seed as u64;
+        self.restart();
+    }
+
     /// Back to t = 0 with a freshly initialised map. The random numbers
     /// start over from the seed too, so a restart replays the same run.
     pub fn restart(&mut self) {
@@ -578,5 +585,23 @@ mod tests {
         lab.step(10);
         lab.paint(0.2, 0.2, 0.1, 1.0);
         assert_eq!(lab.progress()[0], 10.0);
+    }
+
+    #[test]
+    fn a_new_seed_keeps_the_painted_density() {
+        let mut lab = SomLab::new(1);
+        assert!(lab.set_density("blank"));
+        lab.paint(0.3, 0.3, 0.1, 1.0);
+        lab.step(100);
+        let density = lab.density();
+        lab.set_seed(5);
+        assert_eq!(lab.density(), density);
+        assert_eq!(lab.status(), "training");
+        assert_eq!(lab.progress()[0], 0.0);
+        // Same as a lab made with that seed, painted the same.
+        let mut fresh = SomLab::new(5);
+        assert!(fresh.set_density("blank"));
+        fresh.paint(0.3, 0.3, 0.1, 1.0);
+        assert_eq!(lab.weights(), fresh.weights());
     }
 }

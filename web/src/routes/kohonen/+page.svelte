@@ -102,6 +102,9 @@
     training = 'online'
     running = true
     scenario = s
+    // Even when nothing changed (the same scenario again): a clean preset, from the start.
+    densityReset++
+    restart++
   }
 
   const statusText = { training: 'Training', converged: 'Done', empty: 'No density' }

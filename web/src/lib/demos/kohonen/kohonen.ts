@@ -84,12 +84,12 @@ export function readStats(lab: SomLab): SomStats {
   return { t, steps, alpha, sigma, qe, te, status: lab.status() as StatusId, history: lab.history() }
 }
 
-/** Pushes `config` into `lab` and starts over. */
+/** Pushes `config` into `lab` and starts over; painted density stays. */
 export function applyConfig(lab: SomLab, c: SomConfig) {
   lab.set_schedule(c.steps, c.alpha[0], c.alpha[1], c.sigma[0], c.sigma[1], c.decay, c.continuous)
   lab.set_init(c.init)
   lab.set_lattice(c.lattice, c.width, c.height)
-  lab.restart()
+  lab.set_seed(c.seed)
 }
 
 /** The unit square input space on the canvas: a square sheet, centred. */

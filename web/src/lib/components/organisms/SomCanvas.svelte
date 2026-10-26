@@ -45,7 +45,7 @@
     onstats,
   }: {
     wasm: Wasm
-    /** Changing any of it starts the map over; a new seed makes a new lab. */
+    /** Changing any of it starts the map over. */
     config: SomConfig
     /** Changing it replaces the density, painted strokes included, and starts over. */
     density: DensityId
@@ -66,7 +66,6 @@
   } = $props()
 
   let lab: SomLab | null = null
-  let seed = -1
   const densityImage = new DensityImage()
   // The density only changes on edits; redraw its image then, not every frame.
   let densityDirty = true
@@ -89,8 +88,7 @@
   // and the effects would then never track them.
   $effect(() => {
     const c = $state.snapshot(config) as SomConfig
-    if (!lab || c.seed !== seed) {
-      lab?.free()
+    if (!lab) {
       const fresh = new wasm.SomLab(c.seed)
       // Density and training have effects of their own.
       untrack(() => {
@@ -98,7 +96,6 @@
         fresh.set_training(training)
       })
       lab = fresh
-      seed = c.seed
       densityDirty = true
     }
     applyConfig(lab, c)
