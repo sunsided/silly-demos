@@ -50,6 +50,21 @@ tasks:
     cmds:
       - '{{.RUN}} tokens'
 
+  data:countries:
+    desc: Fetch the World Bank indicators for the Kohonen lab's country map (network; the output is committed)
+    deps: [tooling:check]
+    cmds:
+      - node scripts/build-countries.mjs
+
+  data:world:
+    desc: Fetch and project the Natural Earth country shapes for the country map (network; the output is committed)
+    deps: [tooling:check]
+    preconditions:
+      - sh: test -f static/data/countries.json
+        msg: "static/data/countries.json missing — run `task data:countries` first"
+    cmds:
+      - node scripts/build-world.mjs
+
   dev:
     desc: Start the Vite dev server (port 3000)
     deps: [install, wasm:check]

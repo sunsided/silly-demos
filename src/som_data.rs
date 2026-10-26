@@ -539,4 +539,52 @@ mod tests {
             }
         }
     }
+
+    /// The bundled country data, as the page feeds it: both years' rows, log10
+    /// of the log-scaled indicators, null as NaN.
+    fn country_rows() -> (Vec<f32>, usize, usize) {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/web/static/data/countries.json"
+        );
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("countries.json")).unwrap();
+        let logs: Vec<bool> = json["indicators"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| i["log"].as_bool().unwrap())
+            .collect();
+        let countries = json["countries"].as_array().unwrap();
+        let mut rows = Vec::new();
+        for year in ["y1992", "y2022"] {
+            for c in countries {
+                for (v, &log) in c[year].as_array().unwrap().iter().zip(&logs) {
+                    rows.push(match v.as_f64() {
+                        Some(v) if log => (v as f32).log10(),
+                        Some(v) => v as f32,
+                        None => f32::NAN,
+                    });
+                }
+            }
+        }
+        (rows, logs.len(), countries.len())
+    }
+
+    #[test]
+    fn the_country_data_trains_a_map() {
+        let (rows, dim, countries) = country_rows();
+        assert_eq!(dim, 10);
+        assert!(countries >= 120, "{countries} countries");
+        let mut lab = SomData::new(1);
+        assert!(lab.set_lattice("hex", 16, 10));
+        assert!(lab.set_data(&rows, dim as u32));
+        while lab.step(1000) > 0 {}
+        let te = lab.progress()[5];
+        assert!(te < 0.1, "TE {te}");
+        let bmus = lab.bmus();
+        assert_eq!(bmus.len(), 2 * countries);
+        assert!(bmus.iter().all(|&b| b < 160));
+        assert!(lab.codebook().iter().all(|v| v.is_finite()));
+    }
 }
