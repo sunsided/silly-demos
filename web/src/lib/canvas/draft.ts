@@ -147,3 +147,20 @@ export function hatchPattern(ctx: CanvasRenderingContext2D, color: string, dpr: 
   patterns.set(key, pattern)
   return pattern
 }
+
+const rgbaCache = new Map<string, [number, number, number, number]>()
+
+/** A CSS color as RGBA bytes, for writing pixels. */
+export function rgba(color: string): [number, number, number, number] {
+  const cached = rgbaCache.get(color)
+  if (cached) return cached
+  const c = document.createElement('canvas')
+  c.width = c.height = 1
+  const ctx = c.getContext('2d', { willReadFrequently: true })!
+  ctx.fillStyle = color
+  ctx.fillRect(0, 0, 1, 1)
+  const d = ctx.getImageData(0, 0, 1, 1).data
+  const value: [number, number, number, number] = [d[0], d[1], d[2], d[3]]
+  rgbaCache.set(color, value)
+  return value
+}

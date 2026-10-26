@@ -398,28 +398,27 @@ impl VoronoiTests {
 
     /// Compute Voronoi edges as line segments [x1,y1,x2,y2,...]
     pub fn voronoi_edges(points_flat: &[f32]) -> Vec<f32> {
-        let mut pts: Vec<Pt> = Vec::new();
-        for i in (0..points_flat.len()).step_by(4) {
-            if i + 1 < points_flat.len() {
-                pts.push(Pt {
-                    x: points_flat[i],
-                    y: points_flat[i + 1],
-                });
-            }
-        }
-        if pts.len() < 3 {
-            return Vec::new();
-        }
-
-        let tris = bowyer_watson(&pts);
-        let segs = compute_voronoi_edges(&pts, &tris);
-        let mut out = Vec::with_capacity(segs.len() * 4);
-        for (a, b) in segs {
-            out.push(a.x);
-            out.push(a.y);
-            out.push(b.x);
-            out.push(b.y);
-        }
-        out
+        let points: Vec<(f32, f32)> = points_flat
+            .chunks(4)
+            .filter(|c| c.len() >= 2)
+            .map(|c| (c[0], c[1]))
+            .collect();
+        edges_of(&points)
     }
+}
+
+/// The Voronoi edges of `points` as segments [x1, y1, x2, y2, ...]; empty
+/// for fewer than 3 points.
+pub(crate) fn edges_of(points: &[(f32, f32)]) -> Vec<f32> {
+    if points.len() < 3 {
+        return Vec::new();
+    }
+    let pts: Vec<Pt> = points.iter().map(|&(x, y)| Pt { x, y }).collect();
+    let tris = bowyer_watson(&pts);
+    let segs = compute_voronoi_edges(&pts, &tris);
+    let mut out = Vec::with_capacity(segs.len() * 4);
+    for (a, b) in segs {
+        out.extend([a.x, a.y, b.x, b.y]);
+    }
+    out
 }
