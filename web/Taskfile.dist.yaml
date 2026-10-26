@@ -65,6 +65,15 @@ tasks:
     cmds:
       - node scripts/build-world.mjs
 
+  data:images:
+    desc: Fetch and scale the public-domain images for the Kohonen lab (network and ImageMagick; the output is committed)
+    deps: [tooling:check]
+    preconditions:
+      - sh: command -v magick || command -v convert
+        msg: "ImageMagick not found — install it (magick or convert) to scale the images"
+    cmds:
+      - node scripts/fetch-images.mjs
+
   dev:
     desc: Start the Vite dev server (port 3000)
     deps: [install, wasm:check]
