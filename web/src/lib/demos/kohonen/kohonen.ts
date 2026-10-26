@@ -293,3 +293,63 @@ export function drawBrush(ctx: CanvasRenderingContext2D, t: Theme, s: Sheet, at:
   ctx.stroke()
   ctx.restore()
 }
+
+export interface Scenario {
+  id: string
+  label: string
+  config: SomConfig
+  density: DensityId
+  note: string
+}
+
+const classic: SomConfig = {
+  lattice: 'grid',
+  width: 12,
+  height: 12,
+  init: 'random',
+  steps: 20_000,
+  alpha: [0.5, 0.01],
+  sigma: [6, 0.5],
+  decay: 'exp',
+  continuous: false,
+  seed: 1,
+}
+
+/** Presets that set everything at once, then start over. */
+export const SCENARIOS: readonly Scenario[] = [
+  {
+    id: 'classic',
+    label: 'Classic unfold',
+    config: classic,
+    density: 'uniform',
+    note: 'Nodes start on random samples, with no order at all. A wide σ first pulls the whole lattice into one ordered clump; as σ shrinks, it unfolds and spreads over the square, neighbours staying neighbours.',
+  },
+  {
+    id: 'bowtie',
+    label: 'Bow-tie',
+    config: { ...classic, init: 'cluster', steps: 10_000, sigma: [1, 0.3], seed: 17 },
+    density: 'uniform',
+    note: 'All nodes start in a tight cluster and σ starts small, so distant parts of the lattice order themselves independently, some flipped against the others. Where they meet, the lattice folds over, and a σ that shrinks too fast freezes the fold in: the topographic error stays high.',
+  },
+  {
+    id: 'peano',
+    label: 'Space-filling',
+    config: { ...classic, lattice: 'chain', width: 300, height: 1, steps: 40_000, sigma: [30, 0.5] },
+    density: 'uniform',
+    note: 'A one-dimensional chain covering a two-dimensional square cannot keep both its order and the square’s: it folds back and forth into a Peano-like curve. Points close in the square can be far apart on the chain.',
+  },
+  {
+    id: 'ring',
+    label: 'Ring on annulus',
+    config: { ...classic, lattice: 'ring', width: 60, height: 1, sigma: [10, 0.5] },
+    density: 'annulus',
+    note: 'A ring has the same topology as the annulus, so it closes around the hole and keeps its order all the way round. The band has a width, though, and a one-dimensional ring covers it by zig-zagging across: those small folds are what the topographic error counts here.',
+  },
+  {
+    id: 'magnification',
+    label: 'Magnification',
+    config: { ...classic, steps: 30_000 },
+    density: 'gradient',
+    note: 'The density rises from left to right, and the nodes crowd towards the dense side. Not in proportion, though: for a chain, node density grows with the input density to the power 2/3, so a SOM under-samples dense regions and over-samples sparse ones compared with the data.',
+  },
+]

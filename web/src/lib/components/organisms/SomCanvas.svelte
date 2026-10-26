@@ -40,13 +40,14 @@
     brush,
     show,
     restart = 0,
+    densityReset = 0,
     stepRequest = 0,
     onstats,
   }: {
     wasm: Wasm
     /** Changing any of it starts the map over; a new seed makes a new lab. */
     config: SomConfig
-    /** Changing it replaces the density, painted strokes included. */
+    /** Changing it replaces the density, painted strokes included, and starts over. */
     density: DensityId
     training: TrainingId
     running: boolean
@@ -57,6 +58,8 @@
     show: { density: boolean; voronoi: boolean; lattice: boolean; trace: boolean }
     /** Changing this value starts the map over. */
     restart?: number
+    /** Changing this value puts the density preset back, dropping painted strokes. */
+    densityReset?: number
     /** Each increment advances one update while paused. */
     stepRequest?: number
     onstats: (stats: SomStats) => void
@@ -89,7 +92,7 @@
     if (!lab || c.seed !== seed) {
       lab?.free()
       const fresh = new wasm.SomLab(c.seed)
-      // Density and training have effects of their own; changing them doesn't start over.
+      // Density and training have effects of their own.
       untrack(() => {
         fresh.set_density(density)
         fresh.set_training(training)
@@ -105,8 +108,10 @@
 
   $effect(() => {
     const d = density
+    void densityReset
     if (!lab) return
     lab.set_density(d)
+    lab.restart()
     densityDirty = true
     report()
   })

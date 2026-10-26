@@ -20,6 +20,13 @@ export const DEMOS = [
     rust: 'IkChain::solve',
   },
   {
+    route: '/kohonen',
+    name: 'Kohonen maps',
+    blurb:
+      'A grid of neurons unfolds over a density you paint, one Kohonen update at a time, with the twists and errors that come with it.',
+    rust: 'SomLab::step',
+  },
+  {
     route: '/point-line',
     name: 'Point to segment',
     blurb: 'The shortest distance from a point to a line segment, and which side of the line the point is on.',
