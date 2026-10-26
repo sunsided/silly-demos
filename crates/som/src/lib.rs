@@ -16,3 +16,4 @@ pub mod metrics;
 pub mod rng;
 pub mod schedule;
 pub mod train;
+pub mod views;
