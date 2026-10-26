@@ -1,4 +1,4 @@
-import type { SomLab } from 'silly_demos'
+import type { SomData, SomLab } from 'silly_demos'
 import type { Point } from '../../canvas/canvas.svelte.ts'
 import { arrowhead, cross, rgba } from '../../canvas/draft.ts'
 import type { Theme } from '../../canvas/theme.svelte.ts'
@@ -7,8 +7,27 @@ export type LatticeId = 'chain' | 'ring' | 'grid' | 'hex'
 export type InitId = 'random' | 'cluster' | 'pca'
 export type TrainingId = 'online' | 'batch'
 export type DecayId = 'exp' | 'linear'
-export type DensityId = 'uniform' | 'annulus' | 'moons' | 'blobs' | 'lshape' | 'gradient' | 'blank'
+export type DensityId = 'uniform' | 'annulus' | 'moons' | 'blobs' | 'lshape' | 'gradient' | 'blank' | 'image'
+export type ModeId = 'unfolding' | 'colours' | 'countries'
 export type StatusId = 'training' | 'converged' | 'empty'
+
+export const MODES: readonly { value: ModeId; label: string; detail: string }[] = [
+  {
+    value: 'colours',
+    label: 'Colours',
+    detail: 'The map sorts colours onto a 2D sheet: random colours, or the pixels of an image, which it turns into a palette.',
+  },
+  {
+    value: 'countries',
+    label: 'Countries',
+    detail: 'Countries by ten development indicators in 1992 and 2022, after Kaski and Kohonen’s 1996 world poverty map.',
+  },
+  {
+    value: 'unfolding',
+    label: 'Unfolding',
+    detail: 'A lattice of nodes spreads over a 2D density you pick, paint or load from an image.',
+  },
+]
 
 export const LATTICES: readonly { value: LatticeId; label: string }[] = [
   { value: 'grid', label: 'Grid' },
@@ -51,6 +70,7 @@ export const DENSITIES: readonly { value: DensityId; label: string }[] = [
   { value: 'lshape', label: 'L-shape' },
   { value: 'gradient', label: 'Gradient' },
   { value: 'blank', label: 'Blank (paint)' },
+  { value: 'image', label: 'Image…' },
 ]
 
 /** Everything that, when changed, starts the map over. */
@@ -79,7 +99,7 @@ export interface SomStats {
   history: Float32Array
 }
 
-export function readStats(lab: SomLab): SomStats {
+export function readStats(lab: Pick<SomLab, 'progress' | 'status' | 'history'>): SomStats {
   const [t, steps, alpha, sigma, qe, te] = lab.progress()
   return { t, steps, alpha, sigma, qe, te, status: lab.status() as StatusId, history: lab.history() }
 }
@@ -89,6 +109,18 @@ export function applyConfig(lab: SomLab, c: SomConfig) {
   lab.set_schedule(c.steps, c.alpha[0], c.alpha[1], c.sigma[0], c.sigma[1], c.decay, c.continuous)
   lab.set_init(c.init)
   lab.set_lattice(c.lattice, c.width, c.height)
+  lab.set_seed(c.seed)
+}
+
+/**
+ * Pushes `config` into a data map and starts over. Data maps draw their
+ * nodes as cells, so a chain or ring falls back to a grid.
+ */
+export function applyDataConfig(lab: SomData, c: SomConfig) {
+  lab.set_schedule(c.steps, c.alpha[0], c.alpha[1], c.sigma[0], c.sigma[1], c.decay, c.continuous)
+  lab.set_init(c.init)
+  const kind = c.lattice === 'hex' ? 'hex' : 'grid'
+  lab.set_lattice(kind, c.width, c.height)
   lab.set_seed(c.seed)
 }
 

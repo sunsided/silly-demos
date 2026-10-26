@@ -4,7 +4,7 @@ use som::codebook::Codebook;
 use som::density::Density;
 use som::init::{Init, initialise};
 use som::lattice::{Kind, Lattice};
-use som::metrics::{quantization_error, topographic_error};
+use som::metrics::{History, quantization_error, topographic_error};
 use som::rng::Rng;
 use som::schedule::{Decay, Schedule};
 use som::train::{Som, StepTrace};
@@ -41,7 +41,7 @@ pub struct SomLab {
     eval: Vec<f32>,
     trace: Option<StepTrace>,
     /// (t, QE, TE) triples.
-    history: Vec<f32>,
+    history: History,
     errors: (f32, f32),
 }
 
@@ -76,7 +76,7 @@ impl SomLab {
             batch: Vec::new(),
             eval: Vec::new(),
             trace: None,
-            history: Vec::new(),
+            history: History::new(HISTORY_CAP),
             errors: (0.0, 0.0),
         };
         lab.restart();
@@ -159,6 +159,19 @@ impl SomLab {
         self.density = density;
         self.draw_samples();
         self.measure(false);
+        true
+    }
+
+    /// Replaces the density with `side`×`side` non-negative weights,
+    /// row-major from y = 0 (an image's darkness, say), and starts over.
+    /// `false`, changing nothing, for a side outside 2 to 256, the wrong
+    /// number of cells, or a weight that is negative or not finite.
+    pub fn set_density_cells(&mut self, cells: &[f32], side: u32) -> bool {
+        let Some(density) = Density::from_cells(side as usize, cells) else {
+            return false;
+        };
+        self.density = density;
+        self.restart();
         true
     }
 
@@ -249,7 +262,13 @@ impl SomLab {
             .collect()
     }
 
-    /// The 64×64 density, row-major from y = 0, scaled to a maximum of 1.
+    /// Cells per side of the density.
+    pub fn density_side(&self) -> u32 {
+        self.density.side() as u32
+    }
+
+    /// The density, `density_side()` cells a side, row-major from y = 0,
+    /// scaled to a maximum of 1.
     pub fn density(&self) -> Vec<f32> {
         let cells = self.density.cells();
         let max = cells.iter().cloned().fold(0.0, f32::max);
@@ -321,7 +340,7 @@ impl SomLab {
 
     /// The errors over time as (t, QE, TE) triples.
     pub fn history(&self) -> Vec<f32> {
-        self.history.clone()
+        self.history.values().to_vec()
     }
 
     /// "training", "converged", or "empty" when there is no density.
@@ -364,16 +383,7 @@ impl SomLab {
             return;
         }
         self.history
-            .extend([self.som.t as f32, self.errors.0, self.errors.1]);
-        if self.history.len() / 3 > HISTORY_CAP {
-            self.history = self
-                .history
-                .chunks(3)
-                .enumerate()
-                .filter(|(i, _)| i % 2 == 1)
-                .flat_map(|(_, c)| c.to_vec())
-                .collect();
-        }
+            .push(self.som.t as f32, self.errors.0, self.errors.1);
     }
 }
 
@@ -603,5 +613,35 @@ mod tests {
         assert!(fresh.set_density("blank"));
         fresh.paint(0.3, 0.3, 0.1, 1.0);
         assert_eq!(lab.weights(), fresh.weights());
+    }
+
+    #[test]
+    fn image_density_replaces_the_preset() {
+        let mut lab = SomLab::new(1);
+        assert_eq!(lab.density_side(), 64);
+        let mut cells = vec![0.0; 128 * 128];
+        cells[64 * 128 + 64] = 1.0;
+        assert!(lab.set_density_cells(&cells, 128));
+        assert_eq!(lab.density_side(), 128);
+        assert_eq!(lab.density().len(), 128 * 128);
+        assert_eq!(lab.status(), "training");
+        assert_eq!(lab.progress()[0], 0.0);
+    }
+
+    #[test]
+    fn an_empty_image_density_is_empty() {
+        let mut lab = SomLab::new(1);
+        assert!(lab.set_density_cells(&[0.0; 16], 4));
+        assert_eq!(lab.status(), "empty");
+        assert_eq!(lab.step(10), 0);
+    }
+
+    #[test]
+    fn bad_image_density_is_refused() {
+        let mut lab = SomLab::new(1);
+        assert!(!lab.set_density_cells(&[1.0; 15], 4));
+        assert!(!lab.set_density_cells(&[f32::NAN; 16], 4));
+        assert!(!lab.set_density_cells(&[1.0; 4], 1));
+        assert_eq!(lab.density_side(), 64);
     }
 }

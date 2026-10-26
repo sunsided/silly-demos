@@ -46,9 +46,12 @@ impl Som {
         let mut kernels = Vec::with_capacity(if trace { self.lattice.len() } else { 0 });
         for (i, w) in self.codebook.weights.chunks_exact_mut(dim).enumerate() {
             let h = kernel(self.lattice.dist2(bmu, i), sigma);
-            w.iter_mut()
-                .zip(x)
-                .for_each(|(w, x)| *w += alpha * h * (x - *w));
+            for (w, &x) in w.iter_mut().zip(x) {
+                // A missing value says nothing about this dimension.
+                if !x.is_nan() {
+                    *w += alpha * h * (x - *w);
+                }
+            }
             if trace {
                 kernels.push(h);
             }
@@ -65,7 +68,8 @@ impl Som {
     /// The batch map: assign every sample to its best-matching unit, then
     /// set every node to the kernel-weighted mean of all samples, weighted
     /// by how close (on the lattice) the node that won them is. There is no
-    /// learning rate. A node no sample reaches keeps its weight. Counts as
+    /// learning rate. A node no sample reaches keeps its weight, and each
+    /// dimension averages only the samples that have it. Counts as
     /// presenting every sample once.
     pub fn epoch_batch(&mut self, samples: &[f32], trace: bool) -> Option<StepTrace> {
         let dim = self.codebook.dim;
@@ -75,32 +79,40 @@ impl Som {
         }
         let (_, sigma) = self.schedule.at(self.t);
         let n = self.codebook.len();
+        // Per node and dimension: the sum of its samples' values, and how
+        // many of them had that dimension.
         let mut sums = vec![0.0f32; n * dim];
-        let mut hits = vec![0.0f32; n];
+        let mut counts = vec![0.0f32; n * dim];
         for x in samples.chunks_exact(dim) {
             let j = self.codebook.bmu(x);
-            hits[j] += 1.0;
-            sums[j * dim..(j + 1) * dim]
-                .iter_mut()
-                .zip(x)
-                .for_each(|(s, x)| *s += x);
+            for (d, &v) in x.iter().enumerate() {
+                if !v.is_nan() {
+                    sums[j * dim + d] += v;
+                    counts[j * dim + d] += 1.0;
+                }
+            }
         }
         let previous = trace.then(|| self.codebook.weights.clone());
-        let winners: Vec<usize> = (0..n).filter(|&j| hits[j] > 0.0).collect();
+        let winners: Vec<usize> = (0..n)
+            .filter(|&j| counts[j * dim..(j + 1) * dim].iter().any(|&c| c > 0.0))
+            .collect();
         let mut num = vec![0.0f32; dim];
+        let mut den = vec![0.0f32; dim];
         for i in 0..n {
             num.iter_mut().for_each(|v| *v = 0.0);
-            let mut den = 0.0;
+            den.iter_mut().for_each(|v| *v = 0.0);
             for &j in &winners {
                 let h = kernel(self.lattice.dist2(i, j), sigma);
-                den += h * hits[j];
-                num.iter_mut()
-                    .zip(&sums[j * dim..(j + 1) * dim])
-                    .for_each(|(a, s)| *a += h * s);
+                for d in 0..dim {
+                    num[d] += h * sums[j * dim + d];
+                    den[d] += h * counts[j * dim + d];
+                }
             }
-            if den > 1e-12 {
-                let w = &mut self.codebook.weights[i * dim..(i + 1) * dim];
-                w.iter_mut().zip(&num).for_each(|(w, a)| *w = a / den);
+            let w = &mut self.codebook.weights[i * dim..(i + 1) * dim];
+            for d in 0..dim {
+                if den[d] > 1e-12 {
+                    w[d] = num[d] / den[d];
+                }
             }
         }
         self.t += count as u64;
@@ -334,5 +346,38 @@ mod tests {
         // The two that won a sample each sit on it.
         assert_eq!(som.codebook.node(0), &[0.0, 0.2]);
         assert_eq!(som.codebook.node(1), &[0.2, 0.0]);
+    }
+
+    fn single_node(weights: Vec<f32>, dim: usize) -> Som {
+        let lattice = Lattice::new(Kind::Chain, 2, 1).unwrap();
+        let mut weights = weights;
+        // A second node far away, so the first wins every sample.
+        weights.extend(std::iter::repeat_n(1000.0, dim));
+        Som {
+            lattice,
+            codebook: Codebook { dim, weights },
+            schedule: Schedule {
+                steps: 100,
+                alpha: (0.5, 0.5),
+                sigma: (1e-3, 1e-3),
+                decay: Decay::Linear,
+                continuous: false,
+            },
+            t: 0,
+        }
+    }
+
+    #[test]
+    fn online_leaves_missing_dimensions_alone() {
+        let mut som = single_node(vec![0.0, 7.0], 2);
+        som.step_online(&[0.5, f32::NAN], false);
+        assert_eq!(som.codebook.node(0), &[0.25, 7.0]);
+    }
+
+    #[test]
+    fn batch_averages_each_dimension_over_its_own_samples() {
+        let mut som = single_node(vec![1.0, 1.0], 2);
+        som.epoch_batch(&[0.0, 2.0, 4.0, f32::NAN], false);
+        assert_eq!(som.codebook.node(0), &[2.0, 2.0]);
     }
 }

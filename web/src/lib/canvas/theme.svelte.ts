@@ -15,3 +15,8 @@ const themes = {
 export function currentTheme(): Theme {
   return dark.current ? themes.dark : themes.light
 }
+
+/** Whether the dark color scheme is in use; reactive. */
+export function darkScheme(): boolean {
+  return dark.current
+}

@@ -39,6 +39,7 @@
     speed,
     brush,
     show,
+    image = null,
     restart = 0,
     densityReset = 0,
     stepRequest = 0,
@@ -56,6 +57,8 @@
     /** `radius` is a fraction of the sheet. */
     brush: { mode: 'add' | 'erase'; radius: number }
     show: { density: boolean; voronoi: boolean; lattice: boolean; trace: boolean }
+    /** The density for `density === 'image'`: `side`×`side` weights. */
+    image?: { cells: Float32Array; side: number } | null
     /** Changing this value starts the map over. */
     restart?: number
     /** Changing this value puts the density preset back, dropping painted strokes. */
@@ -92,7 +95,8 @@
       const fresh = new wasm.SomLab(c.seed)
       // Density and training have effects of their own.
       untrack(() => {
-        fresh.set_density(density)
+        if (density === 'image' && image) fresh.set_density_cells(image.cells, image.side)
+        else fresh.set_density(density === 'image' ? 'blank' : density)
         fresh.set_training(training)
       })
       lab = fresh
@@ -105,9 +109,15 @@
 
   $effect(() => {
     const d = density
+    const img = image
     void densityReset
     if (!lab) return
-    lab.set_density(d)
+    if (d === 'image') {
+      // Until an image is loaded, the sheet stays empty.
+      if (!img || !lab.set_density_cells(img.cells, img.side)) lab.set_density('blank')
+    } else {
+      lab.set_density(d)
+    }
     lab.restart()
     densityDirty = true
     report()

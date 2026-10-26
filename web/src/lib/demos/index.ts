@@ -23,8 +23,8 @@ export const DEMOS = [
     route: '/kohonen',
     name: 'Kohonen maps',
     blurb:
-      'A grid of neurons unfolds over a density you paint, one Kohonen update at a time, with the twists and errors that come with it.',
-    rust: 'SomLab::step',
+      'Self-organising maps that sort colours into a palette, map the world’s countries by ten indicators from 1992 to 2022, and unfold over a density you paint.',
+    rust: 'SomData::step',
   },
   {
     route: '/point-line',

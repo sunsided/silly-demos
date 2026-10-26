@@ -3,15 +3,19 @@
 
 use crate::rng::Rng;
 
-/// Cells per side.
+/// Cells per side of the presets.
 pub const SIZE: usize = 64;
+
+/// Cells per side a custom density may have.
+pub const MAX_SIDE: usize = 256;
 
 /// Presets keep this far from the edges, so the map stays on the sheet.
 const MARGIN: f32 = 0.05;
 
 #[derive(Clone, Debug)]
 pub struct Density {
-    /// Row-major; row 0 covers y in [0, 1/64).
+    side: usize,
+    /// Row-major; row 0 covers y in [0, 1 / side).
     cells: Vec<f32>,
     /// Running sums of `cells`, rebuilt on the first sample after an edit.
     cumulative: Vec<f32>,
@@ -50,16 +54,41 @@ impl Density {
         };
         let cells = (0..SIZE * SIZE)
             .map(|i| {
-                let (x, y) = centre(i);
+                let (x, y) = centre(SIZE, i);
                 weight(x, y)
             })
             .collect();
         Some(Density {
+            side: SIZE,
             cells,
             cumulative: Vec::new(),
             dirty: true,
             version: 0,
         })
+    }
+
+    /// A density from `side`×`side` non-negative weights, row-major from
+    /// y = 0 (an image's darkness, say). `None` for a side outside 2 to
+    /// [`MAX_SIDE`], the wrong number of cells, or a weight that is negative
+    /// or not finite.
+    pub fn from_cells(side: usize, cells: &[f32]) -> Option<Density> {
+        if !(2..=MAX_SIDE).contains(&side) || cells.len() != side * side {
+            return None;
+        }
+        if cells.iter().any(|c| !c.is_finite() || *c < 0.0) {
+            return None;
+        }
+        Some(Density {
+            side,
+            cells: cells.to_vec(),
+            cumulative: Vec::new(),
+            dirty: true,
+            version: 0,
+        })
+    }
+
+    pub fn side(&self) -> usize {
+        self.side
     }
 
     /// Adds `amount` within `radius` of (x, y), fading smoothly to 0 at the
@@ -72,7 +101,7 @@ impl Density {
             return;
         }
         for (i, cell) in self.cells.iter_mut().enumerate() {
-            let (cx, cy) = centre(i);
+            let (cx, cy) = centre(self.side, i);
             let d = (cx - x).hypot(cy - y);
             if d < radius {
                 let falloff = (1.0 - (d / radius).powi(2)).powi(2);
@@ -116,23 +145,24 @@ impl Density {
             return None;
         }
         let u = rng.next_f32() * total;
+        let side = self.side;
         let i = self
             .cumulative
             .partition_point(|&c| c <= u)
-            .min(SIZE * SIZE - 1);
-        let cell = 1.0 / SIZE as f32;
-        let x = ((i % SIZE) as f32 + rng.next_f32()) * cell;
-        let y = ((i / SIZE) as f32 + rng.next_f32()) * cell;
+            .min(side * side - 1);
+        let cell = 1.0 / side as f32;
+        let x = ((i % side) as f32 + rng.next_f32()) * cell;
+        let y = ((i / side) as f32 + rng.next_f32()) * cell;
         // Rounding can land exactly on 1.
         Some([x.min(1.0 - f32::EPSILON), y.min(1.0 - f32::EPSILON)])
     }
 }
 
-fn centre(i: usize) -> (f32, f32) {
-    let cell = 1.0 / SIZE as f32;
+fn centre(side: usize, i: usize) -> (f32, f32) {
+    let cell = 1.0 / side as f32;
     (
-        ((i % SIZE) as f32 + 0.5) * cell,
-        ((i / SIZE) as f32 + 0.5) * cell,
+        ((i % side) as f32 + 0.5) * cell,
+        ((i / side) as f32 + 0.5) * cell,
     )
 }
 
@@ -231,5 +261,43 @@ mod tests {
         d.paint(0.5, 0.5, 0.1, 1.0);
         assert!(d.version() > v && d.mass() > mass);
         assert_eq!(d.cells().len(), SIZE * SIZE);
+    }
+
+    #[test]
+    fn from_cells_checks_its_input() {
+        assert!(Density::from_cells(1, &[1.0]).is_none());
+        assert!(Density::from_cells(257, &vec![1.0; 257 * 257]).is_none());
+        assert!(Density::from_cells(4, &[1.0; 15]).is_none());
+        assert!(Density::from_cells(2, &[1.0, f32::NAN, 0.0, 0.0]).is_none());
+        assert!(Density::from_cells(2, &[1.0, -1.0, 0.0, 0.0]).is_none());
+        let d = Density::from_cells(128, &vec![0.5; 128 * 128]).unwrap();
+        assert_eq!((d.side(), d.cells().len()), (128, 128 * 128));
+        assert_eq!(Density::preset("uniform").unwrap().side(), SIZE);
+    }
+
+    #[test]
+    fn an_all_white_image_is_an_empty_density() {
+        let mut d = Density::from_cells(8, &[0.0; 64]).unwrap();
+        assert_eq!(d.mass(), 0.0);
+        assert!(d.sample(&mut Rng::new(1)).is_none());
+    }
+
+    #[test]
+    fn custom_density_samples_where_its_mass_is() {
+        let mut cells = [0.0; 16];
+        cells[15] = 1.0;
+        let mut d = Density::from_cells(4, &cells).unwrap();
+        for [x, y] in samples(&mut d, 200) {
+            assert!(x >= 0.75 && y >= 0.75, "({x}, {y})");
+        }
+    }
+
+    #[test]
+    fn paint_works_at_any_side() {
+        let mut d = Density::from_cells(16, &[0.0; 256]).unwrap();
+        d.paint(0.5, 0.5, 0.2, 1.0);
+        assert!(d.mass() > 0.0);
+        let [x, y] = d.sample(&mut Rng::new(3)).unwrap();
+        assert!((x - 0.5).hypot(y - 0.5) < 0.2 + 1.5 / 16.0);
     }
 }
