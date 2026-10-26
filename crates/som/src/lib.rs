@@ -7,5 +7,6 @@
 //! its topology while its weights spread over the data, so neighbouring
 //! nodes end up responsible for neighbouring inputs.
 
+pub mod density;
 pub mod lattice;
 pub mod rng;

@@ -139,7 +139,10 @@ impl Lattice {
                 .flat_map(|i| {
                     let right = (i % self.width + 1 < self.width).then_some(i + 1);
                     let down = (i + self.width < n).then_some(i + self.width);
-                    right.into_iter().chain(down).map(move |j| (i as u32, j as u32))
+                    right
+                        .into_iter()
+                        .chain(down)
+                        .map(move |j| (i as u32, j as u32))
                 })
                 .collect(),
             Kind::Hex => (0..n)
@@ -156,7 +159,9 @@ mod tests {
     use super::*;
 
     fn count_neighbours(l: &Lattice, i: usize) -> usize {
-        (0..l.len()).filter(|&j| j != i && l.neighbours(i, j)).count()
+        (0..l.len())
+            .filter(|&j| j != i && l.neighbours(i, j))
+            .count()
     }
 
     #[test]
