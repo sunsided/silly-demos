@@ -11,6 +11,10 @@ use som::train::Som;
 use som::views;
 use wasm_bindgen::prelude::*;
 
+/// Up to this many rows, a batch epoch covers all of them; above, a fixed
+/// random subset of this many, so an epoch counts the same against the
+/// schedule however many rows there are (an image has tens of thousands).
+const BATCH_ROWS: usize = 2000;
 /// Up to this many rows, the errors are measured on all of them; above,
 /// on a fixed random subset of [`EVAL_SAMPLES`].
 const EVAL_ALL_UP_TO: usize = 2000;
@@ -42,6 +46,7 @@ pub struct SomData {
     raw: Vec<f32>,
     /// The rows normalised, which is what the map trains on.
     data: Vec<f32>,
+    batch: Vec<f32>,
     eval: Vec<f32>,
     history: History,
     errors: (f32, f32),
@@ -78,6 +83,7 @@ impl SomData {
             normaliser: Normaliser::identity(1),
             raw: Vec::new(),
             data: Vec::new(),
+            batch: Vec::new(),
             eval: Vec::new(),
             history: History::new(HISTORY_CAP),
             errors: (0.0, 0.0),
@@ -197,17 +203,8 @@ impl SomData {
             return;
         }
         let dim = self.som.codebook.dim;
-        let rows = self.data.len() / dim;
-        self.eval = if rows <= EVAL_ALL_UP_TO {
-            self.data.clone()
-        } else {
-            (0..EVAL_SAMPLES)
-                .flat_map(|_| {
-                    let i = self.rng.below(rows);
-                    self.data[i * dim..(i + 1) * dim].to_vec()
-                })
-                .collect()
-        };
+        self.batch = self.subset(BATCH_ROWS, BATCH_ROWS);
+        self.eval = self.subset(EVAL_ALL_UP_TO, EVAL_SAMPLES);
         // Initialisations copy rows or fit axes to them; gaps would carry
         // NaN into the weights, so fill them with the column means first.
         let means = Normaliser::fit(&self.data, dim).mean;
@@ -221,7 +218,8 @@ impl SomData {
         self.measure(true);
     }
 
-    /// `n` random rows online or `n` epochs over all rows. Returns how many
+    /// `n` random rows online or `n` batch epochs (over all rows, or a fixed
+    /// subset of 2000 when there are more). Returns how many
     /// were done: fewer once the schedule finishes, 0 without data.
     pub fn step(&mut self, n: u32) -> u32 {
         if self.data.is_empty() {
@@ -241,7 +239,7 @@ impl SomData {
                     }
                 }
                 Training::Batch => {
-                    self.som.epoch_batch(&self.data, false);
+                    self.som.epoch_batch(&self.batch, false);
                     self.measure(true);
                 }
             }
@@ -343,6 +341,22 @@ impl SomData {
 }
 
 impl SomData {
+    /// All rows when there are at most `all_up_to`, otherwise `n` picked at
+    /// random.
+    fn subset(&mut self, all_up_to: usize, n: usize) -> Vec<f32> {
+        let dim = self.som.codebook.dim;
+        let rows = self.data.len() / dim;
+        if rows <= all_up_to {
+            return self.data.clone();
+        }
+        (0..n)
+            .flat_map(|_| {
+                let i = self.rng.below(rows);
+                self.data[i * dim..(i + 1) * dim].to_vec()
+            })
+            .collect()
+    }
+
     /// Fits the normaliser to the raw rows and normalises them.
     fn prepare(&mut self) {
         let dim = self.som.codebook.dim;
@@ -502,6 +516,23 @@ mod tests {
         // Colour data, but normalised: not colours any more.
         assert!(lab.set_data(&uniform_rgb(10, 1), 3));
         assert_eq!(lab.quantize(&[1, 2, 3, 4]), vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn batch_on_many_rows_still_takes_many_epochs() {
+        // An image's pixels outnumber T; a batch epoch over all of them
+        // would end training after one step.
+        let mut lab = SomData::new(1);
+        lab.set_normalise(false);
+        assert!(lab.set_lattice("grid", 8, 8));
+        assert!(lab.set_training("batch"));
+        assert!(lab.set_data(&uniform_rgb(60_000, 3), 3));
+        let mut epochs = 0;
+        while lab.step(1) > 0 {
+            epochs += 1;
+        }
+        assert!(epochs >= 10, "{epochs} epochs");
+        assert!(lab.progress()[5] < 0.1, "TE {}", lab.progress()[5]);
     }
 
     #[test]
