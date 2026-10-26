@@ -170,10 +170,15 @@ fn the_rover_explores_the_floor_and_comes_home() {
     let mut lab = RoverLab::new("explorer");
     let grid = lab.grid();
     let cells = (grid[0] * grid[1]) as usize;
-    while lab.status() != "done" {
+    // A fixed number of 1 s steps, so a clock that stopped advancing can't
+    // keep the loop going.
+    for _ in 0..900 {
+        if lab.status() == "done" {
+            break;
+        }
         lab.step(1.0);
-        assert!(lab.stats()[2] < 900.0, "not done after 900 s");
     }
+    assert_eq!(lab.status(), "done", "not done after 900 s");
     let stats = lab.stats();
     assert!(stats[0] > 0.999, "explored {}", stats[0]);
     assert_eq!(stats[3], 0.0, "frontiers left");
