@@ -1,4 +1,4 @@
-import type { SomLab } from 'silly_demos'
+import type { SomData, SomLab } from 'silly_demos'
 import type { Point } from '../../canvas/canvas.svelte.ts'
 import { arrowhead, cross, rgba } from '../../canvas/draft.ts'
 import type { Theme } from '../../canvas/theme.svelte.ts'
@@ -99,7 +99,7 @@ export interface SomStats {
   history: Float32Array
 }
 
-export function readStats(lab: SomLab): SomStats {
+export function readStats(lab: Pick<SomLab, 'progress' | 'status' | 'history'>): SomStats {
   const [t, steps, alpha, sigma, qe, te] = lab.progress()
   return { t, steps, alpha, sigma, qe, te, status: lab.status() as StatusId, history: lab.history() }
 }
@@ -109,6 +109,18 @@ export function applyConfig(lab: SomLab, c: SomConfig) {
   lab.set_schedule(c.steps, c.alpha[0], c.alpha[1], c.sigma[0], c.sigma[1], c.decay, c.continuous)
   lab.set_init(c.init)
   lab.set_lattice(c.lattice, c.width, c.height)
+  lab.set_seed(c.seed)
+}
+
+/**
+ * Pushes `config` into a data map and starts over. Data maps draw their
+ * nodes as cells, so a chain or ring falls back to a grid.
+ */
+export function applyDataConfig(lab: SomData, c: SomConfig) {
+  lab.set_schedule(c.steps, c.alpha[0], c.alpha[1], c.sigma[0], c.sigma[1], c.decay, c.continuous)
+  lab.set_init(c.init)
+  const kind = c.lattice === 'hex' ? 'hex' : 'grid'
+  lab.set_lattice(kind, c.width, c.height)
   lab.set_seed(c.seed)
 }
 

@@ -10,6 +10,7 @@
   import Legend from '#lib/components/molecules/Legend.svelte'
   import ImagePicker from '#lib/components/molecules/ImagePicker.svelte'
   import MetricChart from '#lib/components/molecules/MetricChart.svelte'
+  import ColourMap from '#lib/components/organisms/ColourMap.svelte'
   import SomCanvas from '#lib/components/organisms/SomCanvas.svelte'
   import SheetLayout from '#lib/components/templates/SheetLayout.svelte'
   import type { Tone } from '#lib/components/types.ts'
@@ -31,7 +32,7 @@
     type SomStats,
     type TrainingId,
   } from '#lib/demos/kohonen/kohonen.ts'
-  import { BUNDLED, loadImage, toDensity } from '#lib/demos/kohonen/image.ts'
+  import { BUNDLED, loadImage, toDensity, toPixels, type Pixels } from '#lib/demos/kohonen/image.ts'
   import WasmGate from '#lib/wasm/WasmGate.svelte'
 
   let mode = $state<ModeId>('unfolding')
@@ -135,6 +136,67 @@
     restart++
   }
 
+  // Colours: random colours or an image's pixels.
+  let colourSource = $state<'rgb' | 'image'>('rgb')
+  let colourImageId = $state('')
+  let colourPixels = $state.raw<Pixels | null>(null)
+  let showUmatrix = $state(false)
+
+  function pickColourImage(img: HTMLImageElement, id: string) {
+    colourPixels = toPixels(img, 256)
+    colourImageId = id
+    imageError = ''
+  }
+
+  /** Sizes and schedules that suit each mode and source; applied on switching. */
+  function dataDefaults(kind: 'grid' | 'hex', w: number, h: number) {
+    lattice = kind
+    ;[gridWidth, gridHeight] = [w, h]
+    init = 'random'
+    steps = 30_000
+    ;[alphaStart, alphaEnd] = [0.5, 0.01]
+    ;[sigmaStart, sigmaEnd] = [Math.max(w, h) / 2, 0.5]
+    decay = 'exp'
+    continuous = false
+    training = 'online'
+    running = true
+  }
+
+  function setColourSource(source: 'rgb' | 'image') {
+    colourSource = source
+    if (source === 'rgb') dataDefaults('grid', 20, 20)
+    else {
+      dataDefaults('grid', 8, 8)
+      if (!colourPixels) {
+        const first = BUNDLED[1]
+        loadImage(first.src).then(
+          img => pickColourImage(img, first.id),
+          () => (imageError = "Couldn't read that image"),
+        )
+      }
+    }
+  }
+
+  function setMode(next: ModeId) {
+    if (next === mode) return
+    mode = next
+    imageError = ''
+    if (next === 'unfolding') pick(SCENARIOS[0])
+    else if (next === 'colours') setColourSource(colourSource)
+    else dataDefaults('hex', 16, 10)
+  }
+
+  const SUMMARIES: Record<ModeId, string> = {
+    unfolding:
+      'A self-organising map is a lattice of nodes, each with a position in input space. Shown a sample, the nearest node and its lattice neighbours move towards it; as the neighbourhood shrinks, the lattice unfolds over the data while keeping its order. Paint the density it learns from by dragging on the sheet.',
+    colours:
+      'Here the input is colour: three numbers per sample. The map can no longer be drawn in input space, so each node is drawn as a cell in its own colour, where it sits on the lattice. Ordering itself, the map lays the colour cube out flat.',
+    countries:
+      'Countries described by ten development indicators, in 1992 and 2022, on one map: neighbouring cells hold countries that are alike across all ten. After Kaski and Kohonen’s 1996 world poverty map.',
+  }
+
+  const dataLattices = LATTICES.filter(l => l.value === 'grid' || l.value === 'hex')
+
   const statusText = { training: 'Training', converged: 'Done', empty: 'No density' }
   let statusTone = $derived<Tone>(({ training: 'cobalt', converged: 'verdigris', empty: 'signal' } as const)[stats.status])
   let progress = $derived(
@@ -144,9 +206,13 @@
 
 <SheetLayout
   title="Kohonen maps"
-  summary="A self-organising map is a lattice of nodes, each with a position in input space. Shown a sample, the nearest node and its lattice neighbours move towards it; as the neighbourhood shrinks, the lattice unfolds over the data while keeping its order. Paint the density it learns from by dragging on the sheet."
+  summary={SUMMARIES[mode]}
   readouts={[
-    { label: 'Status', value: statusText[stats.status], tone: statusTone },
+    {
+      label: 'Status',
+      value: stats.status === 'empty' && mode !== 'unfolding' ? 'No data' : statusText[stats.status],
+      tone: statusTone,
+    },
     { label: 'Samples', value: progress },
     { label: 'α', value: stats.alpha.toFixed(3) },
     { label: 'σ', value: stats.sigma.toFixed(2) },
@@ -173,6 +239,20 @@
             {stepRequest}
             onstats={s => (stats = s)}
           />
+        {:else if mode === 'colours'}
+          <ColourMap
+            {wasm}
+            source={colourSource}
+            pixels={colourPixels}
+            {config}
+            {training}
+            {running}
+            speed={training === 'online' ? onlineSpeed : batchSpeed}
+            {showUmatrix}
+            {restart}
+            {stepRequest}
+            onstats={s => (stats = s)}
+          />
         {:else}
           <StatusMessage>This mode is on its way.</StatusMessage>
         {/if}
@@ -191,7 +271,7 @@
     <ControlGroup title="Mode">
       <Choice
         name="mode"
-        bind:value={mode}
+        bind:value={() => mode, setMode}
         options={MODES.map(m => ({ ...m, detail: m.value === mode ? m.detail : undefined }))}
       />
     </ControlGroup>
@@ -206,8 +286,28 @@
       </ControlGroup>
     {/if}
 
+    {#if mode === 'colours'}
+      <ControlGroup title="Colours">
+        <Choice
+          name="colour-source"
+          bind:value={() => colourSource, setColourSource}
+          options={[
+            { value: 'rgb', label: 'Random colours' },
+            { value: 'image', label: 'An image’s pixels' },
+          ]}
+        />
+        {#if colourSource === 'image'}
+          <ImagePicker selected={colourImageId} onpick={pickColourImage} onerror={m => (imageError = m)} />
+          {#if imageError}
+            <StatusMessage>{imageError}</StatusMessage>
+          {/if}
+        {/if}
+        <Toggle label="Shade by distance to neighbours (U-matrix)" bind:checked={showUmatrix} />
+      </ControlGroup>
+    {/if}
+
     <ControlGroup title="Lattice">
-      <Select label="Kind" bind:value={lattice} options={LATTICES} />
+      <Select label="Kind" bind:value={lattice} options={mode === 'unfolding' ? LATTICES : dataLattices} />
       {#if oneDimensional}
         <Slider label="Nodes" bind:value={nodes} min={3} max={400} />
       {:else}
@@ -274,24 +374,43 @@
   {/snippet}
 
   {#snippet notes()}
-    {#if stats.status === 'empty'}
-      <StatusMessage>Paint some density or pick a preset.</StatusMessage>
+    {#if mode === 'unfolding'}
+      {#if stats.status === 'empty'}
+        <StatusMessage>Paint some density or pick a preset.</StatusMessage>
+      {/if}
+      <MetricChart history={stats.history} />
+      <Legend
+        items={[
+          { tone: 'cobalt', label: 'Lattice; shading is the kernel h' },
+          { tone: 'amber', label: 'Before the last update, and the moves' },
+          { tone: 'signal', label: 'Sample and its best-matching unit' },
+        ]}
+      />
+      {#if scenario}
+        <p><strong>{scenario.label}.</strong> {scenario.note}</p>
+      {/if}
+    {:else}
+      <MetricChart history={stats.history} />
     {/if}
-    <MetricChart history={stats.history} />
-    <Legend
-      items={[
-        { tone: 'cobalt', label: 'Lattice; shading is the kernel h' },
-        { tone: 'amber', label: 'Before the last update, and the moves' },
-        { tone: 'signal', label: 'Sample and its best-matching unit' },
-      ]}
-    />
-    {#if scenario}
-      <p><strong>{scenario.label}.</strong> {scenario.note}</p>
+    {#if mode === 'colours'}
+      <p>
+        Each cell is a node, painted in its own colour. Colours are three numbers, red, green and blue, so the map
+        squeezes a cube onto a sheet: similar colours end up side by side, and where the sheet can't keep a
+        neighbourhood together, the U-matrix shows a ridge.
+      </p>
+      {#if colourSource === 'image'}
+        <p>
+          Trained on an image's pixels, the nodes settle where the image has many pixels of similar colour: the map
+          becomes the image's palette. On the right, every pixel is replaced by its nearest node's colour, so a map of
+          {gridWidth * gridHeight} nodes repaints the image in {gridWidth * gridHeight} colours.
+        </p>
+      {/if}
     {/if}
     <p>
       Quantization error (QE) is the mean distance from a sample to its nearest node: how well the nodes cover the data.
       Topographic error (TE) is the share of samples whose nearest and second-nearest nodes are not lattice
-      neighbours: how often the map's order breaks, at a fold or a twist. Pause and step to see a single update.
+      neighbours: how often the map's order breaks, at a fold or a twist.{#if mode === 'unfolding'}
+        Pause and step to see a single update.{/if}
     </p>
   {/snippet}
 </SheetLayout>
