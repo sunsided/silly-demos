@@ -38,6 +38,10 @@ jobs:
         with:
           tool: wasm-pack
 
+      # The default cargo target is wasm32 (.cargo/config.toml); unit tests run on the host.
+      - name: Unit tests
+        run: cargo test --workspace --lib --target x86_64-unknown-linux-gnu
+
       - name: Build WASM
         run: wasm-pack build --target web
 
@@ -45,6 +49,12 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+
+      - name: WASM tests
+        run: wasm-pack test --node
+
+      - name: Package tests
+        run: node --test 'tests/js/*.test.mjs'
 
       # Yarn 4 comes from corepack, pinned by `packageManager` in web/package.json.
       - name: Enable corepack
