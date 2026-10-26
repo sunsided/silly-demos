@@ -52,7 +52,8 @@ silly-demos/
 │   ├── rover_lab.rs       # WASM bindings for the rover crate
 │   └── vec2.rs            # 2D vector math
 ├── crates/
-│   └── rover/             # Rover simulation: floor plan, laser, mapping, frontiers, planning, controllers
+│   ├── rover/             # Rover simulation: floor plan, laser, mapping, frontiers, planning, controllers
+│   └── som/               # Self-organising maps: lattices, training, error measures, sampling density
 ├── pkg/                   # Generated WebAssembly package (wasm-pack)
 ├── web/                   # SvelteKit frontend (static site)
 │   ├── tokens/tokens.json # Design tokens (W3C DTCG format)
