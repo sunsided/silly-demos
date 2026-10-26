@@ -10,7 +10,9 @@
   import Legend from '#lib/components/molecules/Legend.svelte'
   import ImagePicker from '#lib/components/molecules/ImagePicker.svelte'
   import MetricChart from '#lib/components/molecules/MetricChart.svelte'
+  import PlaneGrid from '#lib/components/molecules/PlaneGrid.svelte'
   import ColourMap from '#lib/components/organisms/ColourMap.svelte'
+  import CountryMap from '#lib/components/organisms/CountryMap.svelte'
   import SomCanvas from '#lib/components/organisms/SomCanvas.svelte'
   import SheetLayout from '#lib/components/templates/SheetLayout.svelte'
   import type { Tone } from '#lib/components/types.ts'
@@ -33,20 +35,21 @@
     type TrainingId,
   } from '#lib/demos/kohonen/kohonen.ts'
   import { BUNDLED, loadImage, toDensity, toPixels, type Pixels } from '#lib/demos/kohonen/image.ts'
+  import { formatValue, type Country, type Planes, type YearView } from '#lib/demos/kohonen/countries.ts'
   import WasmGate from '#lib/wasm/WasmGate.svelte'
 
-  let mode = $state<ModeId>('unfolding')
-  let scenario = $state<Scenario | null>(SCENARIOS[0])
+  let mode = $state<ModeId>('colours')
+  let scenario = $state<Scenario | null>(null)
 
   let lattice = $state<LatticeId>('grid')
   let nodes = $state(60)
-  let gridWidth = $state(12)
-  let gridHeight = $state(12)
+  let gridWidth = $state(20)
+  let gridHeight = $state(20)
   let init = $state<InitId>('random')
-  let steps = $state(20_000)
+  let steps = $state(30_000)
   let alphaStart = $state(0.5)
   let alphaEnd = $state(0.01)
-  let sigmaStart = $state(6)
+  let sigmaStart = $state(10)
   let sigmaEnd = $state(0.5)
   let decay = $state<DecayId>('exp')
   let continuous = $state(false)
@@ -92,9 +95,9 @@
   let stepRequest = $state(0)
   let stats = $state<SomStats>({
     t: 0,
-    steps: 20_000,
+    steps: 30_000,
     alpha: 0.5,
-    sigma: 6,
+    sigma: 10,
     qe: 0,
     te: 0,
     status: 'training',
@@ -147,6 +150,12 @@
     colourImageId = id
     imageError = ''
   }
+
+  // Countries: which year to show, an indicator's plane instead of the U-matrix, what is hovered.
+  let yearView = $state<YearView>('2022')
+  let planeIndex = $state<number | null>(null)
+  let planes = $state.raw<Planes | null>(null)
+  let selection = $state.raw<{ country: Country | null; cell: Country[] }>({ country: null, cell: [] })
 
   /** Sizes and schedules that suit each mode and source; applied on switching. */
   function dataDefaults(kind: 'grid' | 'hex', w: number, h: number) {
@@ -254,7 +263,20 @@
             onstats={s => (stats = s)}
           />
         {:else}
-          <StatusMessage>This mode is on its way.</StatusMessage>
+          <CountryMap
+            {wasm}
+            {config}
+            {training}
+            {running}
+            speed={training === 'online' ? onlineSpeed : batchSpeed}
+            view={yearView}
+            plane={planeIndex}
+            {restart}
+            {stepRequest}
+            onstats={s => (stats = s)}
+            onselect={s => (selection = s)}
+            onplanes={p => (planes = p)}
+          />
         {/if}
       {/snippet}
     </WasmGate>
@@ -303,6 +325,20 @@
           {/if}
         {/if}
         <Toggle label="Shade by distance to neighbours (U-matrix)" bind:checked={showUmatrix} />
+      </ControlGroup>
+    {/if}
+
+    {#if mode === 'countries'}
+      <ControlGroup title="Countries">
+        <Choice
+          name="year"
+          bind:value={yearView}
+          options={[
+            { value: '1992', label: '1992' },
+            { value: '2022', label: '2022' },
+            { value: 'both', label: '1992 → 2022', detail: yearView === 'both' ? 'Arrows from each country’s cell in 1992 to its cell in 2022.' : undefined },
+          ]}
+        />
       </ControlGroup>
     {/if}
 
@@ -392,6 +428,41 @@
     {:else}
       <MetricChart history={stats.history} />
     {/if}
+    {#if mode === 'countries'}
+      {#if selection.country && planes}
+        {@const c = selection.country}
+        <h3>{c.name}</h3>
+        <table class="values">
+          <thead><tr><th></th><th>1992</th><th>2022</th></tr></thead>
+          <tbody>
+            {#each planes.indicators as indicator, k (indicator.code)}
+              <tr>
+                <th>{indicator.name}</th>
+                <td>{formatValue(c.y1992[k], indicator.unit)}</td>
+                <td>{formatValue(c.y2022[k], indicator.unit)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {:else if selection.cell.length > 0}
+        <p><strong>In this cell:</strong> {selection.cell.map(c => c.name).join(', ')}</p>
+      {:else}
+        <p>Hover a cell or a country to see who is where.</p>
+      {/if}
+      {#if planes}
+        <PlaneGrid {planes} bind:selected={planeIndex} />
+      {/if}
+      <p>
+        Each country is a row of ten indicators, once for 1992 and once for 2022, and the map is trained on all of them
+        at once, so a country's two cells can be compared. Neighbouring cells hold countries that are alike across all
+        ten; dark seams in the U-matrix separate groups that differ. The world map colours each country by where its
+        cell sits on the map, as in Kaski and Kohonen's 1996 figure, so similar countries share a colour.
+      </p>
+      <p class="credit">
+        Data: World Bank, World Development Indicators (CC BY 4.0); values nearest 1992 (1990–1995) and 2022
+        (2019–2023). Shapes: Natural Earth (public domain).
+      </p>
+    {/if}
     {#if mode === 'colours'}
       <p>
         Each cell is a node, painted in its own colour. Colours are three numbers, red, green and blue, so the map
@@ -414,3 +485,35 @@
     </p>
   {/snippet}
 </SheetLayout>
+
+<style>
+  h3 {
+    margin: 0 0 var(--space-xs);
+    font-size: var(--font-size-md);
+  }
+
+  .values {
+    width: 100%;
+    margin: 0 0 var(--space-md);
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .values th,
+  .values td {
+    padding: var(--space-3xs) 0;
+    text-align: right;
+    font-weight: var(--font-weight-regular);
+  }
+
+  .values tbody th {
+    text-align: left;
+    color: var(--color-ink-soft);
+  }
+
+  .credit {
+    font-size: var(--font-size-xs);
+    color: var(--color-ink-soft);
+  }
+</style>
