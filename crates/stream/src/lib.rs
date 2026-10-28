@@ -44,6 +44,8 @@ pub enum EventKind {
     Merge,
     /// A cluster that no longer got points was removed.
     Prune,
+    /// A cluster whose points had come apart became two.
+    Split,
 }
 
 impl EventKind {
@@ -53,6 +55,7 @@ impl EventKind {
             EventKind::Spawn => "spawn",
             EventKind::Merge => "merge",
             EventKind::Prune => "prune",
+            EventKind::Split => "split",
         }
     }
 }
@@ -60,10 +63,28 @@ impl EventKind {
 /// Events kept per model; older ones are dropped.
 pub const EVENT_CAP: usize = 64;
 
-/// Appends `event`, dropping the oldest beyond [`EVENT_CAP`].
-pub fn record(events: &mut Vec<Event>, event: Event) {
-    events.push(event);
-    if events.len() > EVENT_CAP {
-        events.remove(0);
+/// A model's events: the recent ones for drawing, and how many of each
+/// kind there have been in all.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Log {
+    /// The newest events, at most [`EVENT_CAP`], oldest first.
+    pub events: Vec<Event>,
+    /// How many spawns, merges, prunes and splits there have been, in that order.
+    pub counts: [u64; 4],
+}
+
+impl Log {
+    /// Records `event`, dropping the oldest beyond [`EVENT_CAP`].
+    pub fn record(&mut self, event: Event) {
+        self.counts[event.kind as usize] += 1;
+        self.events.push(event);
+        if self.events.len() > EVENT_CAP {
+            self.events.remove(0);
+        }
+    }
+
+    /// How many events of `kind` there have been.
+    pub fn count(&self, kind: EventKind) -> u64 {
+        self.counts[kind as usize]
     }
 }

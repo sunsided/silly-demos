@@ -11,11 +11,12 @@
 //! facility farther than √λ from every center becomes a center (as in
 //! DP-means, Kulis and Jordan, 2012), centers move to the weighted mean of
 //! the facilities inside their ball, half the way to the next center, and
-//! two clusters merge when that costs less in squared error than λ saves.
-//! The number of clusters is the one that balances the two.
+//! centers closer than half √λ merge. Clusters holding less than a small
+//! share of the points are dissolved into the rest, so the number of
+//! clusters comes from λ and the data, not from a given k.
 
 use crate::rng::Rng;
-use crate::{Event, EventKind, Point, dist2, record};
+use crate::{Event, EventKind, Log, Point, dist2};
 
 /// What the sketch is tuned by.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -28,8 +29,9 @@ pub struct SketchParams {
     pub growth: f32,
     /// Every weight is multiplied by `1 − decay` per point.
     pub decay: f32,
-    /// The weight a cluster needs to count.
-    pub support: f32,
+    /// The share of the sketch's weight a cluster needs to count; lighter
+    /// ones are dissolved into their neighbors at each refinement.
+    pub share: f32,
     /// Points between two refinements.
     pub every: u64,
 }
@@ -37,18 +39,24 @@ pub struct SketchParams {
 impl Default for SketchParams {
     /// λ 0.02 (a cluster pays for itself once it saves 0.14 in distance per
     /// point), 60 facilities growing their cost by 1.5, the same forgetting
-    /// as the balls, support 10 and a refinement every 200 points.
+    /// as the balls, clusters of at least 2 % of the points and a
+    /// refinement every 200 points.
     fn default() -> Self {
         SketchParams {
             cluster_cost: 0.02,
             cap: 60,
             growth: 1.5,
             decay: 0.0005,
-            support: 10.0,
+            share: 0.02,
             every: 200,
         }
     }
 }
+
+/// The least share of the way a facility moves towards a point it takes.
+/// The mean of everything it ever took (a rate of one over its weight)
+/// would lag far behind a cluster that moves; this floor keeps it close.
+pub const MIN_RATE: f32 = 0.01;
 
 /// The cost of opening a facility at the start; it grows from there.
 const F_START: f32 = 1e-5;
@@ -118,7 +126,7 @@ pub struct Sketch {
     /// Points taken so far.
     t: u64,
     /// Recent spawns, merges and prunes of clusters.
-    pub events: Vec<Event>,
+    pub log: Log,
     /// How the last point was placed.
     pub trace: Option<Trace>,
     /// Distances computed to place points.
@@ -136,7 +144,7 @@ impl Sketch {
             next_id: 0,
             rng: Rng::new(seed),
             t: 0,
-            events: Vec::new(),
+            log: Log::default(),
             trace: None,
             search_checks: 0,
         }
@@ -152,11 +160,9 @@ impl Sketch {
         &self.clusters
     }
 
-    /// The clusters with enough weight to count.
+    /// The clusters. Refinement dissolves the light ones, so they all count.
     pub fn clusters(&self) -> impl Iterator<Item = &Cluster> {
-        self.clusters
-            .iter()
-            .filter(|c| c.weight >= self.params.support)
+        self.clusters.iter()
     }
 
     /// The cost of opening a facility now.
@@ -193,7 +199,7 @@ impl Sketch {
             Some((i, _)) if !opened => {
                 let fac = &mut self.facilities[i];
                 fac.weight += 1.0;
-                let rate = 1.0 / fac.weight;
+                let rate = (1.0 / fac.weight).max(MIN_RATE);
                 fac.center = [
                     fac.center[0] + rate * (x[0] - fac.center[0]),
                     fac.center[1] + rate * (x[1] - fac.center[1]),
@@ -271,7 +277,7 @@ impl Sketch {
                 }
             }
             let next = ball_means(&facs, &assigned, &centers);
-            let merged = merge_cheap(next, lambda);
+            let merged = merge_close(next, lambda);
             let moved = merged.len() != centers.len()
                 || merged
                     .iter()
@@ -282,15 +288,25 @@ impl Sketch {
                 break;
             }
         }
-        // Weights and spreads from the final assignment.
-        let mut weight = vec![0.0f32; centers.len()];
-        let mut spread = vec![0.0f32; centers.len()];
-        for fac in &facs {
-            if let Some((i, d)) = nearest(&centers, fac.center) {
-                weight[i] += fac.weight;
-                spread[i] += fac.weight * d;
+        // Dissolve clusters too light to count, lightest first, into the rest.
+        let total: f32 = facs.iter().map(|f| f.weight).sum();
+        let (weight, spread) = loop {
+            let mut weight = vec![0.0f32; centers.len()];
+            let mut spread = vec![0.0f32; centers.len()];
+            for fac in &facs {
+                if let Some((i, d)) = nearest(&centers, fac.center) {
+                    weight[i] += fac.weight;
+                    spread[i] += fac.weight * d;
+                }
             }
-        }
+            let lightest = (0..centers.len()).min_by(|&a, &b| weight[a].total_cmp(&weight[b]));
+            match lightest {
+                Some(i) if centers.len() > 1 && weight[i] < self.params.share * total => {
+                    centers.remove(i);
+                }
+                _ => break (weight, spread),
+            }
+        };
         let fresh: Vec<(Point, f32, f32)> = (0..centers.len())
             .filter(|&i| weight[i] > 0.0)
             .map(|i| (centers[i], weight[i], spread[i] / weight[i]))
@@ -321,16 +337,11 @@ impl Sketch {
                 None => {
                     let id = self.next_id;
                     self.next_id += 1;
-                    if weight >= self.params.support {
-                        record(
-                            &mut self.events,
-                            Event {
-                                kind: EventKind::Spawn,
-                                at: center,
-                                t: self.t,
-                            },
-                        );
-                    }
+                    self.log.record(Event {
+                        kind: EventKind::Spawn,
+                        at: center,
+                        t: self.t,
+                    });
                     id
                 }
             };
@@ -342,7 +353,7 @@ impl Sketch {
             });
         }
         for (i, o) in old.iter().enumerate() {
-            if owner_of_old[i].is_some() || o.weight < self.params.support {
+            if owner_of_old[i].is_some() {
                 continue;
             }
             // Gone: merged if a new cluster now covers it, pruned otherwise.
@@ -352,14 +363,11 @@ impl Sketch {
             } else {
                 EventKind::Prune
             };
-            record(
-                &mut self.events,
-                Event {
-                    kind,
-                    at: o.center,
-                    t: self.t,
-                },
-            );
+            self.log.record(Event {
+                kind,
+                at: o.center,
+                t: self.t,
+            });
         }
         self.clusters = clusters;
     }
@@ -422,18 +430,17 @@ fn ball_means(facs: &[Facility], assigned: &[usize], centers: &[Point]) -> Vec<(
         .collect()
 }
 
-/// Merges pairs of clusters while some pair costs less than `lambda` to
-/// merge: joining weights a and b at distance d adds ab/(a+b)·d² of
-/// squared error and saves one cluster's price.
-fn merge_cheap(mut clusters: Vec<(Point, f32)>, lambda: f32) -> Vec<(Point, f32)> {
+/// Merges pairs of clusters whose centers are closer than half the
+/// distance √λ at which a facility opens a cluster of its own: two centers
+/// that close describe the same cluster.
+fn merge_close(mut clusters: Vec<(Point, f32)>, lambda: f32) -> Vec<(Point, f32)> {
     loop {
         let mut best: Option<(usize, usize, f32)> = None;
         for i in 0..clusters.len() {
             for j in i + 1..clusters.len() {
-                let (a, b) = (clusters[i], clusters[j]);
-                let cost = a.1 * b.1 / (a.1 + b.1) * dist2(a.0, b.0);
-                if cost < lambda && best.is_none_or(|(_, _, c)| cost < c) {
-                    best = Some((i, j, cost));
+                let d = dist2(clusters[i].0, clusters[j].0);
+                if d < lambda / 4.0 && best.is_none_or(|(_, _, c)| d < c) {
+                    best = Some((i, j, d));
                 }
             }
         }
@@ -482,11 +489,11 @@ mod tests {
     }
 
     #[test]
-    fn a_cheap_merge_is_taken_and_a_dear_one_is_not() {
-        let near = merge_cheap(vec![([0.5, 0.5], 10.0), ([0.52, 0.5], 10.0)], 0.02);
+    fn close_centers_merge_and_far_ones_do_not() {
+        let near = merge_close(vec![([0.5, 0.5], 10.0), ([0.52, 0.5], 10.0)], 0.02);
         assert_eq!(near.len(), 1);
         assert!((near[0].0[0] - 0.51).abs() < 1e-6 && near[0].1 == 20.0);
-        let far = merge_cheap(vec![([0.2, 0.5], 10.0), ([0.8, 0.5], 10.0)], 0.02);
+        let far = merge_close(vec![([0.2, 0.5], 10.0), ([0.8, 0.5], 10.0)], 0.02);
         assert_eq!(far.len(), 2);
     }
 
