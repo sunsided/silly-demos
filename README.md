@@ -25,6 +25,7 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 
 ### Features
 
+- **Clustering Lab**: Points arrive one at a time and are seen once; two methods find the clusters as they come, including how many there are. *Balls* spawn, merge, split and fade, finding the nearest ball by a greedy walk over linked ball neighborhoods (after Xia et al.'s ball k-means) that stays exact; a *sketch* by online facility location is refined by a ball k-means with a price per cluster. Streams of blobs, long thin clusters, rings, moons and a drifting story where clusters move, split, die and appear, or points you paint; both are scored against the true clusters by the adjusted Rand index, beside batch k-means told the true k. The clustering is its own crate, `crates/stream`
 - **Collision Lab**: Pick two shapes (circle, boxes, triangle, convex polygon, ellipse, capsule) and switch between the methods that can test them, from pair-specific shortcuts to SAT and GJK/EPA, each with its own construction drawing, operation counts and timing; a quadtree over a drifting crowd of shapes shows scene-wide pair pruning against brute force
 - **Inverse Kinematics**: A planar arm reaching for a draggable or animated target, solved by FABRIK, CCD, Jacobian transpose or damped least squares, with the remaining error and iterations per frame; optional limits keep the links from crossing and the arm above the floor, rerouting it when it gets stuck
 - **Kohonen Maps**: Self-organizing maps in five modes. *Colors*: a map lays the color cube out flat, or learns an image's palette and repaints the image with it. *Countries*: a recreation of Kaski & Kohonen's 1996 world poverty map, 216 countries by ten World Bank indicators in 1992 and 2022 on one hex map, with U-matrix, component planes, the drift between the two years and a linked world map. *Unfolding*: a chain, ring or grid unfolds over a 2D density you pick, paint or load from an image, trained online or in batch, with a step-by-step view of a single update and scenarios that freeze in a twist or fill a square with a curve. *Tours*: rings that solve the traveling salesman problem, the Kohonen ring, Durbin and Willshaw's elastic net and Angéniol's growing ring, raced against nearest neighbor, 2-opt and an exact solver on TSPLIB classics, random sets, shapes or real cities. *Successors*: the map beside neural gas, growing neural gas with and without utility, and k-means, all learning the same paintable density, so erasing part of it shows which of them move on. The maps are their own crate, `crates/som`; the country data, images, TSPLIB instances and cities are fetched once by scripts in `web/scripts` (World Bank WDI, CC BY 4.0; TSPLIB with attribution to Gerhard Reinelt, Universität Heidelberg; Natural Earth and the images are public domain)
@@ -45,6 +46,7 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 silly-demos/
 ├── src/                   # Rust WebAssembly core
 │   ├── lib.rs             # wasm-bindgen exports
+│   ├── cluster_lab.rs     # WASM bindings for the stream crate: clustering a stream
 │   ├── collision/         # Shapes, collision methods, broadphase, method registry
 │   ├── geometry.rs        # Point/segment geometry
 │   ├── ik.rs              # Inverse kinematics solvers
@@ -58,7 +60,8 @@ silly-demos/
 │   └── vec2.rs            # 2D vector math
 ├── crates/
 │   ├── rover/             # Rover simulation: floor plan, laser, mapping, frontiers, planning, controllers
-│   └── som/               # Self-organizing maps: lattices, training, error measures, sampling density, TSP rings, neural gas, GNG, k-means
+│   ├── som/               # Self-organizing maps: lattices, training, error measures, sampling density, TSP rings, neural gas, GNG, k-means
+│   └── stream/            # Clustering a stream without k: balls, facility-location sketch, ball k-means, scores
 ├── pkg/                   # Generated WebAssembly package (wasm-pack)
 ├── web/                   # SvelteKit frontend (static site)
 │   ├── tokens/tokens.json # Design tokens (W3C DTCG format)
@@ -122,6 +125,7 @@ BASE_PATH=/my-custom-path task build
 ## Available Demos
 
 - **Boids**: Flocking simulation with live controls for every rule and a view of what a single boid perceives
+- **Clustering Lab**: A stream clustered as it arrives, without being told how many clusters, by balls and by a sketch
 - **Collision Lab**: Two shapes, every applicable collision method, its construction and its cost
 - **Inverse Kinematics**: FABRIK, CCD and Jacobian solvers moving a jointed arm onto a target
 - **Voronoi / Delaunay**: Moving points with their Delaunay triangulation and Voronoi diagram
