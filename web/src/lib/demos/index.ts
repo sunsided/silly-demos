@@ -7,6 +7,13 @@ export const DEMOS = [
     rust: 'BoidsSim::step',
   },
   {
+    route: '/clustering',
+    name: 'Clustering lab',
+    blurb:
+      'Points arrive one at a time and two methods find the clusters as they come, without being told how many: balls that spawn, merge, split and fade, and a sketch refined by ball k-means.',
+    rust: 'ClusterLab::step',
+  },
+  {
     route: '/collision',
     name: 'Collision lab',
     blurb:
