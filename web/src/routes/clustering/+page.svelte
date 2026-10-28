@@ -27,7 +27,9 @@
     type SearchCurve,
     type SpaceId,
     type TreeParam,
+    type TreeQuality,
     type TreeStats,
+    type TreeTone,
     type WhichTree,
   } from '#lib/demos/clustering/tree.ts'
   import WasmGate from '#lib/wasm/WasmGate.svelte'
@@ -80,10 +82,10 @@
   let buildRequest = $state(0)
   let treeStats = $state.raw<TreeStats>(emptyTreeStats())
   let treeLab = $state.raw<TreeLab | null>(null)
-  let curves = $state.raw<{ label: string; tone: 'cobalt' | 'verdigris' | 'amber'; curve: SearchCurve }[] | null>(null)
+  let curves = $state.raw<{ label: string; tone: TreeTone; curve: SearchCurve }[] | null>(null)
   let streaming = $derived(treeStats.points < treeStats.total)
 
-  /** Search both trees for the queries' neighbors; a few hundred ms on 20 000 points. */
+  /** Search every tree for the queries' neighbors; a few hundred ms on 20 000 points. */
   function measureSearch() {
     if (!treeLab) return
     curves = TREES.flatMap(({ id, label, tone }) => {
@@ -100,6 +102,10 @@
 
   const pct = (v: number | undefined) => (v === undefined ? '–' : v.toFixed(2))
 
+  /** What a tree did to mend itself: splits that waited and points moved, or repairs. */
+  const mended = (id: WhichTree, q: TreeQuality) =>
+    id === 'careful' ? `${q.deferred} waited, ${q.moved} moved` : id === 'repaired' ? `${q.repairs} repairs` : '–'
+
   const tally = (counts: number[]) =>
     `${counts[0]} spawns, ${counts[1]} merges, ${counts[2]} prunes, ${counts[3]} splits`
   const checks = (m: { search: number; upkeep: number; total: number }) =>
@@ -115,11 +121,13 @@
     ? [
         { label: 'Status', value: !streaming ? 'Done' : running ? 'Streaming' : 'Paused', tone: !streaming ? 'verdigris' : running ? 'cobalt' : 'ink' },
         { label: 'Points', value: `${treeStats.points.toLocaleString()} of ${treeStats.total.toLocaleString()}` },
-        { label: 'Dimensions', value: treeStats.dim },
         { label: 'Topics, online', value: pct(treeStats.quality.online?.levels[0]), tone: 'cobalt' },
-        { label: 'Topics, careful', value: pct(treeStats.quality.careful?.levels[0]), tone: 'verdigris' },
         { label: 'Subtopics, online', value: pct(treeStats.quality.online?.levels[1]), tone: 'cobalt' },
+        { label: 'Topics, careful', value: pct(treeStats.quality.careful?.levels[0]), tone: 'verdigris' },
         { label: 'Subtopics, careful', value: pct(treeStats.quality.careful?.levels[1]), tone: 'verdigris' },
+        { label: 'Topics, repaired', value: pct(treeStats.quality.repaired?.levels[0]), tone: 'signal' },
+        { label: 'Subtopics, repaired', value: pct(treeStats.quality.repaired?.levels[1]), tone: 'signal' },
+        { label: 'Dimensions', value: treeStats.dim },
       ]
     : [
     { label: 'Status', value: running ? 'Streaming' : 'Paused', tone: running ? 'cobalt' : 'ink' },
@@ -283,7 +291,7 @@
       <div class="scroll">
       <table class="values">
         <thead>
-          <tr><th></th><th>Topics</th><th>Subtopics</th><th>Leaves</th><th>Leaf set</th><th>Nodes</th><th>Per point</th><th>Waited / moved</th></tr>
+          <tr><th></th><th>Topics</th><th>Subtopics</th><th>Leaves</th><th>Leaf set</th><th>Nodes</th><th>Per point</th><th>Mended</th></tr>
         </thead>
         <tbody>
           {#each TREES as tree (tree.id)}
@@ -296,8 +304,8 @@
                 <td>{q.levels[2].toFixed(2)}</td>
                 <td>{q.leaves.toFixed(2)}</td>
                 <td>{q.nodes.slice(0, 3).join('/')}</td>
-                <td>{(q.place + q.split + q.recheck).toFixed(0)}{tree.id === 'passes' ? `, ${q.passes} passes` : ''}</td>
-                <td>{tree.id === 'careful' ? `${q.deferred} / ${q.moved}` : '–'}</td>
+                <td>{(q.place + q.split + q.recheck + q.repair).toFixed(0)}{tree.id === 'passes' ? `, ${q.passes} passes` : ''}</td>
+                <td>{mended(tree.id, q)}</td>
               {:else}
                 <td colspan="7">once every point is in</td>
               {/if}
@@ -309,8 +317,8 @@
       <p class="credit">
         Adjusted Rand index of the tree's nodes at depths 1, 2 and 3 against the true topics, subtopics and leaves, and of
         its leaves against the true leaves (6 topics, 24 subtopics, 72 leaves). Nodes per level, and distances computed per
-        point to place it, split nodes and re-check points; for the careful tree, the splits that waited for evidence and the
-        points re-checking moved.
+        point to place it, split nodes, re-check points and decide repairs; for the careful tree, the splits that waited for
+        evidence and the points re-checking moved, and for the repaired tree, its repairs.
       </p>
       <p>
         <strong>Growing online.</strong> A point descends from the root to the nearest child at every node and settles in a
@@ -327,6 +335,15 @@
         that number, and otherwise waits for more points, after ODAC's rule of deciding once the evidence separates the
         options; and it re-checks a few points per point placed, moving those that would now descend elsewhere, after
         SPFresh's LIRE. Waiting is what makes the difference, at several times the splitting cost.
+      </p>
+      <p>
+        <strong>Repairing.</strong> Or a tree splits as fast as the plain one and mends what it got wrong. Every node keeps
+        the count, the mean and the summed squared norms of the points through it, so the squared error of any grouping of
+        siblings follows exactly from theirs, without looking at a point. Each time a node's points have doubled, it
+        re-decides its children from that alone, by the same coarsest-level rule: siblings that turn out to be halves of one
+        cluster are merged, a split that wasn't needed is flattened, a missing level is put in, and a child that took two
+        clusters for one has its children lifted up among its siblings. This costs less than a distance per point. Lower the
+        points before a leaf splits to see the plain and careful trees go wrong early, and the repaired one recover.
       </p>
       <p>
         <strong>Built in passes.</strong> The batch way: cluster all points at the root, then hand each to its nearest child
@@ -450,6 +467,10 @@
 
   .values .tone-amber {
     color: var(--color-amber);
+  }
+
+  .values .tone-signal {
+    color: var(--color-signal);
   }
 
   .credit {

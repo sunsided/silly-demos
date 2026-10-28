@@ -193,12 +193,12 @@ test('the tree lab returns its points, nodes and scores as typed arrays', () => 
   assert.equal(lab.has_passes(), true)
   assert.ok(lab.projected() instanceof Float32Array && lab.projected().length === 4000)
   assert.ok(lab.assignments('online', 1) instanceof Uint32Array)
-  for (const which of ['online', 'careful', 'passes']) {
+  for (const which of ['online', 'careful', 'repaired', 'passes']) {
     const nodes = lab.nodes(which)
     assert.ok(nodes instanceof Float32Array && nodes.length % 8 === 0, which)
     assert.equal(lab.quality(which).length, 9, which)
     assert.equal(lab.search(which).length, 13, which)
-    assert.equal(lab.cost(which).length, 6, which)
+    assert.equal(lab.cost(which).length, 8, which)
   }
   assert.equal(JSON.parse(lab.params()).length, 6)
   lab.free()
