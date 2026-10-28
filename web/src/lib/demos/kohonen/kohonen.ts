@@ -8,7 +8,7 @@ export type InitId = 'random' | 'cluster' | 'pca'
 export type TrainingId = 'online' | 'batch'
 export type DecayId = 'exp' | 'linear'
 export type DensityId = 'uniform' | 'annulus' | 'moons' | 'blobs' | 'lshape' | 'gradient' | 'blank' | 'image'
-export type ModeId = 'unfolding' | 'colours' | 'countries'
+export type ModeId = 'unfolding' | 'colours' | 'countries' | 'tours'
 export type StatusId = 'training' | 'converged' | 'empty'
 
 export const MODES: readonly { value: ModeId; label: string; detail: string }[] = [
@@ -26,6 +26,11 @@ export const MODES: readonly { value: ModeId; label: string; detail: string }[] 
     value: 'unfolding',
     label: 'Unfolding',
     detail: 'A lattice of nodes spreads over a 2D density you pick, paint or load from an image.',
+  },
+  {
+    value: 'tours',
+    label: 'Tours',
+    detail: 'A ring of nodes pulled onto cities until it reads as a travelling salesman’s tour, raced against the classical heuristics.',
   },
 ]
 

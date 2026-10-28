@@ -13,7 +13,9 @@
   import PlaneGrid from '#lib/components/molecules/PlaneGrid.svelte'
   import ColourMap from '#lib/components/organisms/ColourMap.svelte'
   import CountryMap from '#lib/components/organisms/CountryMap.svelte'
+  import RaceTable from '#lib/components/organisms/RaceTable.svelte'
   import SomCanvas from '#lib/components/organisms/SomCanvas.svelte'
+  import TourCanvas from '#lib/components/organisms/TourCanvas.svelte'
   import SheetLayout from '#lib/components/templates/SheetLayout.svelte'
   import type { Tone } from '#lib/components/types.ts'
   import {
@@ -35,8 +37,29 @@
     type TrainingId,
   } from '#lib/demos/kohonen/kohonen.ts'
   import { BUNDLED, loadImage, toDensity, toPixels, type Pixels } from '#lib/demos/kohonen/image.ts'
-  import { formatValue, type Country, type Planes, type YearView } from '#lib/demos/kohonen/countries.ts'
+  import { formatValue, loadWorld, type Country, type Planes, type World, type YearView } from '#lib/demos/kohonen/countries.ts'
+  import {
+    METHODS,
+    MAX_EXACT,
+    customSet,
+    formatGap,
+    formatLength,
+    loadCities,
+    loadTsplib,
+    randomSet,
+    realSet,
+    shapeSet,
+    tsplibSet,
+    type CityData,
+    type CitySet,
+    type CitySourceId,
+    type MethodId,
+    type Param,
+    type TourStats,
+    type TsplibData,
+  } from '#lib/demos/kohonen/tours.ts'
   import WasmGate from '#lib/wasm/WasmGate.svelte'
+  import { loadWasm, type Wasm } from '#lib/wasm/wasm.ts'
 
   let mode = $state<ModeId>('colours')
   let scenario = $state<Scenario | null>(null)
@@ -157,6 +180,91 @@
   let planes = $state.raw<Planes | null>(null)
   let selection = $state.raw<{ country: Country | null; cell: Country[] }>({ country: null, cell: [] })
 
+  // Tours: which cities, which method, and what a race found.
+  let tourWasm = $state.raw<Wasm | null>(null)
+  let tsplib = $state.raw<TsplibData | null>(null)
+  let realCities = $state.raw<CityData | null>(null)
+  let world = $state.raw<World | null>(null)
+  let tourDataError = $state('')
+  let citySource = $state<CitySourceId>('tsplib')
+  let randomKind = $state<'uniform' | 'clusters'>('uniform')
+  let shapeKind = $state<'circle' | 'grid' | 'spiral'>('circle')
+  let cityCount = $state(100)
+  let citySeed = $state(1)
+  let tsplibName = $state('berlin52')
+  let realSetId = $state('europe')
+  let method = $state<MethodId>('elastic')
+  let paramValues = $state<Record<string, number>>({})
+  let paramList = $state.raw<Param[]>([])
+  let tourSpeed = $state(1)
+  let raceRequest = $state(0)
+  let tourStats = $state.raw<TourStats>({ status: 'empty', iterations: 0, length: NaN, readout: NaN })
+
+  $effect(() => {
+    if (mode !== 'tours') return
+    if (!tourWasm) loadWasm().then(m => (tourWasm = m))
+    const fail = () => (tourDataError = "Couldn't load the city data")
+    if (citySource === 'tsplib' && !tsplib) loadTsplib().then(d => (tsplib = d), fail)
+    if (citySource === 'real' && !realCities) {
+      loadCities().then(d => (realCities = d), fail)
+      loadWorld().then(w => (world = w), () => {})
+    }
+  })
+
+  /** The chosen cities, before any edits; null until their data has loaded. */
+  let baseCities = $derived.by((): CitySet | null => {
+    if (!tourWasm) return null
+    if (citySource === 'random') return randomSet(tourWasm, randomKind, cityCount, citySeed)
+    if (citySource === 'shapes') return shapeSet(tourWasm, shapeKind, cityCount)
+    if (citySource === 'tsplib') {
+      const instance = tsplib?.instances.find(i => i.name === tsplibName)
+      return instance ? tsplibSet(instance) : null
+    }
+    const set = realCities?.sets.find(s => s.id === realSetId)
+    return set ? realSet(set) : null
+  })
+
+  // Edits belong to the cities they were made on; choosing others drops them.
+  let edited = $state.raw<{ base: CitySet; set: CitySet } | null>(null)
+  let tourCities = $derived(edited && edited.base === baseCities ? edited.set : baseCities)
+
+  function editCities(xy: Float32Array) {
+    if (!tourWasm || !baseCities || !tourCities) return
+    edited = { base: baseCities, set: customSet(tourWasm, tourCities, xy) }
+  }
+
+  // A race row shows that run's result until the cities or the method change, or it runs again.
+  let raced = $state.raw<{
+    cities: CitySet
+    method: MethodId
+    shape: { ring: Float32Array; tour: Uint32Array }
+  } | null>(null)
+  let overlay = $derived(
+    raced && raced.cities === tourCities && raced.method === method && !running ? raced.shape : null,
+  )
+
+  function setMethod(next: MethodId) {
+    method = next
+    paramValues = {}
+  }
+
+  function pickRaced(next: MethodId, shape: { ring: Float32Array; tour: Uint32Array } | null) {
+    setMethod(next)
+    running = false
+    raced = shape && tourCities ? { cities: tourCities, method: next, shape } : null
+  }
+
+  /** A slider step of about a hundredth of the range, rounded to a readable value. */
+  function paramStep(p: Param) {
+    const raw = (p.max - p.min) / 100
+    const unit = 10 ** Math.floor(Math.log10(raw))
+    return raw / unit >= 5 ? 5 * unit : raw / unit >= 2 ? 2 * unit : unit
+  }
+
+  const tourStatusText = { empty: 'No cities', ready: 'Ready', running: 'Running', done: 'Done', 'too-big': 'Too many cities' }
+  const tourStatusTone = { empty: 'signal', ready: 'ink', running: 'cobalt', done: 'verdigris', 'too-big': 'signal' } as const
+  let methodInfo = $derived(METHODS.find(m => m.value === method))
+
   /** Sizes and schedules that suit each mode and source; applied on switching. */
   function dataDefaults(kind: 'grid' | 'hex', w: number, h: number) {
     lattice = kind
@@ -193,7 +301,13 @@
     imageError = ''
     if (next === 'unfolding') pick(SCENARIOS[0])
     else if (next === 'colours') setColourSource(colourSource)
-    else dataDefaults('hex', 16, 10)
+    else if (next === 'countries') dataDefaults('hex', 16, 10)
+    else {
+      citySource = 'tsplib'
+      tsplibName = 'berlin52'
+      setMethod('elastic')
+      running = false
+    }
   }
 
   const SUMMARIES: Record<ModeId, string> = {
@@ -203,6 +317,8 @@
       'Here the input is colour: three numbers per sample. The map can no longer be drawn in input space, so each node is drawn as a cell in its own colour, where it sits on the lattice. Ordering itself, the map lays the colour cube out flat.',
     countries:
       'Countries described by ten development indicators, in 1992 and 2022, on one map: neighbouring cells hold countries that are alike across all ten. After Kaski and Kohonen’s 1996 world poverty map.',
+    tours:
+      'A ring of nodes laid over a set of cities and pulled onto them until it reads as a tour: neural answers to the travelling salesman problem, after Durbin and Willshaw and after Angéniol, raced against the classical heuristics on the same cities.',
   }
 
   const dataLattices = LATTICES.filter(l => l.value === 'grid' || l.value === 'hex')
@@ -217,7 +333,18 @@
 <SheetLayout
   title="Kohonen maps"
   summary={SUMMARIES[mode]}
-  readouts={[
+  readouts={mode === 'tours'
+    ? [
+        { label: 'Status', value: tourStatusText[tourStats.status], tone: tourStatusTone[tourStats.status] },
+        { label: 'Cities', value: tourCities ? tourCities.xy.length / 2 : 0 },
+        { label: 'Iterations', value: tourStats.iterations.toLocaleString() },
+        { label: 'Length', value: formatLength(tourStats.length, tourCities?.metric ?? 'euclid'), tone: 'amber' },
+        { label: 'Gap to optimum', value: formatGap(tourStats.length, tourCities?.optimum ?? null) },
+        ...(methodInfo?.readout
+          ? [{ label: methodInfo.readout, value: methodInfo.readout === 'Nodes' ? tourStats.readout : tourStats.readout.toFixed(3), tone: 'cobalt' as const }]
+          : []),
+      ]
+    : [
     {
       label: 'Status',
       value: stats.status === 'empty' && mode !== 'unfolding' ? 'No data' : statusText[stats.status],
@@ -263,6 +390,27 @@
             {stepRequest}
             onstats={s => (stats = s)}
           />
+        {:else if mode === 'tours'}
+          {#if tourCities}
+            <TourCanvas
+              {wasm}
+              cities={tourCities}
+              {method}
+              params={paramValues}
+              {seed}
+              {running}
+              speed={tourSpeed}
+              world={tourCities.metric === 'geo' ? world : null}
+              {overlay}
+              {restart}
+              {stepRequest}
+              onstats={s => (tourStats = s)}
+              onparams={p => (paramList = p)}
+              onedit={editCities}
+            />
+          {:else}
+            <StatusMessage>{tourDataError || 'Loading the cities…'}</StatusMessage>
+          {/if}
         {:else}
           <CountryMap
             {wasm}
@@ -343,6 +491,92 @@
       </ControlGroup>
     {/if}
 
+    {#if mode === 'tours'}
+      <ControlGroup title="Cities">
+        <Choice
+          name="city-source"
+          bind:value={citySource}
+          options={[
+            { value: 'tsplib', label: 'TSPLIB classics' },
+            { value: 'random', label: 'Random' },
+            { value: 'shapes', label: 'Shapes' },
+            { value: 'real', label: 'Real cities' },
+          ]}
+        />
+        {#if citySource === 'tsplib'}
+          <Select
+            label="Instance"
+            bind:value={tsplibName}
+            options={(tsplib?.instances ?? []).map(i => ({ value: i.name, label: `${i.name}, ${i.xy.length / 2} cities` }))}
+          />
+        {:else if citySource === 'random'}
+          <Select
+            label="Kind"
+            bind:value={randomKind}
+            options={[
+              { value: 'uniform', label: 'Uniform' },
+              { value: 'clusters', label: 'Clusters' },
+            ]}
+          />
+          <Slider label="Cities" bind:value={cityCount} min={5} max={500} />
+          <ButtonRow>
+            <Button onclick={() => citySeed++}>New cities</Button>
+          </ButtonRow>
+        {:else if citySource === 'shapes'}
+          <Select
+            label="Shape"
+            bind:value={shapeKind}
+            options={[
+              { value: 'circle', label: 'Circle' },
+              { value: 'grid', label: 'Grid' },
+              { value: 'spiral', label: 'Spiral' },
+            ]}
+          />
+          <Slider label="Cities" bind:value={cityCount} min={5} max={500} />
+        {:else}
+          <Select label="Set" bind:value={realSetId} options={(realCities?.sets ?? []).map(s => ({ value: s.id, label: s.label }))} />
+        {/if}
+        {#if tourDataError}
+          <StatusMessage>{tourDataError}</StatusMessage>
+        {/if}
+        {#if tourCities?.editable}
+          <p class="hint">Click to add a city, drag one to move it, Alt-click to remove it.</p>
+        {/if}
+        {#if edited && edited.base === baseCities}
+          <ButtonRow>
+            <Button onclick={() => (edited = null)}>Undo edits</Button>
+          </ButtonRow>
+        {/if}
+      </ControlGroup>
+
+      <ControlGroup title="Method">
+        <Choice
+          name="method"
+          bind:value={() => method, setMethod}
+          options={METHODS.map(m => ({
+            value: m.value,
+            label: m.value === 'exact' ? `${m.label}, ≤ ${MAX_EXACT} cities` : m.label,
+            detail: m.value === method ? m.detail : undefined,
+          }))}
+        />
+        {#each paramList as p (p.id)}
+          <Slider
+            label={p.label}
+            bind:value={() => paramValues[p.id] ?? p.value, v => (paramValues = { ...paramValues, [p.id]: v })}
+            min={p.min}
+            max={p.max}
+            step={paramStep(p)}
+          />
+        {/each}
+        <Slider label="Speed" bind:value={tourSpeed} min={0.25} max={20} step={0.25} format={v => `${v}×`} />
+      </ControlGroup>
+
+      <ControlGroup title="Race">
+        <ButtonRow>
+          <Button onclick={() => raceRequest++}>Race every method</Button>
+        </ButtonRow>
+      </ControlGroup>
+    {:else}
     <ControlGroup title="Lattice">
       <Select label="Kind" bind:value={lattice} options={mode === 'unfolding' ? LATTICES : dataLattices} />
       {#if oneDimensional}
@@ -376,6 +610,7 @@
       <Select label="Decay" bind:value={decay} options={DECAYS} />
       <Toggle label="Continuous (keep learning at the end values)" bind:checked={continuous} />
     </ControlGroup>
+    {/if}
 
     {#if mode === 'unfolding'}
       <ControlGroup title="Density">
@@ -432,8 +667,53 @@
           <p class="credit">Image: <a href={bundled.source}>{bundled.credit}</a>, public domain.</p>
         {/if}
       {/if}
-    {:else}
+    {:else if mode !== 'tours'}
       <MetricChart history={stats.history} />
+    {/if}
+    {#if mode === 'tours'}
+      {#if tourStats.status === 'too-big'}
+        <StatusMessage>The exact solver takes at most {MAX_EXACT} cities.</StatusMessage>
+      {/if}
+      {#if tourCities}
+        {@const shown = tourCities}
+        <WasmGate quiet>
+          {#snippet children(wasm)}
+            <RaceTable
+              {wasm}
+              cities={shown}
+              {seed}
+              request={raceRequest}
+              selected={raced?.method ?? null}
+              onselect={pickRaced}
+            />
+          {/snippet}
+        </WasmGate>
+      {/if}
+      <Legend
+        items={[
+          { tone: 'cobalt', label: 'The ring and its nodes' },
+          { tone: 'amber', label: 'The tour, once settled' },
+          { tone: 'ink', label: 'Cities' },
+        ]}
+      />
+      <p>
+        A ring of nodes is a tour waiting to happen: read the cities in the order of their nearest nodes round the ring
+        and you have one. Kohonen's ring is his self-organising map on a closed chain. Durbin and Willshaw's elastic net
+        (1987) lets every city pull on every node while the ring's tension keeps it short, and Angéniol's ring (1988)
+        grows from a single node, splitting where cities compete for one.
+      </p>
+      <p>
+        They are curiosities today: 2-opt alone usually comes within a few per cent of the optimum, and solvers like LKH
+        and Concorde find or prove optimal tours of thousands of cities. The gap is how much longer a tour is than the
+        shortest one, where that is known: the published optimum of a TSPLIB instance, the exact solution for at most
+        {MAX_EXACT} cities, or the closed form round a circle and over an even grid. Otherwise the race measures against
+        the shortest tour it found.
+      </p>
+      <p class="credit">
+        TSPLIB instances: <a href="http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/">TSPLIB</a>, Gerhard Reinelt,
+        Universität Heidelberg; lengths in its EUC_2D metric. Real cities:
+        <a href="https://www.naturalearthdata.com">Natural Earth</a> (public domain), with lengths along great circles.
+      </p>
     {/if}
     {#if mode === 'countries'}
       {#if selection.country && planes}
@@ -490,12 +770,14 @@
         </p>
       {/if}
     {/if}
+    {#if mode !== 'tours'}
     <p>
       Quantization error (QE) is the mean distance from a sample to its nearest node: how well the nodes cover the data.
       Topographic error (TE) is the share of samples whose nearest and second-nearest nodes are not lattice
       neighbours: how often the map's order breaks, at a fold or a twist.{#if mode === 'unfolding'}
         Pause and step to see a single update.{/if}
     </p>
+    {/if}
   {/snippet}
 </SheetLayout>
 
@@ -522,6 +804,12 @@
 
   .values tbody th {
     text-align: left;
+    color: var(--color-ink-soft);
+  }
+
+  .hint {
+    margin: 0;
+    font-size: var(--font-size-xs);
     color: var(--color-ink-soft);
   }
 
