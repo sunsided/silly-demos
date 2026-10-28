@@ -39,6 +39,3 @@ yarn-error.log*
 
 # Playwright MCP screenshots and snapshots
 .playwright-mcp/
-
-# Playwright MCP snapshots and screenshots
-.playwright-mcp/
