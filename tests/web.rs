@@ -8,7 +8,7 @@
 #![cfg(target_arch = "wasm32")]
 
 use silly_demos::{
-    BoidsParams, BoidsSim, CollisionLab, GeometryTests, IkChain, RoverLab, SomData, SomLab,
+    BoidsParams, BoidsSim, CollisionLab, GeometryTests, IkChain, RoverLab, SomData, SomLab, TspLab,
     VoronoiTests,
 };
 use wasm_bindgen_test::*;
@@ -321,6 +321,50 @@ fn the_country_data_trains_on_wasm32() {
     assert!(lab.progress()[5] < 0.1, "TE {}", lab.progress()[5]);
     assert_eq!(lab.bmus().len(), 2 * countries.len());
     assert!(finite(&lab.codebook()));
+}
+
+/// The elastic net finds berlin52's optimum natively (src/tsp_lab.rs); the
+/// same seed must take the same 7600 iterations to it here.
+#[wasm_bindgen_test]
+fn the_elastic_net_finds_berlin52s_optimum_on_wasm32_as_natively() {
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("../web/static/data/tsplib.json")).unwrap();
+    let berlin = data["instances"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["name"] == "berlin52")
+        .unwrap();
+    let xy: Vec<f32> = berlin["xy"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_f64().unwrap() as f32)
+        .collect();
+    let mut lab = TspLab::new(1);
+    assert!(lab.set_cities(&xy, "tsplib", &[]));
+    assert!(lab.set_method("elastic"));
+    while lab.step(1000) > 0 {}
+    assert_eq!(lab.status(), "done");
+    assert_eq!(lab.length(), 7542.0);
+    assert_eq!(lab.iterations(), 7600.0);
+}
+
+#[wasm_bindgen_test]
+fn tsp_lab_refuses_what_it_cant_use() {
+    let mut lab = TspLab::new(1);
+    assert_eq!(lab.status(), "empty");
+    assert_eq!(lab.step(10), 0);
+    let xy = TspLab::shape("uniform", 14, 1);
+    assert!(lab.set_cities(&xy, "euclid", &[]));
+    assert!(!lab.set_cities(&xy[..4], "euclid", &[]));
+    assert!(!lab.set_cities(&[0.0, 0.0, 1.0, f32::NAN, 2.0, 2.0], "euclid", &[]));
+    assert!(!lab.set_method("lkh"));
+    assert!(!lab.set_param("k", -1.0));
+    assert_eq!(lab.tour().len(), 14, "the 14 cities are kept");
+    assert!(lab.set_method("exact"));
+    assert_eq!(lab.status(), "too-big");
+    assert!(lab.tour().is_empty());
 }
 
 /// On wasm32 `usize` is 32 bits: a grid this size has more cells than it can

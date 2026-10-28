@@ -6,6 +6,7 @@ mod rand;
 mod rover_lab;
 mod som_data;
 mod som_lab;
+mod tsp_lab;
 mod utils;
 mod vec2;
 mod voronoi;
@@ -22,6 +23,7 @@ use crate::vec2::Vec2;
 pub use rover_lab::RoverLab;
 pub use som_data::SomData;
 pub use som_lab::SomLab;
+pub use tsp_lab::TspLab;
 pub use voronoi::VoronoiTests;
 use wasm_bindgen::prelude::*;
 

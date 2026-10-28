@@ -19,7 +19,7 @@ before(async () => {
 })
 
 test('the classes and functions the pages use are exported', () => {
-  for (const name of ['BoidsParams', 'BoidsSim', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'VoronoiTests']) {
+  for (const name of ['BoidsParams', 'BoidsSim', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'TspLab', 'VoronoiTests']) {
     assert.equal(typeof wasm[name], 'function', name)
   }
   assert.equal(typeof wasm.run, 'function')
@@ -117,6 +117,30 @@ test('struct fields read as numbers, and writes reach the simulation', () => {
   for (let i = 0; i < state.length; i += 5) assert.ok(Math.hypot(state[i + 2], state[i + 3]) <= 50 + 1e-3)
   sim.free()
   params.free()
+})
+
+test('the Tours lab takes cities as typed arrays and returns its ring and tour', () => {
+  const xy = wasm.TspLab.shape('circle', 30, 1)
+  assert.ok(xy instanceof Float32Array)
+  assert.equal(xy.length, 60)
+  assert.equal(wasm.TspLab.shape('blob', 30, 1).length, 0)
+  assert.ok(Number.isNaN(wasm.TspLab.shape_optimum('uniform', 30)))
+  const lab = new wasm.TspLab(1)
+  assert.equal(lab.set_cities(xy, 'euclid', new Float32Array()), true)
+  assert.equal(lab.set_method('ring-som'), true)
+  const params = JSON.parse(lab.params())
+  assert.deepEqual(params.map(p => p.id), ['nodes', 'samples', 'alpha', 'sigma'])
+  lab.step(500)
+  assert.equal(lab.status(), 'running')
+  const ring = lab.ring()
+  assert.ok(ring instanceof Float32Array)
+  assert.equal(ring.length, 2 * 60)
+  const tour = lab.tour()
+  assert.ok(tour instanceof Uint32Array)
+  assert.deepEqual([...tour].sort((a, b) => a - b), [...Array(30).keys()])
+  assert.equal(typeof lab.length(), 'number')
+  assert.equal(typeof lab.readout(), 'number')
+  lab.free()
 })
 
 test('a freed object refuses further use instead of touching freed memory', () => {
