@@ -2,15 +2,19 @@
 //! the clusters, including how many there are, have to be found as they
 //! come, without a pass over all the data and without being told `k`.
 //!
-//! Two methods work on the same stream. [`balls`] keeps each cluster as a
-//! ball and spawns, merges and prunes balls as points arrive, checking only
-//! a ball's neighbors. [`sketch`] keeps a one-pass sketch of weighted
+//! Three methods work on the same stream. [`balls`] keeps each cluster as a
+//! ball and spawns, merges, splits and prunes balls as points arrive,
+//! checking only a ball's neighbors; [`ellipses`] does the same with a
+//! covariance per cluster and Mahalanobis distances, so long thin clusters
+//! fit. [`sketch`] keeps a one-pass sketch of weighted
 //! centers by online facility location and refines it into clusters with a
 //! penalized ball k-means, so `k` is what balances error against the cost
 //! of a cluster. [`source`] makes labeled streams to try them on and
 //! [`metrics`] scores them against the labels.
 
 pub mod balls;
+pub mod cov;
+pub mod ellipses;
 pub mod metrics;
 pub mod rng;
 pub mod sketch;
