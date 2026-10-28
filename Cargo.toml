@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0 OR EUPL-1.2"
 edition = "2024"
 
 [workspace]
-members = ["crates/rover", "crates/som", "crates/stream"]
+members = ["crates/ann", "crates/rover", "crates/som", "crates/stream"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -21,6 +21,7 @@ default = ["console_error_panic_hook"]
 console_error_panic_hook = ["dep:console_error_panic_hook"]
 
 [dependencies]
+ann = { path = "crates/ann" }
 rover = { path = "crates/rover" }
 som = { path = "crates/som" }
 stream = { path = "crates/stream" }
@@ -68,4 +69,11 @@ opt-level = 3
 opt-level = 2
 
 [profile.release.package.stream]
+opt-level = 3
+
+# Building the graphs takes millions of distances.
+[profile.dev.package.ann]
+opt-level = 2
+
+[profile.release.package.ann]
 opt-level = 3
