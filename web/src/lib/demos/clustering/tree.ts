@@ -1,7 +1,7 @@
 import type { TreeLab } from 'silly_demos'
 
 export type SpaceId = 'sphere64' | 'plane'
-export type WhichTree = 'online' | 'passes'
+export type WhichTree = 'online' | 'careful' | 'passes'
 
 export const SPACES: readonly { value: SpaceId; label: string; detail: string }[] = [
   {
@@ -17,9 +17,10 @@ export const SPACES: readonly { value: SpaceId; label: string; detail: string }[
   },
 ]
 
-export const TREES: readonly { id: WhichTree; label: string }[] = [
-  { id: 'online', label: 'Grown online' },
-  { id: 'passes', label: 'Built in passes' },
+export const TREES: readonly { id: WhichTree; label: string; tone: 'cobalt' | 'verdigris' | 'amber' }[] = [
+  { id: 'online', label: 'Grown online', tone: 'cobalt' },
+  { id: 'careful', label: 'Grown carefully', tone: 'verdigris' },
+  { id: 'passes', label: 'Built in passes', tone: 'amber' },
 ]
 
 /** Values per node in TreeLab.nodes. */
@@ -51,7 +52,13 @@ export interface TreeQuality {
   place: number
   /** Distances per point to split nodes. */
   split: number
+  /** Distances per point to re-check placed points. */
+  recheck: number
   passes: number
+  /** Splits put off for want of evidence. */
+  deferred: number
+  /** Points moved by re-checking. */
+  moved: number
 }
 
 /** Recall@10 and distances per query at each beam, and what a scan takes. */
@@ -81,7 +88,10 @@ export function readTreeStats(lab: TreeLab): TreeStats {
       leafCount: q[8],
       place: c[0],
       split: c[1],
-      passes: c[2],
+      recheck: c[2],
+      passes: c[3],
+      deferred: c[4],
+      moved: c[5],
     }
   }
   return { points, total, dim, quality }

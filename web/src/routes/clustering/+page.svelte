@@ -76,19 +76,19 @@
   let treeParamList = $state.raw<TreeParam[]>([])
   let depth = $state(1)
   let colorBy = $state<'tree' | 'truth'>('tree')
+  let drawn = $state<WhichTree>('careful')
   let buildRequest = $state(0)
   let treeStats = $state.raw<TreeStats>(emptyTreeStats())
   let treeLab = $state.raw<TreeLab | null>(null)
-  let curves = $state.raw<{ label: string; tone: 'cobalt' | 'amber'; curve: SearchCurve }[] | null>(null)
+  let curves = $state.raw<{ label: string; tone: 'cobalt' | 'verdigris' | 'amber'; curve: SearchCurve }[] | null>(null)
   let streaming = $derived(treeStats.points < treeStats.total)
 
   /** Search both trees for the queries' neighbors; a few hundred ms on 20 000 points. */
   function measureSearch() {
     if (!treeLab) return
-    const tones = { online: 'cobalt', passes: 'amber' } as const
-    curves = TREES.flatMap(({ id, label }) => {
-      const curve = readSearch(treeLab!, id as WhichTree)
-      return curve ? [{ label, tone: tones[id], curve }] : []
+    curves = TREES.flatMap(({ id, label, tone }) => {
+      const curve = readSearch(treeLab!, id)
+      return curve ? [{ label, tone, curve }] : []
     })
   }
 
@@ -116,15 +116,10 @@
         { label: 'Status', value: !streaming ? 'Done' : running ? 'Streaming' : 'Paused', tone: !streaming ? 'verdigris' : running ? 'cobalt' : 'ink' },
         { label: 'Points', value: `${treeStats.points.toLocaleString()} of ${treeStats.total.toLocaleString()}` },
         { label: 'Dimensions', value: treeStats.dim },
-        { label: 'Topics, ARI', value: pct(treeStats.quality.online?.levels[0]), tone: 'cobalt' },
-        { label: 'Leaves, ARI', value: pct(treeStats.quality.online?.leaves), tone: 'cobalt' },
-        { label: 'Nodes', value: treeStats.quality.online ? treeStats.quality.online.nodes.reduce((a, b) => a + b, 1) : 0 },
-        {
-          label: 'Distances per point',
-          value: treeStats.quality.online
-            ? `${treeStats.quality.online.place.toFixed(0)} + ${treeStats.quality.online.split.toFixed(0)}`
-            : '–',
-        },
+        { label: 'Topics, online', value: pct(treeStats.quality.online?.levels[0]), tone: 'cobalt' },
+        { label: 'Topics, careful', value: pct(treeStats.quality.careful?.levels[0]), tone: 'verdigris' },
+        { label: 'Subtopics, online', value: pct(treeStats.quality.online?.levels[1]), tone: 'cobalt' },
+        { label: 'Subtopics, careful', value: pct(treeStats.quality.careful?.levels[1]), tone: 'verdigris' },
       ]
     : [
     { label: 'Status', value: running ? 'Streaming' : 'Paused', tone: running ? 'cobalt' : 'ink' },
@@ -150,6 +145,7 @@
             params={treeParams}
             {depth}
             {colorBy}
+            {drawn}
             {restart}
             {buildRequest}
             onstats={s => (treeStats = s)}
@@ -222,6 +218,11 @@
       </ControlGroup>
 
       <ControlGroup title="Show">
+        <Choice
+          name="drawn"
+          bind:value={drawn}
+          options={TREES.filter(t => t.id !== 'passes').map(t => ({ value: t.id, label: t.label }))}
+        />
         <Slider label="Depth drawn" bind:value={depth} min={1} max={4} />
         <Choice
           name="color-by"
@@ -282,22 +283,23 @@
       <div class="scroll">
       <table class="values">
         <thead>
-          <tr><th></th><th>Topics</th><th>Subtopics</th><th>Leaves</th><th>Leaf set</th><th>Nodes</th><th>Per point</th></tr>
+          <tr><th></th><th>Topics</th><th>Subtopics</th><th>Leaves</th><th>Leaf set</th><th>Nodes</th><th>Per point</th><th>Waited / moved</th></tr>
         </thead>
         <tbody>
           {#each TREES as tree (tree.id)}
             {@const q = treeStats.quality[tree.id]}
             <tr>
-              <th>{tree.label}</th>
+              <th class="tone-{tree.tone}">{tree.label}</th>
               {#if q}
                 <td>{q.levels[0].toFixed(2)}</td>
                 <td>{q.levels[1].toFixed(2)}</td>
                 <td>{q.levels[2].toFixed(2)}</td>
                 <td>{q.leaves.toFixed(2)}</td>
                 <td>{q.nodes.slice(0, 3).join('/')}</td>
-                <td>{(q.place + q.split).toFixed(0)}{tree.id === 'passes' ? `, ${q.passes} passes` : ''}</td>
+                <td>{(q.place + q.split + q.recheck).toFixed(0)}{tree.id === 'passes' ? `, ${q.passes} passes` : ''}</td>
+                <td>{tree.id === 'careful' ? `${q.deferred} / ${q.moved}` : '–'}</td>
               {:else}
-                <td colspan="6">once every point is in</td>
+                <td colspan="7">once every point is in</td>
               {/if}
             </tr>
           {/each}
@@ -307,7 +309,8 @@
       <p class="credit">
         Adjusted Rand index of the tree's nodes at depths 1, 2 and 3 against the true topics, subtopics and leaves, and of
         its leaves against the true leaves (6 topics, 24 subtopics, 72 leaves). Nodes per level, and distances computed per
-        point to place it and to split nodes.
+        point to place it, split nodes and re-check points; for the careful tree, the splits that waited for evidence and the
+        points re-checking moved.
       </p>
       <p>
         <strong>Growing online.</strong> A point descends from the root to the nearest child at every node and settles in a
@@ -315,6 +318,15 @@
         k-means for every number of children up to the cap, keeping the one the Bayesian information criterion likes best,
         squared error against the parameters more children add. So each node finds its own number of children, and placing
         a point costs only the children on its way down, a few dozen distances however many points there are.
+      </p>
+      <p>
+        <strong>Growing carefully.</strong> Left to the criterion, a leaf splits into the finest structure it can see, and the
+        subtopics inside a topic are real clusters too: the root takes seven or eight children for six topics and cuts some
+        in two. The careful tree splits at the coarsest strong level instead, the number of children after which one more
+        would add little next to the average gain so far. It splits only once two random halves of the leaf's points agree on
+        that number, and otherwise waits for more points, after ODAC's rule of deciding once the evidence separates the
+        options; and it re-checks a few points per point placed, moving those that would now descend elsewhere, after
+        SPFresh's LIRE. Waiting is what makes the difference, at several times the splitting cost.
       </p>
       <p>
         <strong>Built in passes.</strong> The batch way: cluster all points at the root, then hand each to its nearest child
@@ -426,6 +438,18 @@
 
   .values tbody th {
     text-align: left;
+  }
+
+  .values .tone-cobalt {
+    color: var(--color-cobalt);
+  }
+
+  .values .tone-verdigris {
+    color: var(--color-verdigris);
+  }
+
+  .values .tone-amber {
+    color: var(--color-amber);
   }
 
   .credit {

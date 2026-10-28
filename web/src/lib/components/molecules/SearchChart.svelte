@@ -11,7 +11,7 @@
     curves,
   }: {
     /** One curve per tree, with the CSS class it is drawn in. */
-    curves: readonly { label: string; tone: 'cobalt' | 'amber'; curve: SearchCurve }[]
+    curves: readonly { label: string; tone: 'cobalt' | 'verdigris' | 'amber'; curve: SearchCurve }[]
   } = $props()
 
   const WIDTH = 300
@@ -109,12 +109,20 @@
     stroke: var(--color-amber);
   }
 
+  polyline.tone-verdigris {
+    stroke: var(--color-verdigris);
+  }
+
   circle.tone-cobalt {
     fill: var(--color-cobalt);
   }
 
   circle.tone-amber {
     fill: var(--color-amber);
+  }
+
+  circle.tone-verdigris {
+    fill: var(--color-verdigris);
   }
 
   figcaption {
@@ -157,5 +165,9 @@
 
   th.tone-amber {
     color: var(--color-amber);
+  }
+
+  th.tone-verdigris {
+    color: var(--color-verdigris);
   }
 </style>
