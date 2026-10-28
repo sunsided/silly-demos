@@ -2,6 +2,7 @@
 //! collision lab, point-line test, boids, IK chain, Voronoi, Kohonen and rover labs.
 
 mod boids;
+mod cluster_lab;
 mod collision;
 mod geometry;
 mod ik;
@@ -24,6 +25,7 @@ use crate::collision::scene::{self, Crowd, SceneStats};
 use crate::collision::shape::{Body, Shape, ShapeKind};
 use crate::utils::set_panic_hook;
 use crate::vec2::Vec2;
+pub use cluster_lab::ClusterLab;
 pub use rover_lab::RoverLab;
 pub use som_data::SomData;
 pub use som_lab::SomLab;

@@ -8,8 +8,8 @@
 #![cfg(target_arch = "wasm32")]
 
 use silly_demos::{
-    BoidsParams, BoidsSim, CollisionLab, GeometryTests, IkChain, RoverLab, SomData, SomLab,
-    SuccessorLab, TspLab, VoronoiTests,
+    BoidsParams, BoidsSim, ClusterLab, CollisionLab, GeometryTests, IkChain, RoverLab, SomData,
+    SomLab, SuccessorLab, TspLab, VoronoiTests,
 };
 use wasm_bindgen_test::*;
 
@@ -386,6 +386,22 @@ fn growing_gas_with_utility_follows_an_erased_half_on_wasm32() {
     assert!(left("gng-u") <= 3, "GNG-U keeps {}", left("gng-u"));
     assert!(lab.errors("kmeans")[1].is_nan());
     assert!(lab.weights("lvq").is_empty());
+}
+
+/// The clustering lab finds the five blobs on wasm32, and the drifting
+/// story's split, as it does natively.
+#[wasm_bindgen_test]
+fn the_stream_is_clustered_on_wasm32_as_natively() {
+    let mut lab = ClusterLab::new(1);
+    lab.step(8000);
+    let s = lab.stats();
+    assert_eq!(&s[1..4], &[5.0, 5.0, 5.0], "true, balls, sketch");
+    assert!(lab.set_scenario("drift"));
+    lab.step(11_500);
+    assert!(lab.event_counts("balls")[3] > 0.0, "a split");
+    assert!(!lab.set_scenario("spiral"));
+    assert!(lab.assignments("kmeans").is_empty());
+    assert!(!lab.paint(2.0, 0.5));
 }
 
 /// On wasm32 `usize` is 32 bits: a grid this size has more cells than it can

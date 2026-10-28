@@ -19,7 +19,7 @@ before(async () => {
 })
 
 test('the classes and functions the pages use are exported', () => {
-  for (const name of ['BoidsParams', 'BoidsSim', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'SuccessorLab', 'TspLab', 'VoronoiTests']) {
+  for (const name of ['BoidsParams', 'BoidsSim', 'ClusterLab', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'SuccessorLab', 'TspLab', 'VoronoiTests']) {
     assert.equal(typeof wasm[name], 'function', name)
   }
   assert.equal(typeof wasm.run, 'function')
@@ -159,6 +159,28 @@ test('the Successors lab returns each model as typed arrays', () => {
   assert.ok(Number.isNaN(lab.errors('kmeans')[1]))
   assert.equal(lab.weights('lvq').length, 0)
   assert.equal(lab.status(), 'training')
+  lab.free()
+})
+
+test('the clustering lab returns points, clusters and traces as typed arrays and JSON', () => {
+  const lab = new wasm.ClusterLab(1)
+  lab.step(500)
+  const points = lab.points()
+  assert.ok(points instanceof Float32Array)
+  assert.equal(points.length, 500 * 4)
+  const assigned = lab.assignments('balls')
+  assert.ok(assigned instanceof Uint32Array)
+  assert.equal(assigned.length, 500)
+  for (const model of ['balls', 'sketch']) {
+    const clusters = lab.clusters(model)
+    assert.ok(clusters instanceof Float32Array && clusters.length % 6 === 0, model)
+    assert.equal(typeof JSON.parse(lab.trace(model)).point[0], 'number', model)
+    assert.equal(lab.event_counts(model).length, 4, model)
+  }
+  assert.ok(lab.facilities() instanceof Float32Array)
+  assert.equal(lab.history().length % 7, 0)
+  assert.equal(JSON.parse(lab.params()).length, 11)
+  assert.equal(lab.paint(0.5, 0.5), true)
   lab.free()
 })
 
