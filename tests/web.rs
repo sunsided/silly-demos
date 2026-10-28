@@ -9,7 +9,7 @@
 
 use silly_demos::{
     BoidsParams, BoidsSim, ClusterLab, CollisionLab, GeometryTests, IkChain, RoverLab, SomData,
-    SomLab, SuccessorLab, TreeLab, TspLab, VoronoiTests,
+    SomLab, SuccessorLab, TreeLab, TspLab, VectorLab, VoronoiTests,
 };
 use wasm_bindgen_test::*;
 
@@ -433,6 +433,29 @@ fn a_tree_of_clusters_grows_on_wasm32() {
     let s = lab.search("online");
     assert!(s[10] > 0.95 && s[11] < s[12] / 5.0, "beam 8: {s:?}");
     assert!(!lab.set_space("torus"));
+}
+
+/// Every index is built over embeddings on wasm32 and finds nearly all
+/// neighbors for a fraction of a scan.
+#[wasm_bindgen_test]
+fn the_nearest_neighbor_indexes_are_built_and_searched_on_wasm32() {
+    let mut lab = VectorLab::new(1);
+    assert!(lab.set_param("points", 5000.0));
+    while lab.step(2000) > 0 {}
+    assert_eq!(lab.phase(), "done");
+    for which in ["hnsw", "spfresh", "pq", "vamana", "tree"] {
+        let s = lab.search(which);
+        let best = s
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|p| p[1])
+            .fold(0.0, f32::max);
+        assert!(best > 0.9 && s[s.len() - 1] == 5000.0, "{which}: {s:?}");
+        let t = lab.trace(which, 0, lab.efforts(which)[0]);
+        assert!(t.len() > 1 + t[0] as usize, "{which}");
+    }
+    assert!(!lab.set_param("alpha", 3.0));
 }
 
 /// On wasm32 `usize` is 32 bits: a grid this size has more cells than it can

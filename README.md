@@ -32,6 +32,7 @@ See the demos at <https://sunsided.github.io/silly-demos/>
 - **Rover Exploration**: A differential-drive rover with a 240° laser scanner maps a floor plan it has never seen, clearing the fog of war; a frontier explorer plans to the nearest frontier by travel distance and drives home when none is left, next to a port of the reactive controller from a 2013 university lab. The simulation is its own crate, `crates/rover`
 - **Point-Line Distance Demo**: Visualizes the shortest distance from a point to a line segment
 - **Boids Simulation**: Reynolds flocking (separation, alignment, cohesion) with field of view, look-ahead edge avoidance and a spatial grid for neighbor lookups; the flock state lives in WASM
+- **Vector Search Lab**: The same mock embeddings streamed into five nearest-neighbor indexes, all measured by recall@10 against the distances a query computes: HNSW's layered graph and an inverted file whose postings split online with SPFresh's LIRE rebalancing, both grown point by point beside the repaired tree of clusters; then IVF-PQ, compressing each vector to 8 bytes of product-quantization codes, and DiskANN's Vamana graph, built in passes once every point is in. One search through the chosen index is drawn, every point it compared the query with, what it found and the true neighbors, beside build cost and memory per point. The indexes are their own crate, `crates/ann`
 - **Voronoi / Delaunay**: Interactive Voronoi diagram / Delaunay triangulation
 - **Real-time Visualization**: Interactive demos drawn on HTML5 Canvas from Svelte 5 components
 - **High Performance**: Rust WebAssembly core for computational heavy lifting
@@ -48,6 +49,7 @@ silly-demos/
 │   ├── lib.rs             # wasm-bindgen exports
 │   ├── cluster_lab.rs     # WASM bindings for the stream crate: clustering a stream
 │   ├── tree_lab.rs        # WASM bindings for the stream crate: a tree of clusters from embeddings
+│   ├── vector_lab.rs      # WASM bindings for the ann crate: nearest-neighbor indexes compared
 │   ├── collision/         # Shapes, collision methods, broadphase, method registry
 │   ├── geometry.rs        # Point/segment geometry
 │   ├── ik.rs              # Inverse kinematics solvers
@@ -60,6 +62,7 @@ silly-demos/
 │   ├── tsp_lab.rs         # WASM bindings for the som crate: TSP tours
 │   └── vec2.rs            # 2D vector math
 ├── crates/
+│   ├── ann/               # Nearest-neighbor indexes: HNSW, an inverted file split online (SPFresh), IVF-PQ, Vamana
 │   ├── rover/             # Rover simulation: floor plan, laser, mapping, frontiers, planning, controllers
 │   ├── som/               # Self-organizing maps: lattices, training, error measures, sampling density, TSP rings, neural gas, GNG, k-means
 │   └── stream/            # Clustering a stream without k: balls, ellipses, facility-location sketch, ball k-means, a tree of clusters, scores

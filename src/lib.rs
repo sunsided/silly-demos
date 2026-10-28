@@ -1,5 +1,6 @@
 //! WASM entry point for the silly demos: the bindings JS calls for the
-//! collision lab, point-line test, boids, IK chain, Voronoi, Kohonen and rover labs.
+//! collision lab, point-line test, boids, IK chain, Voronoi, Kohonen, rover,
+//! clustering and vector search labs.
 
 mod boids;
 mod cluster_lab;
@@ -15,6 +16,7 @@ mod tree_lab;
 mod tsp_lab;
 mod utils;
 mod vec2;
+mod vector_lab;
 mod voronoi;
 
 use crate::collision::broadphase::{QUADTREE, Stage};
@@ -33,6 +35,7 @@ pub use som_lab::SomLab;
 pub use successor_lab::SuccessorLab;
 pub use tree_lab::TreeLab;
 pub use tsp_lab::TspLab;
+pub use vector_lab::VectorLab;
 pub use voronoi::VoronoiTests;
 use wasm_bindgen::prelude::*;
 
