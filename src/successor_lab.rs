@@ -42,6 +42,8 @@ struct Param {
     min: f32,
     /// The most it may be.
     max: f32,
+    /// A slider step that lands on the default from the minimum.
+    step: f32,
     /// Takes effect at once instead of starting over.
     live: bool,
 }
@@ -57,6 +59,7 @@ const PARAMS: [Param; 9] = [
         default: 0.5,
         min: 0.05,
         max: 1.0,
+        step: 0.05,
         live: false,
     },
     Param {
@@ -66,6 +69,7 @@ const PARAMS: [Param; 9] = [
         default: 0.5,
         min: 0.05,
         max: 1.0,
+        step: 0.05,
         live: false,
     },
     Param {
@@ -75,6 +79,7 @@ const PARAMS: [Param; 9] = [
         default: 0.5,
         min: 0.05,
         max: 1.0,
+        step: 0.05,
         live: false,
     },
     Param {
@@ -84,6 +89,7 @@ const PARAMS: [Param; 9] = [
         default: 0.5,
         min: 0.02,
         max: 1.0,
+        step: 0.02,
         live: false,
     },
     Param {
@@ -93,6 +99,7 @@ const PARAMS: [Param; 9] = [
         default: 300.0,
         min: 20.0,
         max: 2000.0,
+        step: 10.0,
         live: true,
     },
     Param {
@@ -102,6 +109,7 @@ const PARAMS: [Param; 9] = [
         default: 88.0,
         min: 5.0,
         max: 500.0,
+        step: 1.0,
         live: true,
     },
     Param {
@@ -111,6 +119,7 @@ const PARAMS: [Param; 9] = [
         default: 0.05,
         min: 0.001,
         max: 0.3,
+        step: 0.001,
         live: true,
     },
     Param {
@@ -120,6 +129,7 @@ const PARAMS: [Param; 9] = [
         default: 0.0006,
         min: 0.0,
         max: 0.02,
+        step: 0.0001,
         live: true,
     },
     Param {
@@ -129,6 +139,7 @@ const PARAMS: [Param; 9] = [
         default: 3.0,
         min: 1.0,
         max: 20.0,
+        step: 0.1,
         live: true,
     },
 ];
@@ -383,7 +394,7 @@ impl SuccessorLab {
     }
 
     /// The method parameters as JSON: `[{ "id", "model", "label", "value",
-    /// "default", "min", "max", "live" }]`; `model` "gng" covers both
+    /// "default", "min", "max", "step", "live" }]`; `model` "gng" covers both
     /// growing gases, and `live` ones apply without starting over.
     pub fn params(&self) -> String {
         let rows: Vec<String> = PARAMS
@@ -391,8 +402,8 @@ impl SuccessorLab {
             .zip(&self.values)
             .map(|(p, v)| {
                 format!(
-                    r#"{{"id":"{}","model":"{}","label":"{}","value":{v},"default":{},"min":{},"max":{},"live":{}}}"#,
-                    p.id, p.model, p.label, p.default, p.min, p.max, p.live
+                    r#"{{"id":"{}","model":"{}","label":"{}","value":{v},"default":{},"min":{},"max":{},"step":{},"live":{}}}"#,
+                    p.id, p.model, p.label, p.default, p.min, p.max, p.step, p.live
                 )
             })
             .collect();
@@ -770,6 +781,15 @@ mod tests {
             lab.params()
                 .contains(r#""id":"gng.age","model":"gng","label":"Edge age limit","value":88"#)
         );
+    }
+
+    #[test]
+    fn every_default_lies_on_its_slider_steps() {
+        for p in &PARAMS {
+            let k = (p.default - p.min) / p.step;
+            assert!((k - k.round()).abs() < 1e-3, "{}: {k} steps", p.id);
+            assert!((p.min..=p.max).contains(&p.default), "{}", p.id);
+        }
     }
 
     #[test]
