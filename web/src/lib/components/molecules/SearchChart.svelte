@@ -178,4 +178,8 @@
   th.tone-verdigris {
     color: var(--color-verdigris);
   }
+
+  th.tone-signal {
+    color: var(--color-signal);
+  }
 </style>
