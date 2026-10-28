@@ -9,7 +9,7 @@
 
 use silly_demos::{
     BoidsParams, BoidsSim, ClusterLab, CollisionLab, GeometryTests, IkChain, RoverLab, SomData,
-    SomLab, SuccessorLab, TspLab, VoronoiTests,
+    SomLab, SuccessorLab, TreeLab, TspLab, VoronoiTests,
 };
 use wasm_bindgen_test::*;
 
@@ -410,6 +410,24 @@ fn the_stream_is_clustered_on_wasm32_as_natively() {
     assert!(!lab.set_scenario("spiral"));
     assert!(lab.assignments("kmeans").is_empty());
     assert!(!lab.paint(2.0, 0.5));
+}
+
+/// A tree grows from 64-dimensional embeddings on wasm32 and finds the
+/// topics, and a beam search through it beats a scan.
+#[wasm_bindgen_test]
+fn a_tree_of_clusters_grows_on_wasm32() {
+    let mut lab = TreeLab::new(1);
+    assert!(lab.set_param("points", 10_000.0));
+    while lab.step(5000) > 0 {}
+    assert!(lab.has_passes());
+    assert!(
+        lab.quality("online")[0] > 0.85,
+        "topics {:?}",
+        lab.quality("online")
+    );
+    let s = lab.search("online");
+    assert!(s[10] > 0.95 && s[11] < s[12] / 5.0, "beam 8: {s:?}");
+    assert!(!lab.set_space("torus"));
 }
 
 /// On wasm32 `usize` is 32 bits: a grid this size has more cells than it can
