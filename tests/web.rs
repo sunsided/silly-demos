@@ -8,7 +8,8 @@
 #![cfg(target_arch = "wasm32")]
 
 use silly_demos::{
-    BoidsParams, BoidsSim, CollisionLab, GeometryTests, IkChain, RoverLab, VoronoiTests,
+    BoidsParams, BoidsSim, CollisionLab, GeometryTests, IkChain, RoverLab, SomData, SomLab,
+    VoronoiTests,
 };
 use wasm_bindgen_test::*;
 
@@ -209,6 +210,117 @@ fn the_reactive_rover_moves_and_bad_inputs_are_harmless() {
     assert_eq!(lab.ranges().len(), 121);
     lab.reset();
     assert_eq!(lab.stats()[2], 0.0);
+}
+
+#[wasm_bindgen_test]
+fn the_unfolding_scenarios_behave_on_wasm32_as_natively() {
+    // Classic unfold: a 12×12 grid orders itself.
+    let mut classic = SomLab::new(1);
+    while classic.step(1000) > 0 {}
+    assert_eq!(classic.status(), "converged");
+    assert!(classic.progress()[5] < 0.05, "TE {}", classic.progress()[5]);
+    // Bow-tie, as the page sets it up: seed 17 freezes a twist in. The page
+    // relies on runs being the same on every target.
+    let mut bow_tie = SomLab::new(17);
+    assert!(bow_tie.set_schedule(10_000, 0.5, 0.01, 1.0, 0.3, "exp", false));
+    assert!(bow_tie.set_init("cluster"));
+    while bow_tie.step(1000) > 0 {}
+    assert!(bow_tie.progress()[5] > 0.1, "TE {}", bow_tie.progress()[5]);
+    // The history keeps its newest point.
+    let h = classic.history();
+    assert_eq!(h[h.len() - 3], 20_000.0);
+}
+
+#[wasm_bindgen_test]
+fn som_lab_refuses_what_it_cant_use() {
+    let mut lab = SomLab::new(1);
+    lab.step(10);
+    let before = lab.weights();
+    assert!(!lab.set_lattice("grid", 30, 30));
+    assert!(!lab.set_lattice("ring", 2, 1));
+    assert!(!lab.set_schedule(1000, 1.5, 0.01, 6.0, 0.5, "exp", false));
+    assert!(!lab.set_density_cells(&[1.0; 15], 4));
+    assert!(!lab.set_density_cells(&[f32::NAN; 16], 4));
+    assert_eq!(lab.weights(), before);
+    // An all-white image is an empty density, not an error.
+    assert!(lab.set_density_cells(&[0.0; 16], 4));
+    assert_eq!((lab.status().as_str(), lab.step(10)), ("empty", 0));
+    lab.paint(0.5, 0.5, 0.2, 1.0);
+    assert_eq!(lab.status(), "training");
+    assert!(finite(&lab.weights()) && finite(&lab.voronoi()));
+}
+
+#[wasm_bindgen_test]
+fn a_colour_map_orders_itself_and_repaints_pixels() {
+    let mut lab = SomData::new(1);
+    assert_eq!(lab.status(), "empty");
+    lab.set_normalise(false);
+    assert!(lab.set_lattice("grid", 10, 10));
+    // A fixed spread of colours over the cube.
+    let colours: Vec<f32> = (0..2000u32)
+        .flat_map(|i| {
+            [
+                (i * 37 % 256) as f32,
+                (i * 91 % 256) as f32,
+                (i * 173 % 256) as f32,
+            ]
+        })
+        .collect();
+    assert!(lab.set_data(&colours, 3));
+    while lab.step(1000) > 0 {}
+    assert!(lab.progress()[5] < 0.1, "TE {}", lab.progress()[5]);
+    let out = lab.quantize(&[10, 200, 30, 99, 250, 250, 250, 7]);
+    assert_eq!(out.len(), 8);
+    assert_eq!((out[3], out[7]), (99, 7));
+    assert_eq!(lab.hits().iter().sum::<u32>(), 2000);
+    assert_eq!(lab.umatrix().len(), 100);
+}
+
+#[wasm_bindgen_test]
+fn som_data_refuses_what_it_cant_use() {
+    let mut lab = SomData::new(1);
+    assert!(!lab.set_data(&[1.0, 2.0, 3.0], 2));
+    assert!(!lab.set_data(&[f32::INFINITY, 1.0], 2));
+    assert!(!lab.set_data(&[f32::NAN, f32::NAN], 2));
+    assert!(!lab.set_lattice("chain", 10, 1));
+    assert_eq!(lab.step(10), 0);
+    assert!(lab.codebook().is_empty() && lab.plane(0).is_empty() && lab.bmus().is_empty());
+}
+
+#[wasm_bindgen_test]
+fn the_country_data_trains_on_wasm32() {
+    let json: serde_json::Value =
+        serde_json::from_str(include_str!("../web/static/data/countries.json")).unwrap();
+    let logs: Vec<bool> = json["indicators"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["log"].as_bool().unwrap())
+        .collect();
+    let countries = json["countries"].as_array().unwrap();
+    let rows: Vec<f32> = ["y1992", "y2022"]
+        .iter()
+        .flat_map(|year| countries.iter().map(move |c| &c[*year]))
+        .flat_map(|values| {
+            values
+                .as_array()
+                .unwrap()
+                .iter()
+                .zip(&logs)
+                .map(|(v, &log)| match v.as_f64() {
+                    Some(v) if log => (v as f32).log10(),
+                    Some(v) => v as f32,
+                    None => f32::NAN,
+                })
+        })
+        .collect();
+    let mut lab = SomData::new(1);
+    assert!(lab.set_lattice("hex", 16, 10));
+    assert!(lab.set_data(&rows, logs.len() as u32));
+    while lab.step(1000) > 0 {}
+    assert!(lab.progress()[5] < 0.1, "TE {}", lab.progress()[5]);
+    assert_eq!(lab.bmus().len(), 2 * countries.len());
+    assert!(finite(&lab.codebook()));
 }
 
 /// On wasm32 `usize` is 32 bits: a grid this size has more cells than it can

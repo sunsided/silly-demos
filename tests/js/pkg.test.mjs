@@ -19,7 +19,7 @@ before(async () => {
 })
 
 test('the classes and functions the pages use are exported', () => {
-  for (const name of ['BoidsParams', 'BoidsSim', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'VoronoiTests']) {
+  for (const name of ['BoidsParams', 'BoidsSim', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'VoronoiTests']) {
     assert.equal(typeof wasm[name], 'function', name)
   }
   assert.equal(typeof wasm.run, 'function')
@@ -47,6 +47,32 @@ test('numeric arrays come back as typed-array copies', () => {
   for (const m of more) m.free()
   const tris = wasm.VoronoiTests.delaunay_indices(wasm.VoronoiTests.voronoi_create_points(20, 400, 300, 1, 10))
   assert.ok(tris instanceof Uint32Array && tris.length % 3 === 0)
+  lab.free()
+})
+
+test('the Kohonen labs take and return the typed arrays the pages use', () => {
+  // The pages hand over pixels as Uint8ClampedArray and rows as Float32Array.
+  const data = new wasm.SomData(1)
+  data.set_normalise(false)
+  assert.ok(data.set_lattice('grid', 4, 4))
+  assert.ok(data.set_data(Float32Array.from({ length: 300 }, (_, i) => (i * 37) % 256), 3))
+  data.step(500)
+  assert.ok(data.codebook() instanceof Float32Array && data.codebook().length === 48)
+  assert.ok(data.bmus() instanceof Uint32Array && data.bmus().length === 100)
+  assert.ok(data.hits() instanceof Uint32Array)
+  const pixels = new Uint8ClampedArray([10, 20, 30, 255, 200, 100, 50, 128])
+  const out = data.quantize(new Uint8Array(pixels))
+  assert.ok(out instanceof Uint8Array && out.length === 8)
+  assert.equal(out[7], 128)
+  data.free()
+
+  const lab = new wasm.SomLab(1)
+  assert.ok(lab.set_density_cells(new Float32Array(16).fill(1), 4))
+  assert.equal(lab.density_side(), 4)
+  assert.ok(lab.trace_kernel() instanceof Float32Array)
+  assert.equal(lab.trace_bmu(), -1)
+  lab.step(1)
+  assert.ok(lab.trace_bmu() >= 0)
   lab.free()
 })
 
