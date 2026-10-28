@@ -24,6 +24,8 @@
     DECAYS,
     DENSITIES,
     INITS,
+    MOVING_DENSITIES,
+    isMoving,
     LATTICES,
     MODES,
     SCENARIOS,
@@ -60,7 +62,13 @@
     type TourStats,
     type TsplibData,
   } from '#lib/demos/kohonen/tours.ts'
-  import { MODELS, emptySuccessorStats, type SuccessorStats } from '#lib/demos/kohonen/successors.ts'
+  import {
+    MODELS,
+    PARAM_GROUPS,
+    emptySuccessorStats,
+    type SuccessorParam,
+    type SuccessorStats,
+  } from '#lib/demos/kohonen/successors.ts'
   import WasmGate from '#lib/wasm/WasmGate.svelte'
   import { loadWasm, type Wasm } from '#lib/wasm/wasm.ts'
 
@@ -274,6 +282,16 @@
   let successorContinuous = $state(true)
   let successorVoronoi = $state(false)
   let successorStats = $state.raw<SuccessorStats>(emptySuccessorStats())
+  let successorParams = $state<Record<string, number>>({})
+  let successorParamList = $state.raw<SuccessorParam[]>([])
+  let motionPeriod = $state(40_000)
+  let paramGroups = $derived(
+    (Object.keys(PARAM_GROUPS) as SuccessorParam['model'][]).map(model => ({
+      model,
+      title: PARAM_GROUPS[model],
+      params: successorParamList.filter(p => p.model === model),
+    })),
+  )
   let bestModel = $derived(
     MODELS.filter(m => Number.isFinite(successorStats.models[m.id].qe)).reduce<(typeof MODELS)[number] | null>(
       (best, m) => (!best || successorStats.models[m.id].qe < successorStats.models[best.id].qe ? m : best),
@@ -446,6 +464,9 @@
             speed={onlineSpeed}
             brush={{ mode: brushMode, radius: brushRadius }}
             showVoronoi={successorVoronoi}
+            params={successorParams}
+            {motionPeriod}
+            onparams={p => (successorParamList = p)}
             {restart}
             {densityReset}
             {stepRequest}
@@ -645,6 +666,25 @@
         <Slider label="Samples per frame" bind:value={onlineSpeed} min={1} max={2000} />
         <Toggle label="Voronoi regions for every model" bind:checked={successorVoronoi} />
       </ControlGroup>
+
+      <ControlGroup title="Method settings">
+        {#each paramGroups as group (group.model)}
+          <p class="subhead">{group.title}</p>
+          {#each group.params as p (p.id)}
+            <Slider
+              label={p.label}
+              bind:value={() => successorParams[p.id] ?? p.default, v => (successorParams = { ...successorParams, [p.id]: v })}
+              min={p.min}
+              max={p.max}
+              step={p.step}
+            />
+          {/each}
+        {/each}
+        <p class="hint">The map’s and neural gas’ settings start them over; the growing gases’ apply at once.</p>
+        <ButtonRow>
+          <Button onclick={() => (successorParams = {})}>Published defaults</Button>
+        </ButtonRow>
+      </ControlGroup>
     {:else}
     <ControlGroup title="Lattice">
       <Select label="Kind" bind:value={lattice} options={mode === 'unfolding' ? LATTICES : dataLattices} />
@@ -683,7 +723,10 @@
 
     {#if mode === 'unfolding' || mode === 'successors'}
       <ControlGroup title="Density">
-        <Select label="Preset" bind:value={density} options={DENSITIES} />
+        <Select label="Preset" bind:value={density} options={mode === 'successors' ? [...DENSITIES, ...MOVING_DENSITIES] : DENSITIES} />
+        {#if mode === 'successors' && isMoving(density)}
+          <Slider label="Samples per cycle" bind:value={motionPeriod} min={2000} max={200_000} step={1000} />
+        {/if}
         {#if density === 'image'}
           <ImagePicker selected={densityImageId} onpick={pickDensityImage} onerror={m => (imageError = m)} />
           <Toggle label="Light pixels are dense" bind:checked={invertImage} />
@@ -766,10 +809,16 @@
         <p><strong>{m.label}.</strong> {m.detail}</p>
       {/each}
       <p>
-        Try it: let them settle, then erase part of the density. The map and neural gas have cooled down and barely
+        Try it: let them settle, then erase part of the density, or pick a moving density. The map and neural gas have cooled down and barely
         move, and k-means’ steps have shrunk to almost nothing, so their nodes stay where the data was. Growing neural
         gas keeps learning but keeps its nodes, held there by their edges; only GNG with utility notices they are no
         longer worth anything and moves them to where the data is now.
+      </p>
+      <p>
+        The moving densities show the price. Under the jumping block, plain GNG ends up covering both of the block’s
+        places and so does well whichever side it is on, while GNG with utility drops the old side at every jump and
+        regrows one node per insertion, briefly with only a handful of nodes. Forgetting pays when the data leaves for
+        good, not when it comes back.
       </p>
     {/if}
     {#if mode === 'tours'}
@@ -908,6 +957,13 @@
 
   .values tbody th {
     text-align: left;
+    color: var(--color-ink-soft);
+  }
+
+  .subhead {
+    margin: var(--space-xs) 0 0;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
     color: var(--color-ink-soft);
   }
 

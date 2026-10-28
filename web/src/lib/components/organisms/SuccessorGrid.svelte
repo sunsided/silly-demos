@@ -17,11 +17,18 @@
     drawFrame,
     drawLattice,
     drawVoronoi,
+    isMoving,
     toUnit,
     type DensityId,
     type Sheet,
   } from '../../demos/kohonen/kohonen.ts'
-  import { MODELS, readSuccessorStats, type SuccessorStats } from '../../demos/kohonen/successors.ts'
+  import {
+    MODELS,
+    readSuccessorParams,
+    readSuccessorStats,
+    type SuccessorParam,
+    type SuccessorStats,
+  } from '../../demos/kohonen/successors.ts'
   import type { Wasm } from '../../wasm/wasm.ts'
 
   let {
@@ -36,10 +43,13 @@
     speed,
     brush,
     showVoronoi,
+    params,
+    motionPeriod,
     restart = 0,
     densityReset = 0,
     stepRequest = 0,
     onstats,
+    onparams,
   }: {
     wasm: Wasm
     /** Changing it replaces the density, painted strokes included. */
@@ -60,6 +70,10 @@
     brush: { mode: 'add' | 'erase'; radius: number }
     /** Draws every model's Voronoi regions, not only k-means'. */
     showVoronoi: boolean
+    /** Method parameters that differ from their defaults, by id. */
+    params: Record<string, number>
+    /** Samples per cycle of a moving density. */
+    motionPeriod: number
     /** Changing this value starts over. */
     restart?: number
     /** Changing this value reloads the density, dropping painted strokes. */
@@ -67,6 +81,8 @@
     /** Each increment advances one sample while paused. */
     stepRequest?: number
     onstats: (stats: SuccessorStats) => void
+    /** The method parameters, once the lab exists. */
+    onparams: (params: SuccessorParam[]) => void
   } = $props()
 
   /** Room above each sheet for its title, px. */
@@ -77,6 +93,9 @@
   const WIDE_TITLES = 240
 
   let lab: SuccessorLab | null = null
+  /** The parameter values last given to the lab, to change only what changed. */
+  let applied: Record<string, number> = {}
+  let known: SuccessorParam[] = []
   let since = -Infinity
   let densityDirty = true
   const densityImage = new DensityImage()
@@ -99,9 +118,12 @@
     const s = seed
     if (!lab) {
       lab = new wasm.SuccessorLab(s)
+      known = readSuccessorParams(lab)
+      applied = Object.fromEntries(known.map(p => [p.id, p.value]))
       untrack(() => {
         loadDensity()
         lab!.set_continuous(continuous)
+        onparams(known)
       })
     }
     lab.set_nodes(n)
@@ -113,7 +135,9 @@
 
   function loadDensity() {
     if (!lab) return
-    if (density === 'image') {
+    if (isMoving(density)) {
+      lab.set_motion(density, motionPeriod)
+    } else if (density === 'image') {
       if (!image || !lab.set_density_cells(image.cells, image.side)) lab.set_density('blank')
     } else {
       lab.set_density(density)
@@ -135,6 +159,25 @@
   $effect(() => {
     const on = continuous
     lab?.set_continuous(on)
+  })
+
+  // A new period keeps the run going.
+  $effect(() => {
+    const period = motionPeriod
+    untrack(() => {
+      if (lab && isMoving(density)) lab.set_motion(density, period)
+    })
+  })
+
+  // Only parameters that changed go to the lab: the scheduled ones start over.
+  $effect(() => {
+    const wanted = $state.snapshot(params) as Record<string, number>
+    if (!lab) return
+    for (const p of known) {
+      const v = wanted[p.id] ?? p.default
+      if (applied[p.id] !== v && lab.set_param(p.id, v)) applied[p.id] = v
+    }
+    report()
   })
 
   $effect(() => {
@@ -227,7 +270,7 @@
     const t = currentTheme()
     const { width, height, dpr } = canvas.size
     const sheets = layout(width, height)
-    if (densityDirty) {
+    if (densityDirty || (running && isMoving(density))) {
       densityImage.update(t, lab.density())
       densityDirty = false
     }

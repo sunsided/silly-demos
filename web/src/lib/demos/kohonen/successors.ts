@@ -43,6 +43,33 @@ export const MODELS: readonly { id: ModelId; label: string; tone: Tone; detail: 
   },
 ]
 
+/** A method parameter, as SuccessorLab.params() describes it. */
+export interface SuccessorParam {
+  id: string
+  /** The model it tunes; "gng" covers both growing gases. */
+  model: 'som' | 'ng' | 'gng' | 'gng-u'
+  label: string
+  value: number
+  default: number
+  min: number
+  max: number
+  /** A slider step that lands on the default from the minimum. */
+  step: number
+  /** Applies without starting over. */
+  live: boolean
+}
+
+export const readSuccessorParams = (lab: Pick<SuccessorLab, 'params'>): SuccessorParam[] =>
+  JSON.parse(lab.params()) as SuccessorParam[]
+
+/** What each parameter group is called on the page. */
+export const PARAM_GROUPS: Record<SuccessorParam['model'], string> = {
+  som: 'Kohonen map',
+  ng: 'Neural gas',
+  gng: 'Both growing gases',
+  'gng-u': 'GNG with utility',
+}
+
 /** One model's latest errors and its history. */
 export interface ModelStats {
   qe: number

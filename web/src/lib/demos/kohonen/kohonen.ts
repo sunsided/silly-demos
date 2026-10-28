@@ -7,7 +7,19 @@ export type LatticeId = 'chain' | 'ring' | 'grid' | 'hex'
 export type InitId = 'random' | 'cluster' | 'pca'
 export type TrainingId = 'online' | 'batch'
 export type DecayId = 'exp' | 'linear'
-export type DensityId = 'uniform' | 'annulus' | 'moons' | 'blobs' | 'lshape' | 'gradient' | 'blank' | 'image'
+export type DensityId =
+  | 'uniform'
+  | 'annulus'
+  | 'moons'
+  | 'blobs'
+  | 'lshape'
+  | 'gradient'
+  | 'blank'
+  | 'image'
+  | MovingDensityId
+
+/** Densities that move on their own; only the Successors mode has them. */
+export type MovingDensityId = 'orbit' | 'jump'
 export type ModeId = 'unfolding' | 'colors' | 'countries' | 'tours' | 'successors'
 export type StatusId = 'training' | 'converged' | 'empty'
 
@@ -81,6 +93,13 @@ export const DENSITIES: readonly { value: DensityId; label: string }[] = [
   { value: 'blank', label: 'Blank (paint)' },
   { value: 'image', label: 'Image…' },
 ]
+
+export const MOVING_DENSITIES: readonly { value: MovingDensityId; label: string }[] = [
+  { value: 'orbit', label: 'Moving: orbiting blob' },
+  { value: 'jump', label: 'Moving: jumping block' },
+]
+
+export const isMoving = (d: DensityId): d is MovingDensityId => d === 'orbit' || d === 'jump'
 
 /** Everything that, when changed, starts the map over. */
 export interface SomConfig {
