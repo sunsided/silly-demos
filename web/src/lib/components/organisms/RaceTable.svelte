@@ -7,7 +7,16 @@
 <script lang="ts">
   import { untrack } from 'svelte'
   import { onFrame } from '../../canvas/canvas.svelte.ts'
-  import { formatGap, formatLength, methodLabel, Race, type CitySet, type MethodId, type RaceRow } from '../../demos/kohonen/tours.ts'
+  import {
+    MAX_EXACT,
+    formatGap,
+    formatLength,
+    methodLabel,
+    Race,
+    type CitySet,
+    type MethodId,
+    type RaceRow,
+  } from '../../demos/kohonen/tours.ts'
   import type { Wasm } from '../../wasm/wasm.ts'
 
   let {
@@ -106,8 +115,8 @@
       {/each}
     </tbody>
   </table>
-  {#if cities.xy.length / 2 > 13}
-    <p class="note">Exact sits out above 13 cities.</p>
+  {#if cities.xy.length / 2 > MAX_EXACT}
+    <p class="note">Exact sits out above {MAX_EXACT} cities.</p>
   {/if}
 {/if}
 
