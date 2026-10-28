@@ -12,6 +12,8 @@
   import MetricChart from '#lib/components/molecules/MetricChart.svelte'
   import PlaneGrid from '#lib/components/molecules/PlaneGrid.svelte'
   import ColorMap from '#lib/components/organisms/ColorMap.svelte'
+  import ErrorRace from '#lib/components/molecules/ErrorRace.svelte'
+  import SuccessorGrid from '#lib/components/organisms/SuccessorGrid.svelte'
   import CountryMap from '#lib/components/organisms/CountryMap.svelte'
   import RaceTable from '#lib/components/organisms/RaceTable.svelte'
   import SomCanvas from '#lib/components/organisms/SomCanvas.svelte'
@@ -58,6 +60,7 @@
     type TourStats,
     type TsplibData,
   } from '#lib/demos/kohonen/tours.ts'
+  import { MODELS, emptySuccessorStats, type SuccessorStats } from '#lib/demos/kohonen/successors.ts'
   import WasmGate from '#lib/wasm/WasmGate.svelte'
   import { loadWasm, type Wasm } from '#lib/wasm/wasm.ts'
 
@@ -265,6 +268,19 @@
   const tourStatusTone = { empty: 'signal', ready: 'ink', running: 'cobalt', done: 'verdigris', 'too-big': 'signal' } as const
   let methodInfo = $derived(METHODS.find(m => m.value === method))
 
+  // Successors: how many nodes each model gets, how long a run is, and what they found.
+  let successorNodes = $state(100)
+  let successorSteps = $state(20_000)
+  let successorContinuous = $state(true)
+  let successorVoronoi = $state(false)
+  let successorStats = $state.raw<SuccessorStats>(emptySuccessorStats())
+  let bestModel = $derived(
+    MODELS.filter(m => Number.isFinite(successorStats.models[m.id].qe)).reduce<(typeof MODELS)[number] | null>(
+      (best, m) => (!best || successorStats.models[m.id].qe < successorStats.models[best.id].qe ? m : best),
+      null,
+    ),
+  )
+
   /** Sizes and schedules that suit each mode and source; applied on switching. */
   function dataDefaults(kind: 'grid' | 'hex', w: number, h: number) {
     lattice = kind
@@ -302,7 +318,11 @@
     if (next === 'unfolding') pick(SCENARIOS[0])
     else if (next === 'colors') setColorSource(colorSource)
     else if (next === 'countries') dataDefaults('hex', 16, 10)
-    else {
+    else if (next === 'successors') {
+      density = 'moons'
+      densityReset++
+      running = true
+    } else {
       citySource = 'tsplib'
       tsplibName = 'berlin52'
       setMethod('elastic')
@@ -317,6 +337,8 @@
       'Here the input is color: three numbers per sample. The map can no longer be drawn in input space, so each node is drawn as a cell in its own color, where it sits on the lattice. Ordering itself, the map lays the color cube out flat.',
     countries:
       'Countries described by ten development indicators, in 1992 and 2022, on one map: neighboring cells hold countries that are alike across all ten. After Kaski and Kohonen’s 1996 world poverty map.',
+    successors:
+      'Self-organizing maps were followed by vector quantizers that keep the nodes pulled towards samples but drop the fixed grid. Here the map, neural gas, growing neural gas with and without utility, and k-means learn from exactly the same samples, side by side.',
     tours:
       'A ring of nodes laid over a set of cities and pulled onto them until it reads as a tour: neural answers to the traveling salesman problem, after Durbin and Willshaw and after Angéniol, raced against the classical heuristics on the same cities.',
   }
@@ -333,7 +355,28 @@
 <SheetLayout
   title="Kohonen maps"
   summary={SUMMARIES[mode]}
-  readouts={mode === 'tours'
+  readouts={mode === 'successors'
+    ? [
+        {
+          label: 'Status',
+          value: statusText[successorStats.status],
+          tone: ({ training: 'cobalt', converged: 'verdigris', empty: 'signal' } as const)[successorStats.status],
+        },
+        {
+          label: 'Samples',
+          value: successorContinuous
+            ? successorStats.t.toLocaleString()
+            : `${successorStats.t.toLocaleString()} / ${successorStats.steps.toLocaleString()}`,
+        },
+        { label: 'Nodes each', value: successorStats.models.som.nodes },
+        {
+          label: 'Lowest QE',
+          value: bestModel ? `${successorStats.models[bestModel.id].qe.toFixed(3)}` : '–',
+          tone: bestModel?.tone ?? 'ink',
+        },
+        { label: 'Best at it', value: bestModel?.label ?? '–' },
+      ]
+    : mode === 'tours'
     ? [
         { label: 'Status', value: tourStatusText[tourStats.status], tone: tourStatusTone[tourStats.status] },
         { label: 'Cities', value: tourCities ? tourCities.xy.length / 2 : 0 },
@@ -389,6 +432,24 @@
             {restart}
             {stepRequest}
             onstats={s => (stats = s)}
+          />
+        {:else if mode === 'successors'}
+          <SuccessorGrid
+            {wasm}
+            {density}
+            image={densityImage}
+            nodes={successorNodes}
+            steps={successorSteps}
+            continuous={successorContinuous}
+            {seed}
+            {running}
+            speed={onlineSpeed}
+            brush={{ mode: brushMode, radius: brushRadius }}
+            showVoronoi={successorVoronoi}
+            {restart}
+            {densityReset}
+            {stepRequest}
+            onstats={s => (successorStats = s)}
           />
         {:else if mode === 'tours'}
           {#if tourCities}
@@ -576,6 +637,14 @@
           <Button onclick={() => raceRequest++}>Race every method</Button>
         </ButtonRow>
       </ControlGroup>
+    {:else if mode === 'successors'}
+      <ControlGroup title="Models">
+        <Slider label="Nodes each" bind:value={successorNodes} min={4} max={400} />
+        <Slider label="Samples per run" bind:value={successorSteps} min={1000} max={100_000} step={1000} />
+        <Toggle label="Keep learning after the run" bind:checked={successorContinuous} />
+        <Slider label="Samples per frame" bind:value={onlineSpeed} min={1} max={2000} />
+        <Toggle label="Voronoi regions for every model" bind:checked={successorVoronoi} />
+      </ControlGroup>
     {:else}
     <ControlGroup title="Lattice">
       <Select label="Kind" bind:value={lattice} options={mode === 'unfolding' ? LATTICES : dataLattices} />
@@ -612,7 +681,7 @@
     </ControlGroup>
     {/if}
 
-    {#if mode === 'unfolding'}
+    {#if mode === 'unfolding' || mode === 'successors'}
       <ControlGroup title="Density">
         <Select label="Preset" bind:value={density} options={DENSITIES} />
         {#if density === 'image'}
@@ -635,7 +704,9 @@
           <Button onclick={() => densityReset++}>Reset painting</Button>
         </ButtonRow>
       </ControlGroup>
+    {/if}
 
+    {#if mode === 'unfolding'}
       <ControlGroup title="Show">
         <Toggle label="Density" bind:checked={showDensity} />
         <Toggle label="Voronoi regions" bind:checked={showVoronoi} />
@@ -667,8 +738,39 @@
           <p class="credit">Image: <a href={bundled.source}>{bundled.credit}</a>, public domain.</p>
         {/if}
       {/if}
-    {:else if mode !== 'tours'}
+    {:else if mode !== 'tours' && mode !== 'successors'}
       <MetricChart history={stats.history} />
+    {/if}
+    {#if mode === 'successors'}
+      {#if successorStats.status === 'empty'}
+        <StatusMessage>Paint some density or pick a preset.</StatusMessage>
+      {/if}
+      <ErrorRace series={MODELS.map(m => ({ label: m.label, tone: m.tone, history: successorStats.models[m.id].history }))} />
+      <table class="values">
+        <thead><tr><th></th><th>QE</th><th>TE</th><th>Nodes</th><th>Links</th></tr></thead>
+        <tbody>
+          {#each MODELS as m (m.id)}
+            {@const r = successorStats.models[m.id]}
+            <tr>
+              <th>{m.label}</th>
+              <td>{Number.isFinite(r.qe) ? r.qe.toFixed(3) : '–'}</td>
+              <td>{Number.isFinite(r.te) ? `${(r.te * 100).toFixed(1)} %` : '–'}</td>
+              <td>{r.nodes}</td>
+              <td>{r.edges}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <Legend items={MODELS.map(m => ({ tone: m.tone, label: m.label }))} />
+      {#each MODELS as m (m.id)}
+        <p><strong>{m.label}.</strong> {m.detail}</p>
+      {/each}
+      <p>
+        Try it: let them settle, then erase part of the density. The map and neural gas have cooled down and barely
+        move, and k-means’ steps have shrunk to almost nothing, so their nodes stay where the data was. Growing neural
+        gas keeps learning but keeps its nodes, held there by their edges; only GNG with utility notices they are no
+        longer worth anything and moves them to where the data is now.
+      </p>
     {/if}
     {#if mode === 'tours'}
       {#if tourStats.status === 'too-big'}
@@ -774,7 +876,9 @@
     <p>
       Quantization error (QE) is the mean distance from a sample to its nearest node: how well the nodes cover the data.
       Topographic error (TE) is the share of samples whose nearest and second-nearest nodes are not lattice
-      neighbors: how often the map's order breaks, at a fold or a twist.{#if mode === 'unfolding'}
+      neighbors: how often the map's order breaks, at a fold or a twist.{#if mode === 'successors'}
+        For the gases, TE counts samples whose two nearest nodes are not linked by a learned edge; k-means has no
+        links, so no TE.{/if}{#if mode === 'unfolding'}
         Pause and step to see a single update.{/if}
     </p>
     {/if}
