@@ -132,11 +132,13 @@
     padding: var(--space-2xs) var(--space-xs) var(--space-2xs) 0;
     text-align: right;
     vertical-align: top;
+    white-space: nowrap;
     font-weight: var(--font-weight-regular);
   }
 
   th:first-child {
     text-align: left;
+    white-space: normal;
   }
 
   thead th {
