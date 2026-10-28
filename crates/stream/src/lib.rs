@@ -15,10 +15,13 @@
 pub mod balls;
 pub mod cov;
 pub mod ellipses;
+pub mod embed;
 pub mod metrics;
 pub mod rng;
 pub mod sketch;
 pub mod source;
+pub mod tree;
+pub mod vector;
 
 /// A point in the unit square.
 pub type Point = [f32; 2];

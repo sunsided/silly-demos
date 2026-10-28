@@ -19,7 +19,7 @@ before(async () => {
 })
 
 test('the classes and functions the pages use are exported', () => {
-  for (const name of ['BoidsParams', 'BoidsSim', 'ClusterLab', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'SuccessorLab', 'TspLab', 'VoronoiTests']) {
+  for (const name of ['BoidsParams', 'BoidsSim', 'ClusterLab', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'SuccessorLab', 'TreeLab', 'TspLab', 'VoronoiTests']) {
     assert.equal(typeof wasm[name], 'function', name)
   }
   assert.equal(typeof wasm.run, 'function')
@@ -182,6 +182,24 @@ test('the clustering lab returns points, clusters and traces as typed arrays and
   assert.equal(lab.stats().length, 14)
   assert.equal(JSON.parse(lab.params()).length, 17)
   assert.equal(lab.paint(0.5, 0.5), true)
+  lab.free()
+})
+
+test('the tree lab returns its points, nodes and scores as typed arrays', () => {
+  const lab = new wasm.TreeLab(1)
+  assert.equal(lab.set_space('plane'), true)
+  assert.equal(lab.set_param('points', 2000), true)
+  while (lab.step(1000) > 0) {}
+  assert.equal(lab.has_passes(), true)
+  assert.ok(lab.projected() instanceof Float32Array && lab.projected().length === 4000)
+  assert.ok(lab.assignments('online', 1) instanceof Uint32Array)
+  for (const which of ['online', 'passes']) {
+    const nodes = lab.nodes(which)
+    assert.ok(nodes instanceof Float32Array && nodes.length % 8 === 0, which)
+    assert.equal(lab.quality(which).length, 9, which)
+    assert.equal(lab.search(which).length, 13, which)
+  }
+  assert.equal(JSON.parse(lab.params()).length, 6)
   lab.free()
 })
 
