@@ -24,8 +24,133 @@ const EVAL_SAMPLES: usize = 1000;
 const METRIC_EVERY: u64 = 250;
 /// History entries kept per model; when full, every other one is dropped.
 const HISTORY_CAP: usize = 400;
-/// GNG-U's removal ratio k, as in Fritzke (1997).
-const UTILITY_RATIO: f32 = 3.0;
+/// Samples between two updates of a moving density.
+const MOTION_EVERY: u64 = 100;
+
+/// A tunable method parameter: which model it belongs to, its range, and
+/// whether changing it starts over (the scheduled ones) or applies at once.
+struct Param {
+    /// The id `set_param` takes.
+    id: &'static str,
+    /// The model it tunes, or "gng" for both growing gases.
+    model: &'static str,
+    /// What the page calls it.
+    label: &'static str,
+    /// Its published value.
+    default: f32,
+    /// The least it may be.
+    min: f32,
+    /// The most it may be.
+    max: f32,
+    /// A slider step that lands on the default from the minimum.
+    step: f32,
+    /// Takes effect at once instead of starting over.
+    live: bool,
+}
+
+/// Every tunable parameter. The defaults are the published ones: the map's
+/// usual start, Martinetz and Schulten's for neural gas, Fritzke's for the
+/// growing gases (GNG-U's ratio k from 1997).
+const PARAMS: [Param; 9] = [
+    Param {
+        id: "som.alpha",
+        model: "som",
+        label: "α start",
+        default: 0.5,
+        min: 0.05,
+        max: 1.0,
+        step: 0.05,
+        live: false,
+    },
+    Param {
+        id: "som.sigma",
+        model: "som",
+        label: "σ start, share of the grid",
+        default: 0.5,
+        min: 0.05,
+        max: 1.0,
+        step: 0.05,
+        live: false,
+    },
+    Param {
+        id: "ng.eps",
+        model: "ng",
+        label: "ε start",
+        default: 0.5,
+        min: 0.05,
+        max: 1.0,
+        step: 0.05,
+        live: false,
+    },
+    Param {
+        id: "ng.lambda",
+        model: "ng",
+        label: "λ start, share of the nodes",
+        default: 0.5,
+        min: 0.02,
+        max: 1.0,
+        step: 0.02,
+        live: false,
+    },
+    Param {
+        id: "gng.insert",
+        model: "gng",
+        label: "Samples per insertion λ",
+        default: 300.0,
+        min: 20.0,
+        max: 2000.0,
+        step: 10.0,
+        live: true,
+    },
+    Param {
+        id: "gng.age",
+        model: "gng",
+        label: "Edge age limit",
+        default: 88.0,
+        min: 5.0,
+        max: 500.0,
+        step: 1.0,
+        live: true,
+    },
+    Param {
+        id: "gng.eps_b",
+        model: "gng",
+        label: "Winner step εb",
+        default: 0.05,
+        min: 0.001,
+        max: 0.3,
+        step: 0.001,
+        live: true,
+    },
+    Param {
+        id: "gng.eps_n",
+        model: "gng",
+        label: "Neighbor step εn",
+        default: 0.0006,
+        min: 0.0,
+        max: 0.02,
+        step: 0.0001,
+        live: true,
+    },
+    Param {
+        id: "gngu.k",
+        model: "gng-u",
+        label: "Removal ratio k",
+        default: 3.0,
+        min: 1.0,
+        max: 20.0,
+        step: 0.1,
+        live: true,
+    },
+];
+
+/// The value of parameter `id` in `values` (ordered as [`PARAMS`]).
+fn param(values: &[f32], id: &str) -> f32 {
+    values[PARAMS
+        .iter()
+        .position(|p| p.id == id)
+        .expect("a known parameter")]
+}
 /// The models, in the order the page lays them out.
 const MODELS: [Model; 5] = [
     Model::Som,
@@ -130,6 +255,11 @@ pub struct SuccessorLab {
     history: Vec<History>,
     /// The latest (QE, TE) per model; TE is NaN for k-means.
     errors: [(f32, f32); 5],
+    /// The method parameters, ordered as [`PARAMS`].
+    values: Vec<f32>,
+    /// A [`som::density::MOVING`] density the samples follow, and the
+    /// samples one cycle of it takes; `None` for a still one.
+    motion: Option<(&'static str, u64)>,
 }
 
 #[wasm_bindgen]
@@ -152,6 +282,8 @@ impl SuccessorLab {
                 .map(|_| History::new(HISTORY_CAP))
                 .collect(),
             errors: [(0.0, 0.0); 5],
+            values: PARAMS.iter().map(|p| p.default).collect(),
+            motion: None,
         };
         lab.restart();
         lab
@@ -195,6 +327,7 @@ impl SuccessorLab {
         let Some(density) = Density::preset(preset) else {
             return false;
         };
+        self.motion = None;
         self.replace_density(density);
         true
     }
@@ -206,6 +339,7 @@ impl SuccessorLab {
         let Some(density) = Density::from_cells(side as usize, cells) else {
             return false;
         };
+        self.motion = None;
         self.replace_density(density);
         true
     }
@@ -237,6 +371,71 @@ impl SuccessorLab {
         cells.iter().map(|c| c / max).collect()
     }
 
+    /// Makes the density move: "orbit", a blob circling the center, or
+    /// "jump", a block switching between the left and right halves, one
+    /// cycle every `period` samples (1000 to 1 000 000). "none" stops it
+    /// where it is. Takes effect at once, without starting over. `false`,
+    /// changing nothing, for another name or period.
+    pub fn set_motion(&mut self, kind: &str, period: u32) -> bool {
+        if kind == "none" {
+            self.motion = None;
+            return true;
+        }
+        let Some(&kind) = som::density::MOVING.iter().find(|&&k| k == kind) else {
+            return false;
+        };
+        if !(1000..=1_000_000).contains(&period) {
+            return false;
+        }
+        self.motion = Some((kind, period as u64));
+        self.move_density();
+        self.after_density_change();
+        true
+    }
+
+    /// The method parameters as JSON: `[{ "id", "model", "label", "value",
+    /// "default", "min", "max", "step", "live" }]`; `model` "gng" covers both
+    /// growing gases, and `live` ones apply without starting over.
+    pub fn params(&self) -> String {
+        let rows: Vec<String> = PARAMS
+            .iter()
+            .zip(&self.values)
+            .map(|(p, v)| {
+                format!(
+                    r#"{{"id":"{}","model":"{}","label":"{}","value":{v},"default":{},"min":{},"max":{},"step":{},"live":{}}}"#,
+                    p.id, p.model, p.label, p.default, p.min, p.max, p.step, p.live
+                )
+            })
+            .collect();
+        format!("[{}]", rows.join(","))
+    }
+
+    /// Sets a method parameter. The growing gases' apply at once, to both
+    /// of them where shared; the map's and neural gas' start over, since
+    /// they set where a schedule starts. `false`, changing nothing, for an
+    /// unknown id or a value outside its range.
+    pub fn set_param(&mut self, id: &str, value: f32) -> bool {
+        let Some(k) = PARAMS.iter().position(|p| p.id == id) else {
+            return false;
+        };
+        let p = &PARAMS[k];
+        if !(value.is_finite() && (p.min..=p.max).contains(&value)) {
+            return false;
+        }
+        self.values[k] = value;
+        if p.live {
+            if let Some(m) = &mut self.models {
+                for g in [&mut m.gng.params, &mut m.gng_u.params] {
+                    Self::tune(g, &self.values);
+                }
+                m.gng.params.utility = None;
+            }
+        } else {
+            self.restart();
+        }
+        true
+    }
+
     /// Starts over with other random numbers; the density stays.
     pub fn set_seed(&mut self, seed: u32) {
         self.seed = seed as u64;
@@ -247,8 +446,9 @@ impl SuccessorLab {
     /// from the seed, so a restart replays the same run.
     pub fn restart(&mut self) {
         self.rng = Rng::new(self.seed);
-        self.draw_eval();
         self.t = 0;
+        self.move_density();
+        self.draw_eval();
         self.history.iter_mut().for_each(History::clear);
         self.models = self.build();
         self.measure(true);
@@ -259,6 +459,9 @@ impl SuccessorLab {
     pub fn step(&mut self, n: u32) -> u32 {
         let mut done = 0;
         while done < n && self.models.is_some() && (self.continuous || self.t < self.steps) {
+            if self.motion.is_some() && self.t.is_multiple_of(MOTION_EVERY) {
+                self.move_density();
+            }
             let Some(x) = self.density.sample(&mut self.rng) else {
                 break;
             };
@@ -270,6 +473,9 @@ impl SuccessorLab {
             m.kmeans.step(&x);
             self.t += 1;
             if self.t.is_multiple_of(METRIC_EVERY) {
+                if self.motion.is_some() {
+                    self.draw_eval();
+                }
                 self.measure(true);
             }
             done += 1;
@@ -367,6 +573,24 @@ impl SuccessorLab {
             .collect();
     }
 
+    /// For a moving density, the density at the current sample's phase.
+    fn move_density(&mut self) {
+        if let Some((kind, period)) = self.motion {
+            self.density =
+                Density::moving(kind, self.t as f32 / period as f32).expect("a moving density");
+        }
+    }
+
+    /// Writes the growing-gas parameters in `values` into `params`; GNG-U's
+    /// ratio goes in only where `params` has utility.
+    fn tune(params: &mut gng::Params, values: &[f32]) {
+        params.insert_every = param(values, "gng.insert").round() as u32;
+        params.max_age = param(values, "gng.age").round() as u32;
+        params.eps_winner = param(values, "gng.eps_b");
+        params.eps_neighbor = param(values, "gng.eps_n");
+        params.utility = Some(param(values, "gngu.k"));
+    }
+
     /// Swaps in a new density and lets training go on over it.
     fn replace_density(&mut self, density: Density) {
         self.density = density;
@@ -401,8 +625,11 @@ impl SuccessorLab {
             codebook: codebook.clone(),
             schedule: Schedule {
                 steps: self.steps,
-                alpha: (0.5, 0.01),
-                sigma: ((width.max(height) as f32 / 2.0).max(0.5), 0.5),
+                alpha: (param(&self.values, "som.alpha"), 0.01),
+                sigma: (
+                    (width.max(height) as f32 * param(&self.values, "som.sigma")).max(0.5),
+                    0.5,
+                ),
                 decay: Decay::Exponential,
                 continuous: self.continuous,
             },
@@ -411,6 +638,8 @@ impl SuccessorLab {
         };
         let mut ng_params = neural_gas::Params::defaults(n, self.steps);
         ng_params.schedule.continuous = self.continuous;
+        ng_params.schedule.alpha.0 = param(&self.values, "ng.eps");
+        ng_params.schedule.sigma.0 = (n as f32 * param(&self.values, "ng.lambda")).max(0.02);
         let ng = NeuralGas::new(codebook, ng_params);
         let pick = |rng: &mut Rng, eval: &[f32]| {
             let i = rng.below(eval.len() / 2);
@@ -420,8 +649,13 @@ impl SuccessorLab {
             pick(&mut self.rng, &self.eval),
             pick(&mut self.rng, &self.eval),
         );
-        let gng = Gng::new(&a, &b, gng::Params::defaults(n, None));
-        let gng_u = Gng::new(&a, &b, gng::Params::defaults(n, Some(UTILITY_RATIO)));
+        let mut plain = gng::Params::defaults(n, None);
+        Self::tune(&mut plain, &self.values);
+        plain.utility = None;
+        let mut with_utility = plain;
+        Self::tune(&mut with_utility, &self.values);
+        let gng = Gng::new(&a, &b, plain);
+        let gng_u = Gng::new(&a, &b, with_utility);
         let kmeans = KMeans::new(n, &self.eval, 2, &mut self.rng);
         Some(Models {
             som,
@@ -531,6 +765,77 @@ mod tests {
         assert!(!lab.set_steps(10));
         assert!(!lab.set_density("nebula"));
         assert_eq!(lab.weights("som").len(), 200);
+    }
+
+    #[test]
+    fn parameters_come_as_json_and_refuse_what_is_out_of_range() {
+        let mut lab = SuccessorLab::new(1);
+        let params: serde_json::Value = serde_json::from_str(&lab.params()).unwrap();
+        assert_eq!(params.as_array().unwrap().len(), 9);
+        assert_eq!(params[4]["id"], "gng.insert");
+        assert_eq!(params[4]["live"], true);
+        assert!(!lab.set_param("gng.speed", 1.0));
+        assert!(!lab.set_param("gng.age", 1.0));
+        assert!(!lab.set_param("gngu.k", f32::NAN));
+        assert!(
+            lab.params()
+                .contains(r#""id":"gng.age","model":"gng","label":"Edge age limit","value":88"#)
+        );
+    }
+
+    #[test]
+    fn every_default_lies_on_its_slider_steps() {
+        for p in &PARAMS {
+            let k = (p.default - p.min) / p.step;
+            assert!((k - k.round()).abs() < 1e-3, "{}: {k} steps", p.id);
+            assert!((p.min..=p.max).contains(&p.default), "{}", p.id);
+        }
+    }
+
+    #[test]
+    fn growing_gas_settings_apply_at_once_and_the_map_s_start_over() {
+        let mut lab = SuccessorLab::new(1);
+        lab.step(3000);
+        assert!(lab.set_param("gng.insert", 50.0));
+        assert_eq!(lab.progress()[0], 3000.0, "a live change keeps the run");
+        let m = lab.models.as_ref().unwrap();
+        assert_eq!(
+            (m.gng.params.insert_every, m.gng_u.params.insert_every),
+            (50, 50)
+        );
+        assert_eq!(
+            (m.gng.params.utility, m.gng_u.params.utility),
+            (None, Some(3.0))
+        );
+        assert!(lab.set_param("som.alpha", 0.9));
+        assert_eq!(lab.progress()[0], 0.0, "a schedule change starts over");
+        assert_eq!(lab.models.as_ref().unwrap().som.schedule.alpha.0, 0.9);
+    }
+
+    #[test]
+    fn utility_keeps_up_with_a_jumping_density() {
+        let mut lab = SuccessorLab::new(4);
+        assert!(lab.set_motion("jump", 40_000));
+        assert!(!lab.set_motion("drift", 40_000));
+        assert!(!lab.set_motion("jump", 10));
+        // Left for 20 000 samples, then right until 38 000.
+        while lab.progress()[0] < 38_000.0 {
+            lab.step(2000);
+        }
+        let left = |id: &str| lab.weights(id).chunks(2).filter(|p| p[0] < 0.5).count();
+        assert!(left("gng") > 10, "GNG keeps {}", left("gng"));
+        assert!(left("gng-u") <= 3, "GNG-U keeps {}", left("gng-u"));
+        let density = lab.density();
+        let right_mass: f32 = density
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| i % 64 >= 32)
+            .map(|(_, v)| v)
+            .sum();
+        assert!(
+            right_mass > 0.0 && right_mass == density.iter().sum::<f32>(),
+            "the block is on the right"
+        );
     }
 
     #[test]

@@ -363,7 +363,8 @@ impl VoronoiTests {
                     ^ vx.to_bits()
                     ^ vy.to_bits()
                     ^ (i as u32 * 0x85EB_CA6B);
-                let mut s = hash_u32(seed);
+                // Zero is xorshift's fixed point: it would give the same spot every time.
+                let mut s = hash_u32(seed.max(1));
                 x = frand01(&mut s) * width;
                 y = frand01(&mut s) * height;
                 let ang = frand01(&mut s) * std::f32::consts::TAU;
@@ -451,4 +452,28 @@ pub(crate) fn edges_of(points: &[(f32, f32)]) -> Vec<f32> {
         out.extend([a.x, a.y, b.x, b.y]);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_respawn_whose_state_hashes_to_zero_still_lands_at_random() {
+        // x = y and vx = vy make the XOR of their bits zero, and point 0 adds
+        // nothing to it: the respawn seed is 0, a fixed point of xorshift,
+        // which would put the point at (0, 0) moving at (10, 0) every time.
+        let points = [-5.0, -5.0, 1.0, 1.0];
+        let out = VoronoiTests::voronoi_step_points(&points, 800.0, 600.0, 1.0);
+        assert!(
+            out[0] > 0.0 || out[1] > 0.0,
+            "respawned in the corner: {out:?}"
+        );
+        assert_ne!(
+            (out[2], out[3]),
+            (10.0, 0.0),
+            "the zero-seed velocity: {out:?}"
+        );
+        assert!((0.0..=800.0).contains(&out[0]) && (0.0..=600.0).contains(&out[1]));
+    }
 }

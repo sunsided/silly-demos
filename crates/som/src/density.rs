@@ -12,6 +12,15 @@ pub const MAX_SIDE: usize = 256;
 /// Presets keep this far from the edges, so the map stays on the sheet.
 const MARGIN: f32 = 0.05;
 
+/// The densities [`Density::moving`] makes, which change with their phase.
+pub const MOVING: [&str; 2] = ["orbit", "jump"];
+
+/// How far the orbiting blob's center is from the square's.
+const ORBIT_RADIUS: f32 = 0.28;
+
+/// The orbiting blob's standard deviation.
+const ORBIT_SPREAD: f32 = 0.08;
+
 /// A density on a grid of `side`×`side` cells, sampled through a lazily
 /// rebuilt cumulative sum.
 #[derive(Clone, Debug)]
@@ -63,6 +72,50 @@ impl Density {
                 weight(x, y)
             })
             .collect();
+        Some(Density {
+            side: SIZE,
+            cells,
+            cumulative: Vec::new(),
+            dirty: true,
+            version: 0,
+        })
+    }
+
+    /// One of the [`MOVING`] densities at `phase` (in cycles; only the
+    /// fraction counts): `orbit`, a blob circling the center once per
+    /// cycle, or `jump`, a block that sits on the left for the first half of
+    /// each cycle and on the right for the second. `None` for another name
+    /// or a phase that is not finite.
+    pub fn moving(name: &str, phase: f32) -> Option<Density> {
+        if !phase.is_finite() {
+            return None;
+        }
+        let p = phase.rem_euclid(1.0);
+        let cells: Vec<f32> = match name {
+            "orbit" => {
+                let a = std::f32::consts::TAU * p;
+                let (cx, cy) = (0.5 + ORBIT_RADIUS * a.cos(), 0.5 + ORBIT_RADIUS * a.sin());
+                (0..SIZE * SIZE)
+                    .map(|i| {
+                        let (x, y) = center(SIZE, i);
+                        let w = (-((x - cx).powi(2) + (y - cy).powi(2))
+                            / (2.0 * ORBIT_SPREAD.powi(2)))
+                        .exp();
+                        if w < 1e-3 { 0.0 } else { w }
+                    })
+                    .collect()
+            }
+            "jump" => {
+                let xs = if p < 0.5 { 0.1..=0.45 } else { 0.55..=0.9 };
+                (0..SIZE * SIZE)
+                    .map(|i| {
+                        let (x, y) = center(SIZE, i);
+                        (xs.contains(&x) && (0.1..=0.9).contains(&y)) as u8 as f32
+                    })
+                    .collect()
+            }
+            _ => return None,
+        };
         Some(Density {
             side: SIZE,
             cells,
@@ -197,6 +250,45 @@ fn moons(x: f32, y: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The mean sample of `d`.
+    fn mean(d: &mut Density) -> (f32, f32) {
+        let mut rng = Rng::new(1);
+        let n = 2000;
+        let (mut sx, mut sy) = (0.0, 0.0);
+        for _ in 0..n {
+            let [x, y] = d.sample(&mut rng).unwrap();
+            sx += x;
+            sy += y;
+        }
+        (sx / n as f32, sy / n as f32)
+    }
+
+    #[test]
+    fn the_orbit_goes_round_the_center() {
+        let at = |p: f32| mean(&mut Density::moving("orbit", p).unwrap());
+        let (right, below, left) = (at(0.0), at(0.25), at(1.5));
+        assert!(
+            (right.0 - 0.78).abs() < 0.02 && (right.1 - 0.5).abs() < 0.02,
+            "{right:?}"
+        );
+        assert!(
+            (below.0 - 0.5).abs() < 0.02 && (below.1 - 0.78).abs() < 0.02,
+            "{below:?}"
+        );
+        assert!(
+            (left.0 - 0.22).abs() < 0.02,
+            "a phase of 1.5 is half a cycle: {left:?}"
+        );
+    }
+
+    #[test]
+    fn the_jump_switches_sides_halfway() {
+        let x = |p: f32| mean(&mut Density::moving("jump", p).unwrap()).0;
+        assert!(x(0.2) < 0.45 && x(0.7) > 0.55);
+        assert!(Density::moving("drift", 0.0).is_none());
+        assert!(Density::moving("orbit", f32::NAN).is_none());
+    }
     use crate::rng::Rng;
 
     const PRESETS: [&str; 6] = ["uniform", "annulus", "moons", "blobs", "lshape", "gradient"];
