@@ -8,13 +8,16 @@
   let {
     history,
   }: {
-    /** Flat rows of seven: t, true k, balls k, sketch k, ARI balls, ARI sketch, ARI batch k-means. */
+    /**
+     * Flat rows of nine: t, true k, k of balls, ellipses and sketch, the
+     * adjusted Rand index of balls, ellipses and sketch, and of batch k-means.
+     */
     history: Float32Array
   } = $props()
 
   const WIDTH = 300
   const HEIGHT = 90
-  const STRIDE = 7
+  const STRIDE = 9
 
   let charts = $derived.by(() => {
     const n = Math.floor(history.length / STRIDE)
@@ -22,7 +25,7 @@
     const t0 = history[0]
     const span = Math.max(history[(n - 1) * STRIDE] - t0, 1)
     let kMax = 1
-    for (let i = 0; i < n; i++) for (const c of [1, 2, 3]) kMax = Math.max(kMax, history[i * STRIDE + c])
+    for (let i = 0; i < n; i++) for (const c of [1, 2, 3, 4]) kMax = Math.max(kMax, history[i * STRIDE + c])
     const line = (col: number, lo: number, hi: number) => {
       let points = ''
       for (let i = 0; i < n; i++) {
@@ -35,9 +38,24 @@
     }
     const last = (col: number) => history[(n - 1) * STRIDE + col]
     return {
-      k: { truth: line(1, 0, kMax + 1), balls: line(2, 0, kMax + 1), sketch: line(3, 0, kMax + 1), max: kMax + 1 },
-      ari: { balls: line(4, 0, 1), sketch: line(5, 0, 1), batch: line(6, 0, 1) },
-      last: { truth: last(1), balls: last(2), sketch: last(3), ariBalls: last(4), ariSketch: last(5), ariBatch: last(6) },
+      k: {
+        truth: line(1, 0, kMax + 1),
+        balls: line(2, 0, kMax + 1),
+        ellipses: line(3, 0, kMax + 1),
+        sketch: line(4, 0, kMax + 1),
+        max: kMax + 1,
+      },
+      ari: { balls: line(5, 0, 1), ellipses: line(6, 0, 1), sketch: line(7, 0, 1), batch: line(8, 0, 1) },
+      last: {
+        truth: last(1),
+        balls: last(2),
+        ellipses: last(3),
+        sketch: last(4),
+        ariBalls: last(5),
+        ariEllipses: last(6),
+        ariSketch: last(7),
+        ariBatch: last(8),
+      },
     }
   })
 </script>
@@ -48,12 +66,14 @@
       <line class="axis" x1="0" y1={HEIGHT} x2={WIDTH} y2={HEIGHT} />
       <polyline class="truth" points={charts.k.truth} />
       <polyline class="balls" points={charts.k.balls} />
+      <polyline class="ellipses" points={charts.k.ellipses} />
       <polyline class="sketch" points={charts.k.sketch} />
     </svg>
     <figcaption>
       <span>Clusters, 0 to {charts.k.max}:</span>
       <span class="truth">true {charts.last.truth}</span>
       <span class="balls">balls {charts.last.balls}</span>
+      <span class="ellipses">ellipses {charts.last.ellipses}</span>
       <span class="sketch">sketch {charts.last.sketch}</span>
     </figcaption>
   </figure>
@@ -62,11 +82,13 @@
       <line class="axis" x1="0" y1={HEIGHT} x2={WIDTH} y2={HEIGHT} />
       <polyline class="batch" points={charts.ari.batch} />
       <polyline class="balls" points={charts.ari.balls} />
+      <polyline class="ellipses" points={charts.ari.ellipses} />
       <polyline class="sketch" points={charts.ari.sketch} />
     </svg>
     <figcaption>
       <span>Adjusted Rand index, 0 to 1:</span>
       <span class="balls">balls {charts.last.ariBalls.toFixed(2)}</span>
+      <span class="ellipses">ellipses {charts.last.ariEllipses.toFixed(2)}</span>
       <span class="sketch">sketch {charts.last.ariSketch.toFixed(2)}</span>
       <span class="batch">k-means at the true k {charts.last.ariBatch.toFixed(2)}</span>
     </figcaption>
@@ -106,6 +128,10 @@
     stroke: var(--color-cobalt);
   }
 
+  polyline.ellipses {
+    stroke: var(--color-verdigris);
+  }
+
   polyline.sketch {
     stroke: var(--color-amber);
   }
@@ -130,6 +156,10 @@
 
   span.balls {
     color: var(--color-cobalt);
+  }
+
+  span.ellipses {
+    color: var(--color-verdigris);
   }
 
   span.sketch {

@@ -1,7 +1,8 @@
 <!--
   @component
-  One stream of points clustered two ways, side by side: the balls with
-  their radii and reach, and the sketch with its facilities and clusters.
+  One stream of points clustered three ways, side by side: the balls with
+  their radii and reach, the ellipses with their axes, and the sketch with
+  its facilities and clusters.
   Points fade with age and take their cluster's color; spawns, merges,
   prunes and splits flash where they happen. While paused, the last
   point's placement is drawn. Press and drag on either panel to drop
@@ -15,12 +16,13 @@
   import { clear, label } from '../../canvas/draft.ts'
   import { currentTheme, darkScheme, type Theme } from '../../canvas/theme.svelte.ts'
   import {
+    CLUSTER_STRIDE,
     EVENT_KINDS,
     MODELS,
     clusterColor,
     readStreamParams,
     readStreamStats,
-    type BallTrace,
+    type WalkTrace,
     type ScenarioId,
     type SketchTrace,
     type StreamParam,
@@ -51,7 +53,7 @@
     rate: number
     /** Parameters that differ from their defaults, by id. */
     params: Record<string, number>
-    /** Draws how far out each ball takes points, besides its radius. */
+    /** Draws how far out each ball and ellipse takes points, besides its size. */
     showReach: boolean
     /** Draws how the last point was placed, while paused. */
     showTrace: boolean
@@ -134,16 +136,18 @@
     size: number
   }
 
-  /** Two square panels, side by side when wide and stacked when tall. */
+  /** One square panel per model, in whichever grid makes them largest. */
   function layout(width: number, height: number): Panel[] {
-    const across = width >= height
-    const cellW = across ? width / 2 : width
-    const cellH = across ? height : height / 2
-    const size = Math.max(1, Math.min(cellW - 2 * GAP, cellH - 2 * GAP - TITLE))
-    return [0, 1].map(i => ({
-      x: (across ? i * cellW : 0) + (cellW - size) / 2,
-      y: (across ? 0 : i * cellH) + (cellH - size - TITLE) / 2 + TITLE,
-      size,
+    const n = MODELS.length
+    const size = (cols: number) => Math.min(width / cols - 2 * GAP, height / Math.ceil(n / cols) - 2 * GAP - TITLE)
+    const cols = [1, 2, 3].reduce((best, c) => (size(c) > size(best) ? c : best), 1)
+    const s = Math.max(1, size(cols))
+    const cellW = width / cols
+    const cellH = height / Math.ceil(n / cols)
+    return MODELS.map((_, i) => ({
+      x: (i % cols) * cellW + (cellW - s) / 2,
+      y: Math.floor(i / cols) * cellH + (cellH - s - TITLE) / 2 + TITLE,
+      size: s,
     }))
   }
 
@@ -218,21 +222,31 @@
     ctx.stroke()
   }
 
-  /** Clusters as circles of their radius; for the balls also, faintly, their reach. */
+  /** The ellipse of semi-axes a and b (in px) turned by `angle`, around `q`. */
+  function ellipse(ctx: CanvasRenderingContext2D, q: Point, a: number, b: number, angle: number) {
+    ctx.beginPath()
+    ctx.ellipse(q.x, q.y, Math.max(a, 1), Math.max(b, 1), angle, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+
+  /**
+   * Clusters as their one-standard-deviation ellipse (a circle of their
+   * radius for balls and the sketch), and, faintly, how far they reach.
+   */
   function drawClusters(ctx: CanvasRenderingContext2D, t: Theme, p: Panel, clusters: Float32Array, reach: number | null, dark: boolean) {
     ctx.save()
-    for (let i = 0; i < clusters.length / 6; i++) {
-      const [id, x, y, r, , counted] = clusters.subarray(i * 6, i * 6 + 6)
+    for (let i = 0; i < clusters.length / CLUSTER_STRIDE; i++) {
+      const [id, x, y, a, b, angle, , counted] = clusters.subarray(i * CLUSTER_STRIDE, (i + 1) * CLUSTER_STRIDE)
       const q = at(p, x, y)
       ctx.strokeStyle = counted ? clusterColor(id, dark) : t.inkFaint
       ctx.lineWidth = counted ? 1.75 : 1
       ctx.setLineDash(counted ? [] : [3, 3])
-      circle(ctx, q, r * p.size)
+      ellipse(ctx, q, a * p.size, b * p.size, angle)
       if (reach !== null && counted) {
         ctx.lineWidth = 1
         ctx.setLineDash([2, 4])
         ctx.strokeStyle = clusterColor(id, dark, 0.45)
-        circle(ctx, q, r * reach * p.size)
+        ellipse(ctx, q, a * reach * p.size, b * reach * p.size, angle)
       }
       ctx.setLineDash([])
       ctx.fillStyle = counted ? clusterColor(id, dark) : t.inkFaint
@@ -269,9 +283,12 @@
     ctx.restore()
   }
 
-  function drawBallTrace(ctx: CanvasRenderingContext2D, t: Theme, p: Panel, trace: BallTrace, clusters: Float32Array) {
+  function drawWalkTrace(ctx: CanvasRenderingContext2D, t: Theme, p: Panel, trace: WalkTrace, clusters: Float32Array, noun: string) {
     const centers: Record<number, Point> = {}
-    for (let i = 0; i < clusters.length / 6; i++) centers[clusters[i * 6]] = at(p, clusters[i * 6 + 1], clusters[i * 6 + 2])
+    for (let i = 0; i < clusters.length / CLUSTER_STRIDE; i++) {
+      const k = i * CLUSTER_STRIDE
+      centers[clusters[k]] = at(p, clusters[k + 1], clusters[k + 2])
+    }
     const q = at(p, trace.point[0], trace.point[1])
     ctx.save()
     ctx.strokeStyle = t.inkFaint
@@ -299,7 +316,7 @@
     ctx.arc(q.x, q.y, 4, 0, Math.PI * 2)
     ctx.fill()
     ctx.restore()
-    const what = trace.spawned ? 'spawned a ball' : `joined ball ${trace.ball}`
+    const what = trace.spawned ? `spawned a new ${noun}` : `joined ${noun} ${trace.cluster}`
     const how = trace.fullScan ? 'after a full scan' : `walk of ${trace.path.length}`
     label(ctx, t, `${trace.checked.length} distances, ${how}: ${what}`, { x: q.x + 8, y: q.y - 12 }, t.signal, 'left')
   }
@@ -338,6 +355,7 @@
     const panels = layout(width, height)
     const points = lab.points()
     const stats = lab.stats()
+    const [ballReach, ellipseReach] = lab.reaches()
     clear(ctx, dpr)
     MODELS.forEach((model, i) => {
       const p = panels[i]
@@ -347,14 +365,16 @@
       ctx.strokeRect(p.x, p.y, p.size, p.size)
       drawPoints(ctx, t, p, points, lab!.assignments(model.id), dark)
       if (model.id === 'sketch') drawFacilities(ctx, t, p, lab!.facilities())
-      drawClusters(ctx, t, p, clusters, model.id === 'balls' && showReach ? reachOf() : null, dark)
+      const reach = model.id === 'balls' ? ballReach : model.id === 'ellipses' ? ellipseReach : null
+      drawClusters(ctx, t, p, clusters, showReach ? reach : null, dark)
       drawEvents(ctx, t, p, lab!.events(model.id))
       if (!running && showTrace) {
         const raw = JSON.parse(lab!.trace(model.id))
-        if (raw && model.id === 'balls') drawBallTrace(ctx, t, p, raw as BallTrace, clusters)
+        if (raw && model.id === 'balls') drawWalkTrace(ctx, t, p, raw as WalkTrace, clusters, 'ball')
+        if (raw && model.id === 'ellipses') drawWalkTrace(ctx, t, p, raw as WalkTrace, clusters, 'ellipse')
         if (raw && model.id === 'sketch') drawSketchTrace(ctx, t, p, raw as SketchTrace)
       }
-      const k = model.id === 'balls' ? stats[2] : stats[3]
+      const k = stats[2 + 4 * i]
       label(ctx, t, `${model.label} · ${k} clusters`, { x: p.x, y: p.y - TITLE / 2 }, t.ink, 'left')
     })
 
@@ -364,14 +384,9 @@
     }
   })
 
-  /** The balls' reach in radii, as currently set. */
-  function reachOf(): number {
-    return params['balls.reach'] ?? known.find(p => p.id === 'balls.reach')?.default ?? 2.5
-  }
-
 </script>
 
 <canvas {@attach canvas.attach} {@attach paint}>
-  A stream of points clustered as it arrives, by balls that spawn, merge, split and fade, and by a sketch refined with
+  A stream of points clustered as it arrives, by balls and by ellipses that spawn, merge, split and fade, and by a sketch refined with
   ball k-means
 </canvas>
