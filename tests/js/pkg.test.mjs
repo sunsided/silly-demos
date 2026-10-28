@@ -19,7 +19,7 @@ before(async () => {
 })
 
 test('the classes and functions the pages use are exported', () => {
-  for (const name of ['BoidsParams', 'BoidsSim', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'TspLab', 'VoronoiTests']) {
+  for (const name of ['BoidsParams', 'BoidsSim', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'SuccessorLab', 'TspLab', 'VoronoiTests']) {
     assert.equal(typeof wasm[name], 'function', name)
   }
   assert.equal(typeof wasm.run, 'function')
@@ -140,6 +140,25 @@ test('the Tours lab takes cities as typed arrays and returns its ring and tour',
   assert.deepEqual([...tour].sort((a, b) => a - b), [...Array(30).keys()])
   assert.equal(typeof lab.length(), 'number')
   assert.equal(typeof lab.readout(), 'number')
+  lab.free()
+})
+
+test('the Successors lab returns each model as typed arrays', () => {
+  const lab = new wasm.SuccessorLab(1)
+  assert.equal(lab.set_nodes(25), true)
+  lab.step(2000)
+  for (const id of ['som', 'ng', 'gng', 'gng-u', 'kmeans']) {
+    const w = lab.weights(id)
+    assert.ok(w instanceof Float32Array, id)
+    assert.ok(lab.edges(id) instanceof Uint32Array, id)
+    const errors = lab.errors(id)
+    assert.ok(errors instanceof Float32Array && errors.length === 4, id)
+    assert.equal(errors[2], w.length / 2, id)
+  }
+  assert.equal(lab.weights('som').length, 50)
+  assert.ok(Number.isNaN(lab.errors('kmeans')[1]))
+  assert.equal(lab.weights('lvq').length, 0)
+  assert.equal(lab.status(), 'training')
   lab.free()
 })
 
