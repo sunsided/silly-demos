@@ -1361,7 +1361,7 @@ mod tests {
             );
             assert!(b.deferred > 0, "some splits waited for evidence");
             assert!(b.moved > 0 && b.recheck_checks > 0);
-            check(&b);
+            check(&b, &store);
             for (id, &leaf) in b.leaf_of.iter().enumerate() {
                 assert!(
                     b.nodes[leaf as usize].members.contains(&(id as u32)),
@@ -1412,7 +1412,7 @@ mod tests {
                     "{name} seed {seed}: leaves {}",
                     leaf_ari(&b, &labels)
                 );
-                check(&b);
+                check(&b, &store);
             }
             for d in 0..2 {
                 assert!(
@@ -1437,7 +1437,7 @@ mod tests {
         for id in 0..10_000 {
             t.insert(id, &store);
         }
-        check(&t);
+        check(&t, &store);
         for d in 1..=3 {
             assert!(
                 ari_at(&t, &labels, d) > 0.98,
@@ -1470,8 +1470,9 @@ mod tests {
     }
 
     /// The tree's bookkeeping holds: every point where its leaf says, every
-    /// node's count its children's sum, its center their mean.
-    fn check(t: &Tree) {
+    /// node's count its children's sum, its center the mean of the points
+    /// below it and its squared norms theirs.
+    fn check(t: &Tree, store: &[f32]) {
         for (id, &leaf) in t.leaf_of.iter().enumerate() {
             assert!(
                 t.nodes[leaf as usize].members.contains(&(id as u32)),
@@ -1489,6 +1490,34 @@ mod tests {
                 let sum: u32 = n.children.iter().map(|&c| t.nodes[c].count).sum();
                 assert_eq!(n.count, sum, "node {i}");
             }
+        }
+        // Every point's sums, added to each node on its way up from its leaf.
+        let mut sums = vec![vec![0.0f64; t.dim]; t.nodes.len()];
+        let mut sq = vec![0.0f64; t.nodes.len()];
+        for (id, &leaf) in t.leaf_of.iter().enumerate() {
+            let x = t.point(store, id as u32);
+            for n in t.path_up(leaf as usize) {
+                sums[n].iter_mut().zip(x).for_each(|(s, &v)| *s += v as f64);
+                sq[n] += norm2(x);
+            }
+        }
+        for (i, n) in t.nodes.iter().enumerate() {
+            if n.count == 0 {
+                continue;
+            }
+            for (c, s) in n.center.iter().zip(&sums[i]) {
+                let mean = s / n.count as f64;
+                assert!(
+                    (*c as f64 - mean).abs() < 1e-3,
+                    "node {i}: center {c} against mean {mean}"
+                );
+            }
+            assert!(
+                (n.sq - sq[i]).abs() < 1e-3 * sq[i].max(1.0),
+                "node {i}: squared norms {} against {}",
+                n.sq,
+                sq[i]
+            );
         }
     }
 
