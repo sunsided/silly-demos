@@ -413,7 +413,7 @@ fn the_stream_is_clustered_on_wasm32_as_natively() {
 }
 
 /// A tree grows from 64-dimensional embeddings on wasm32 and finds the
-/// topics, and a beam search through it beats a scan.
+/// topics, a repaired one too, and a beam search through it beats a scan.
 #[wasm_bindgen_test]
 fn a_tree_of_clusters_grows_on_wasm32() {
     let mut lab = TreeLab::new(1);
@@ -424,6 +424,11 @@ fn a_tree_of_clusters_grows_on_wasm32() {
         lab.quality("online")[0] > 0.85,
         "topics {:?}",
         lab.quality("online")
+    );
+    assert!(
+        lab.quality("repaired")[0] > 0.95,
+        "repaired topics {:?}",
+        lab.quality("repaired")
     );
     let s = lab.search("online");
     assert!(s[10] > 0.95 && s[11] < s[12] / 5.0, "beam 8: {s:?}");

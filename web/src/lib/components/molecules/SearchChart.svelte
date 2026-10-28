@@ -5,13 +5,13 @@
   width, on a log scale reaching to what a scan of every point takes.
 -->
 <script lang="ts">
-  import type { SearchCurve } from '../../demos/clustering/tree.ts'
+  import type { SearchCurve, TreeTone } from '../../demos/clustering/tree.ts'
 
   let {
     curves,
   }: {
     /** One curve per tree, with the CSS class it is drawn in. */
-    curves: readonly { label: string; tone: 'cobalt' | 'verdigris' | 'amber'; curve: SearchCurve }[]
+    curves: readonly { label: string; tone: TreeTone; curve: SearchCurve }[]
   } = $props()
 
   const WIDTH = 300
@@ -125,6 +125,14 @@
     fill: var(--color-verdigris);
   }
 
+  polyline.tone-signal {
+    stroke: var(--color-signal);
+  }
+
+  circle.tone-signal {
+    fill: var(--color-signal);
+  }
+
   figcaption {
     margin-top: var(--space-xs);
     font-size: var(--font-size-xs);
@@ -169,5 +177,9 @@
 
   th.tone-verdigris {
     color: var(--color-verdigris);
+  }
+
+  th.tone-signal {
+    color: var(--color-signal);
   }
 </style>

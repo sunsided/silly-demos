@@ -1,7 +1,9 @@
 import type { TreeLab } from 'silly_demos'
 
 export type SpaceId = 'sphere64' | 'plane'
-export type WhichTree = 'online' | 'careful' | 'passes'
+export type WhichTree = 'online' | 'careful' | 'repaired' | 'passes'
+/** The colors trees are told apart by. */
+export type TreeTone = 'cobalt' | 'verdigris' | 'signal' | 'amber'
 
 export const SPACES: readonly { value: SpaceId; label: string; detail: string }[] = [
   {
@@ -17,9 +19,10 @@ export const SPACES: readonly { value: SpaceId; label: string; detail: string }[
   },
 ]
 
-export const TREES: readonly { id: WhichTree; label: string; tone: 'cobalt' | 'verdigris' | 'amber' }[] = [
+export const TREES: readonly { id: WhichTree; label: string; tone: TreeTone }[] = [
   { id: 'online', label: 'Grown online', tone: 'cobalt' },
   { id: 'careful', label: 'Grown carefully', tone: 'verdigris' },
+  { id: 'repaired', label: 'Grown fast, repaired', tone: 'signal' },
   { id: 'passes', label: 'Built in passes', tone: 'amber' },
 ]
 
@@ -59,6 +62,10 @@ export interface TreeQuality {
   deferred: number
   /** Points moved by re-checking. */
   moved: number
+  /** Distances per point to decide repairs. */
+  repair: number
+  /** Repairs made: children merged, flattened, grouped or lifted. */
+  repairs: number
 }
 
 /** Recall@10 and distances per query at each beam, and what a scan takes. */
@@ -92,6 +99,8 @@ export function readTreeStats(lab: TreeLab): TreeStats {
       passes: c[3],
       deferred: c[4],
       moved: c[5],
+      repair: c[6],
+      repairs: c[7],
     }
   }
   return { points, total, dim, quality }

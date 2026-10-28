@@ -2,9 +2,10 @@
   @component
   A tree of clusters growing from a stream of embeddings: the points on
   their two principal axes, colored by their node at the chosen depth,
-  with the tree's centers and links over them; and both trees, grown
-  online and built in passes, as icicles, every node as wide as the points
-  it holds, colored by the true topic most of them come from.
+  with the tree's centers and links over them; and every tree, grown
+  online plainly, carefully or with repairs, and built in passes, as
+  icicles, every node as wide as the points it holds, colored by the true
+  topic most of them come from.
 -->
 <script lang="ts">
   import type { TreeLab } from 'silly_demos'
@@ -285,5 +286,5 @@
 </script>
 
 <canvas {@attach canvas.attach}>
-  A tree of clusters growing from a stream of embeddings, drawn on two principal axes, with both trees as icicles
+  A tree of clusters growing from a stream of embeddings, drawn on two principal axes, with every tree as an icicle
 </canvas>

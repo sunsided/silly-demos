@@ -1,8 +1,8 @@
 //! WASM bindings for the clustering lab's hierarchy mode (`stream::tree`):
-//! mock embeddings streamed into two trees of clusters that grow online, a
-//! plain one and a careful one, the same points built into a tree in
-//! passes, all scored against the true hierarchy and searched for nearest
-//! neighbors.
+//! mock embeddings streamed into three trees of clusters that grow online,
+//! a plain one, a careful one and a repaired one, the same points built
+//! into a tree in passes, all scored against the true hierarchy and
+//! searched for nearest neighbors.
 
 use stream::embed::{BRANCHING, EmbedSpec, Embedder, LEVELS, Projection};
 use stream::metrics::adjusted_rand;
@@ -96,23 +96,26 @@ enum Which {
     Online,
     /// Grown online, carefully: coarsest level, confirmed splits, re-checks.
     Careful,
+    /// Grown online as quickly as the plain tree, and repaired.
+    Repaired,
     /// Built in passes over the stored points.
     Passes,
 }
 
 impl Which {
-    /// The tree for a UI id: "online" or "passes".
+    /// The tree for a UI id: "online", "careful", "repaired" or "passes".
     fn parse(id: &str) -> Option<Which> {
         match id {
             "online" => Some(Which::Online),
             "careful" => Some(Which::Careful),
+            "repaired" => Some(Which::Repaired),
             "passes" => Some(Which::Passes),
             _ => None,
         }
     }
 }
 
-/// A stream of labeled embeddings, a tree grown from it online and one
+/// A stream of labeled embeddings, trees grown from it online and one
 /// built from the same points in passes.
 #[wasm_bindgen]
 pub struct TreeLab {
@@ -134,6 +137,8 @@ pub struct TreeLab {
     online: Tree,
     /// The careful tree grown online.
     careful: Tree,
+    /// The plain tree with repairs, grown online.
+    repaired: Tree,
     /// The tree built in passes, once there is one.
     passes: Option<Tree>,
     /// Queries for the search, generated with the stream's tree.
@@ -158,6 +163,7 @@ impl TreeLab {
             projection: Projection::fit(&[], 2, &mut Rng::new(1)),
             online: Tree::new(TreeParams::default(), spec.dim, seed as u64),
             careful: Tree::new(TreeParams::careful(), spec.dim, seed as u64),
+            repaired: Tree::new(TreeParams::repaired(), spec.dim, seed as u64),
             passes: None,
             queries: Vec::new(),
             values: PARAMS.iter().map(|p| p.default).collect(),
@@ -230,10 +236,18 @@ impl TreeLab {
         self.projected.clear();
         self.online = Tree::new(self.tree_params(), spec.dim, self.seed ^ 0x1234);
         self.careful = Tree::new(self.careful_params(), spec.dim, self.seed ^ 0x1234);
+        self.repaired = Tree::new(
+            TreeParams {
+                repair: true,
+                ..self.tree_params()
+            },
+            spec.dim,
+            self.seed ^ 0x1234,
+        );
         self.passes = None;
     }
 
-    /// Streams up to `n` more points into both online trees, stopping at the
+    /// Streams up to `n` more points into the online trees, stopping at the
     /// set number; once there, builds the tree in passes. Returns how many.
     pub fn step(&mut self, n: u32) -> u32 {
         let total = self.value("points") as usize;
@@ -246,6 +260,7 @@ impl TreeLab {
             self.leaves.push(leaf as u32);
             self.online.insert(id, &self.store);
             self.careful.insert(id, &self.store);
+            self.repaired.insert(id, &self.store);
             done += 1;
         }
         if self.leaves.len() >= total && self.passes.is_none() {
@@ -288,7 +303,7 @@ impl TreeLab {
             .collect()
     }
 
-    /// For each point, the node of tree `which` ("online" or "passes") it is
+    /// For each point, the node of tree `which` (see [`TreeLab::nodes`]) it is
     /// in at `depth` (its leaf where that is shallower); empty for an
     /// unknown tree or one not built yet.
     pub fn assignments(&self, which: &str, depth: u32) -> Vec<u32> {
@@ -301,7 +316,8 @@ impl TreeLab {
             .collect()
     }
 
-    /// The nodes of tree `which`, eight values each: parent (−1 for the
+    /// The nodes of tree `which` ("online", "careful", "repaired" or
+    /// "passes"), eight values each: parent (−1 for the
     /// root), depth, points through it, its center projected (x, y), the
     /// true topic most of its points are from, the share they hold, and 1
     /// for a leaf. Empty for an unknown tree or one not built yet.
@@ -376,7 +392,8 @@ impl TreeLab {
     /// What tree `which` cost and repaired: distances per point to place
     /// points, per point to split nodes, per point to re-check points;
     /// passes over the points; splits put off for want of evidence; points
-    /// moved by re-checking. Empty for an unknown tree or one not built yet.
+    /// moved by re-checking; distances per point to decide repairs; repairs
+    /// made. Empty for an unknown tree or one not built yet.
     pub fn cost(&self, which: &str) -> Vec<f32> {
         let Some(tree) = self.tree(which) else {
             return Vec::new();
@@ -395,6 +412,8 @@ impl TreeLab {
             tree.passes as f32,
             tree.deferred as f32,
             tree.moved as f32,
+            per(tree.repair_checks),
+            tree.repairs as f32,
         ]
     }
 
@@ -489,6 +508,7 @@ impl TreeLab {
         match Which::parse(which)? {
             Which::Online => Some(&self.online),
             Which::Careful => Some(&self.careful),
+            Which::Repaired => Some(&self.repaired),
             Which::Passes => self.passes.as_ref(),
         }
     }
@@ -513,19 +533,33 @@ mod tests {
     }
 
     #[test]
-    fn both_trees_find_the_topics_and_the_leaves() {
+    fn every_tree_finds_the_topics_and_the_leaves() {
         let lab = run("sphere64", 20_000.0);
         assert!(lab.has_passes());
-        for which in ["online", "careful", "passes"] {
+        for which in ["online", "careful", "repaired", "passes"] {
             let q = lab.quality(which);
             assert!(q[0] > 0.85 && q[3] > 0.85, "{which}: {q:?}");
-            if which == "careful" {
+            if which == "careful" || which == "repaired" {
                 assert!(
                     q[0] > 0.95 && q[1] > 0.95,
-                    "careful topics and subtopics: {q:?}"
+                    "{which} topics and subtopics: {q:?}"
                 );
             }
         }
+    }
+
+    #[test]
+    fn the_repaired_tree_repairs_for_little() {
+        let lab = run("sphere64", 20_000.0);
+        let c = lab.cost("repaired");
+        assert_eq!(c.len(), 8);
+        assert!(c[7] > 0.0, "some repairs: {c:?}");
+        assert!(c[6] < 5.0, "repairs per point: {c:?}");
+        assert!(
+            c[1] < lab.cost("careful")[1] / 3.0,
+            "split for less than waiting: {c:?}"
+        );
+        assert_eq!(lab.cost("online")[7], 0.0);
     }
 
     #[test]
@@ -541,19 +575,24 @@ mod tests {
     #[test]
     fn nodes_count_their_points_and_know_their_topic() {
         let lab = run("plane", 6000.0);
-        let nodes = lab.nodes("online");
-        assert_eq!(nodes.len() % NODE_STRIDE, 0);
-        assert_eq!(nodes[0], -1.0, "the root has no parent");
-        assert_eq!(nodes[2], 6000.0, "every point passes the root");
-        // Children's points add up to their parent's.
-        let n = nodes.len() / NODE_STRIDE;
-        for p in 0..n {
-            let kids: f32 = (0..n)
-                .filter(|&c| nodes[c * NODE_STRIDE] == p as f32)
-                .map(|c| nodes[c * NODE_STRIDE + 2])
-                .sum();
-            let leaf = nodes[p * NODE_STRIDE + 7] == 1.0;
-            assert!(leaf || kids == nodes[p * NODE_STRIDE + 2], "node {p}");
+        for which in ["online", "repaired"] {
+            let nodes = lab.nodes(which);
+            assert_eq!(nodes.len() % NODE_STRIDE, 0);
+            assert_eq!(nodes[0], -1.0, "the root has no parent");
+            assert_eq!(nodes[2], 6000.0, "every point passes the root");
+            // Children's points add up to their parent's.
+            let n = nodes.len() / NODE_STRIDE;
+            for p in 0..n {
+                let kids: f32 = (0..n)
+                    .filter(|&c| nodes[c * NODE_STRIDE] == p as f32)
+                    .map(|c| nodes[c * NODE_STRIDE + 2])
+                    .sum();
+                let leaf = nodes[p * NODE_STRIDE + 7] == 1.0;
+                assert!(
+                    leaf || kids == nodes[p * NODE_STRIDE + 2],
+                    "{which} node {p}"
+                );
+            }
         }
         assert_eq!(lab.projected().len(), 2 * 6000);
         assert_eq!(lab.assignments("online", 1).len(), 6000);
