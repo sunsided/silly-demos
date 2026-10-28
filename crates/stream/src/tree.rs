@@ -30,6 +30,16 @@
 //! in the spirit of SPFresh's LIRE rebalancing. The research behind this
 //! is in `docs/research/online-hierarchical-splitting.md`.
 //!
+//! Or a tree can split quickly and mend what it got wrong
+//! ([`TreeParams::repaired`]). Every node keeps the count, the mean and the
+//! sum of squared norms of the points through it, so the squared error of
+//! any grouping of siblings follows exactly from theirs, without a point.
+//! Each time a node's points have doubled it re-decides its children from
+//! that alone: siblings that turn out to be one cluster are merged, a split
+//! that wasn't needed is flattened, a missing level is put in, and a child
+//! that holds what should be siblings has its children lifted among them.
+//! Moves between leaves carry the points' statistics along.
+//!
 //! A one-pass facility-location sketch of each leaf's points, as the flat
 //! [`crate::sketch`] keeps, doesn't do here. In 64 dimensions the noise
 //! between two points of one cluster outweighs the gap between neighboring
@@ -63,6 +73,11 @@ pub struct TreeParams {
     /// Points re-checked per point taken: each is descended again and moved
     /// if it would now land in another leaf. 0 re-checks none.
     pub recheck: f32,
+    /// Re-decide a node's children whenever its points have doubled since
+    /// they were last decided, from the children's statistics alone: merge
+    /// children that turn out to be one cluster, or put a level between
+    /// children that group into fewer clusters.
+    pub repair: bool,
 }
 
 /// How a split chooses its number of children k.
@@ -92,6 +107,7 @@ impl Default for TreeParams {
             restarts: 1,
             confirm: false,
             recheck: 0.0,
+            repair: false,
         }
     }
 }
@@ -115,14 +131,40 @@ impl TreeParams {
             ..TreeParams::default()
         }
     }
+
+    /// The default tree, quick to split, with repairs: on the 64-D
+    /// embeddings it finds topics and subtopics at 1.00 where the default
+    /// tree finds 0.94, for its own splitting cost and less than a distance
+    /// per point on repairs; the careful tree pays seven times as much
+    /// splitting to wait for the evidence instead.
+    pub fn repaired() -> TreeParams {
+        TreeParams {
+            repair: true,
+            ..TreeParams::default()
+        }
+    }
 }
 
 /// Points of a leaf that a split clusters at most; a sample beyond that.
 const SPLIT_SAMPLE: usize = 2000;
-/// Rounds of the ball k-means at most.
+/// Rounds of Lloyd's k-means at most.
 const ROUNDS: usize = 15;
 /// A child needs at least this share of its parent's points.
 const MIN_SHARE: f32 = 0.03;
+/// The share of the best gain a coarser level must have gained for a repair
+/// to take it: the children's own grouping is the best gain, and a level
+/// that holds less than half of it is no reason to undo them. Three pairs of
+/// six clusters in a ring gain a little, and four groups lose, so the
+/// coarsest rule alone would stop at the pairs.
+const STRONG: f32 = 0.5;
+/// How much a lifted child's children must gain per child, against the
+/// level's average gain per child.
+const LIFT: f32 = 0.5;
+/// Repairs at one node per check at most.
+const REPAIRS: usize = 4;
+/// The coarsest rule's share for repairs, for a tree that splits by the
+/// criterion: repairs look for the level that tree skips.
+const REPAIR_SHARE: f32 = 0.2;
 
 /// k-means of `points` into `k` clusters: k-means++ seeding, then Lloyd's
 /// rounds of assigning every point to its nearest center and moving each
@@ -197,6 +239,89 @@ pub fn kmeans(
     (centers, sse, counts)
 }
 
+/// k-means of `points` weighted by `weights` into `k` groups, as
+/// [`kmeans`] does it; returns the group of every point.
+fn weighted_kmeans(
+    points: &[&[f32]],
+    weights: &[f32],
+    k: usize,
+    rng: &mut Rng,
+    checks: &mut u64,
+) -> Vec<usize> {
+    let n = points.len();
+    let k = k.min(n).max(1);
+    let dim = points[0].len();
+    let mut centers: Vec<Vec<f32>> = vec![points[rng.below(n)].to_vec()];
+    let mut nearest: Vec<f32> = points.iter().map(|p| dist2(p, &centers[0])).collect();
+    *checks += n as u64;
+    while centers.len() < k {
+        let total: f32 = nearest.iter().zip(weights).map(|(d, w)| d * w).sum();
+        let mut r = rng.next_f32() * total;
+        let pick = nearest
+            .iter()
+            .zip(weights)
+            .position(|(d, w)| {
+                r -= d * w;
+                r < 0.0
+            })
+            .unwrap_or(n - 1);
+        centers.push(points[pick].to_vec());
+        let last = centers.len() - 1;
+        for (d, p) in nearest.iter_mut().zip(points) {
+            *d = d.min(dist2(p, &centers[last]));
+        }
+        *checks += n as u64;
+    }
+    let mut assigned = vec![usize::MAX; n];
+    for _ in 0..ROUNDS {
+        let mut changed = false;
+        for (i, p) in points.iter().enumerate() {
+            let c = (0..centers.len())
+                .min_by(|&a, &b| dist2(p, &centers[a]).total_cmp(&dist2(p, &centers[b])))
+                .expect("a center");
+            changed |= assigned[i] != c;
+            assigned[i] = c;
+        }
+        *checks += (n * centers.len()) as u64;
+        if !changed {
+            break;
+        }
+        for (c, center) in centers.iter_mut().enumerate() {
+            let rows = points
+                .iter()
+                .zip(weights)
+                .zip(&assigned)
+                .filter(|&(_, &a)| a == c);
+            if rows.clone().any(|_| true) {
+                *center = weighted_mean(rows.map(|((p, &w), _)| (&p[..], w)), dim);
+            }
+        }
+    }
+    assigned
+}
+
+/// The squared error that grouping adds to the points of nodes with
+/// `centers` and `counts` (their weights): each node's count times the
+/// squared distance from its center to its group's mean.
+fn between(centers: &[&[f32]], counts: &[f32], groups: &[usize], k: usize) -> f64 {
+    let dim = centers[0].len();
+    (0..k)
+        .map(|g| {
+            let rows = || {
+                centers
+                    .iter()
+                    .zip(counts)
+                    .zip(groups)
+                    .filter(move |&(_, &a)| a == g)
+            };
+            let mean = weighted_mean(rows().map(|((c, &w), _)| (&c[..], w)), dim);
+            rows()
+                .map(|((c, &w), _)| w as f64 * dist2(c, &mean) as f64)
+                .sum::<f64>()
+        })
+        .sum()
+}
+
 /// The Bayesian information criterion of a hard mixture of spherical
 /// Gaussians with a shared variance, as X-means scores one (Pelleg and
 /// Moore, 2000): −2 log-likelihood, that is −2 Σⱼ nⱼ ln(nⱼ/n) for the
@@ -240,8 +365,10 @@ fn candidates(
         .collect()
 }
 
-/// The number of children `rule` picks from the scores of k = 1, 2, ….
-fn pick(scores: &[f32], rule: SplitRule) -> usize {
+/// The number of children `rule` picks from the scores of k = 1, 2, …; the
+/// coarsest rule only stops at a k that has gained at least `strong` of the
+/// best gain.
+fn pick(scores: &[f32], rule: SplitRule, strong: f32) -> usize {
     match rule {
         SplitRule::Criterion => scores
             .iter()
@@ -249,12 +376,14 @@ fn pick(scores: &[f32], rule: SplitRule) -> usize {
             .min_by(|a, b| a.1.total_cmp(b.1))
             .map_or(1, |(i, _)| i + 1),
         SplitRule::Coarsest(share) => {
-            // The first k that has gained overall and whose next child would
-            // add less than `share` of the average gain per child so far.
+            // The first k that has gained `strong` of the best gain and
+            // whose next child would add less than `share` of the average
+            // gain per child so far.
             let k_max = scores.len();
+            let best = scores.iter().fold(f32::INFINITY, |a, &b| a.min(b));
             for k in 2..=k_max {
                 let gained = scores[0] - scores[k - 1];
-                if gained <= 0.0 {
+                if gained <= 0.0 || gained < strong * (scores[0] - best) {
                     continue;
                 }
                 let next = if k < k_max {
@@ -287,7 +416,7 @@ pub fn split_points(
     }
     let mut runs = candidates(points, p.max_children.min(n / 2), p, rng, checks);
     let scores: Vec<f32> = runs.iter().map(|r| r.0).collect();
-    let k = pick(&scores, p.rule);
+    let k = pick(&scores, p.rule, 0.0);
     let centers = std::mem::take(&mut runs[k - 1].1);
     if centers.len() < 2 {
         return None;
@@ -326,6 +455,11 @@ pub struct Node {
     pub members: Vec<u32>,
     /// The members a leaf needs before it next tries to split.
     next_try: u32,
+    /// The sum of the squared norms of the points through it: with the
+    /// count and the center, their squared error about the center.
+    sq: f64,
+    /// Its count when its children were last decided; 0 for a leaf.
+    settled: u32,
 }
 
 impl Node {
@@ -339,6 +473,8 @@ impl Node {
             children: Vec::new(),
             members: Vec::new(),
             next_try: split_at,
+            sq: 0.0,
+            settled: 0,
         }
     }
 
@@ -346,6 +482,39 @@ impl Node {
     pub fn is_leaf(&self) -> bool {
         self.children.is_empty()
     }
+
+    /// The squared error of its points about its center.
+    fn within(&self) -> f64 {
+        let norm: f64 = self.center.iter().map(|&c| (c as f64) * (c as f64)).sum();
+        (self.sq - self.count as f64 * norm).max(0.0)
+    }
+
+    /// Takes in point `x`: the center stays the mean of the points through it.
+    fn add(&mut self, x: &[f32]) {
+        self.count += 1;
+        pull(&mut self.center, x, 1.0 / self.count as f32);
+        self.sq += norm2(x);
+    }
+
+    /// Lets point `x` go, the inverse of [`Node::add`].
+    fn remove(&mut self, x: &[f32]) {
+        if self.count <= 1 {
+            self.count = 0;
+            self.sq = 0.0;
+            return;
+        }
+        let n = self.count as f32;
+        for (c, &v) in self.center.iter_mut().zip(x) {
+            *c = (n * *c - v) / (n - 1.0);
+        }
+        self.count -= 1;
+        self.sq = (self.sq - norm2(x)).max(0.0);
+    }
+}
+
+/// The squared norm of `x`, in double precision for running sums.
+fn norm2(x: &[f32]) -> f64 {
+    x.iter().map(|&v| (v as f64) * (v as f64)).sum()
 }
 
 /// The tree, its leaves' members and its bookkeeping.
@@ -361,6 +530,9 @@ pub struct Tree {
     pub leaf_of: Vec<u32>,
     /// Its random numbers.
     rng: Rng,
+    /// The repairs' own random numbers, so that checking for a repair that
+    /// changes nothing leaves the tree as it would have grown without.
+    repair_rng: Rng,
     /// Distances computed to place points on their way down.
     pub place_checks: u64,
     /// Distances computed to split leaves: clustering and moving members.
@@ -375,6 +547,11 @@ pub struct Tree {
     pub moved: u64,
     /// Distances computed re-checking points.
     pub recheck_checks: u64,
+    /// Repairs that changed the tree: children merged, flattened or grouped
+    /// under a new level.
+    pub repairs: u64,
+    /// Distances computed deciding repairs.
+    pub repair_checks: u64,
     /// Re-checks owed: grows by `recheck` per point taken.
     debt: f32,
     /// The next point id to re-check.
@@ -390,6 +567,7 @@ impl Tree {
             nodes: vec![Node::new(vec![0.0; dim], 0, None, params.split_at)],
             leaf_of: Vec::new(),
             rng: Rng::new(seed),
+            repair_rng: Rng::new(seed ^ 0x5eed),
             place_checks: 0,
             split_checks: 0,
             points: 0,
@@ -397,6 +575,8 @@ impl Tree {
             deferred: 0,
             moved: 0,
             recheck_checks: 0,
+            repairs: 0,
+            repair_checks: 0,
             debt: 0.0,
             cursor: 0,
         }
@@ -424,13 +604,13 @@ impl Tree {
     pub fn insert(&mut self, id: u32, store: &[f32]) -> usize {
         let x = self.point(store, id);
         let mut node = 0;
+        let mut path = Vec::new();
         loop {
-            let n = &mut self.nodes[node];
-            n.count += 1;
-            pull(&mut n.center, x, 1.0 / n.count as f32);
-            if n.is_leaf() {
+            self.nodes[node].add(x);
+            if self.nodes[node].is_leaf() {
                 break;
             }
+            path.push(node);
             self.place_checks += self.nodes[node].children.len() as u64;
             node = self.nearest_child(node, x);
         }
@@ -446,6 +626,16 @@ impl Tree {
         }
         if self.params.recheck > 0.0 {
             self.recheck(store);
+        }
+        if self.params.repair {
+            // The shallowest node on the way down whose points have doubled.
+            let due = path.into_iter().find(|&n| {
+                let n = &self.nodes[n];
+                !n.is_leaf() && n.count >= 2 * n.settled.max(1)
+            });
+            if let Some(node) = due {
+                self.repair(node, store);
+            }
         }
         self.leaf_of[id as usize] as usize
     }
@@ -482,6 +672,7 @@ impl Tree {
                 .push(Node::new(center, depth, Some(node), p.split_at));
         }
         self.nodes[node].children = (first..self.nodes.len()).collect();
+        self.nodes[node].settled = self.nodes[node].count;
         let members = std::mem::take(&mut self.nodes[node].members);
         self.split_checks += (members.len() * self.nodes[node].children.len()) as u64;
         for id in members {
@@ -496,13 +687,16 @@ impl Tree {
         for c in self.nodes[node].children.clone() {
             let child = &mut self.nodes[c];
             if !child.members.is_empty() {
-                child.center = weighted_mean(
+                let rows = || {
                     child
                         .members
                         .iter()
-                        .map(|&i| (&store[i as usize * dim..(i as usize + 1) * dim], 1.0)),
-                    dim,
-                );
+                        .map(|&i| &store[i as usize * dim..(i as usize + 1) * dim])
+                };
+                let center = weighted_mean(rows().map(|r| (r, 1.0)), dim);
+                let sq = rows().map(norm2).sum();
+                child.center = center;
+                child.sq = sq;
             }
         }
         true
@@ -528,7 +722,9 @@ impl Tree {
 
     /// Re-checks the points owed: descends each again from the root and
     /// moves it if it lands in another leaf than the one it is in, as
-    /// centers have moved since it was placed.
+    /// centers have moved since it was placed. A move takes the point out
+    /// of the nodes above its old leaf and into those above its new one, up
+    /// to where the two paths meet.
     fn recheck(&mut self, store: &[f32]) {
         self.debt += self.params.recheck;
         let n = self.leaf_of.len() as u32;
@@ -547,6 +743,19 @@ impl Tree {
                 let members = &mut self.nodes[from].members;
                 if let Some(at) = members.iter().position(|&m| m == id) {
                     members.swap_remove(at);
+                }
+                let above: Vec<usize> = self.path_up(from).collect();
+                let meet = self
+                    .path_up(node)
+                    .find(|n| above.contains(n))
+                    .expect("the root is above both");
+                for &n in above.iter().take_while(|&&n| n != meet) {
+                    self.nodes[n].remove(x);
+                }
+                let mut n = node;
+                while n != meet {
+                    self.nodes[n].add(x);
+                    n = self.nodes[n].parent.expect("below the meeting node");
                 }
                 self.nodes[node].members.push(id);
                 self.leaf_of[id as usize] = node as u32;
@@ -572,6 +781,10 @@ impl Tree {
         let root = &mut tree.nodes[0];
         root.members = ids.to_vec();
         root.count = ids.len() as u32;
+        root.sq = ids
+            .iter()
+            .map(|&i| norm2(&store[i as usize * dim..(i as usize + 1) * dim]))
+            .sum();
         root.center = weighted_mean(
             ids.iter()
                 .map(|&i| (&store[i as usize * dim..(i as usize + 1) * dim], 1.0)),
@@ -602,6 +815,294 @@ impl Tree {
             }
         }
         tree
+    }
+
+    /// Node `node` and its ancestors up to the root, deepest first.
+    fn path_up(&self, node: usize) -> impl Iterator<Item = usize> + '_ {
+        std::iter::successors(Some(node), |&n| self.nodes[n].parent)
+    }
+
+    /// Re-decides the children of node `node` from their statistics alone,
+    /// regrouping them ([`Tree::regroup`]) or lifting one's children among
+    /// them ([`Tree::lift`]) until neither changes anything. Returns the
+    /// repairs made.
+    fn repair(&mut self, mut node: usize, store: &[f32]) -> u32 {
+        self.nodes[node].settled = self.nodes[node].count;
+        let mut made = 0;
+        // Each repair leaves fewer nodes or a shallower tree; a few suffice.
+        for _ in 0..REPAIRS {
+            let Some(at) = self.regroup(node, store).or_else(|| self.lift(node)) else {
+                break;
+            };
+            node = at;
+            made += 1;
+        }
+        self.repairs += made as u64;
+        made
+    }
+
+    /// The [`bic`] of nodes `parts` taken as one level of clusters, from
+    /// their counts and squared errors.
+    fn level_score(&self, parts: &[usize]) -> f32 {
+        let sse: f64 = parts.iter().map(|&c| self.nodes[c].within()).sum();
+        let counts: Vec<usize> = parts
+            .iter()
+            .map(|&c| self.nodes[c].count as usize)
+            .collect();
+        bic(sse as f32, &counts, self.dim, self.params.price)
+    }
+
+    /// The share the coarsest rule takes for repairs: the tree's own, or
+    /// [`REPAIR_SHARE`] for a tree that splits by the criterion.
+    fn repair_share(&self) -> f32 {
+        match self.params.rule {
+            SplitRule::Coarsest(share) => share,
+            SplitRule::Criterion => REPAIR_SHARE,
+        }
+    }
+
+    /// Groups the children of node `node` by weighted k-means on their
+    /// centers for every number of groups, scores each grouping by the
+    /// [`bic`] of the points the groups would hold (exact, from the
+    /// children's counts, centers and squared errors), and takes the
+    /// coarsest strong level. If that is fewer groups than children, the
+    /// tree was split too early or too finely here:
+    ///
+    /// * one group: the split was not needed, and the children are
+    ///   flattened into the node;
+    /// * some children standing alone: the others were cut too finely, and
+    ///   each group of several is merged into one child that takes over
+    ///   their children (or members), keeping the levels even;
+    /// * every group of several: a level is missing, and one is put between
+    ///   the node and its children.
+    ///
+    /// Returns the node's index after the change, if it made one.
+    fn regroup(&mut self, node: usize, store: &[f32]) -> Option<usize> {
+        let children = self.nodes[node].children.clone();
+        let m = children.len();
+        if m < 2 {
+            return None;
+        }
+        let centers: Vec<&[f32]> = children
+            .iter()
+            .map(|&c| &self.nodes[c].center[..])
+            .collect();
+        let weights: Vec<f32> = children
+            .iter()
+            .map(|&c| self.nodes[c].count as f32)
+            .collect();
+        let within: f64 = children.iter().map(|&c| self.nodes[c].within()).sum();
+        let mut groupings = Vec::with_capacity(m);
+        let mut scores = Vec::with_capacity(m);
+        for k in 1..=m {
+            let groups = if k == 1 {
+                vec![0; m]
+            } else if k == m {
+                (0..m).collect()
+            } else {
+                (0..self.params.restarts.max(2))
+                    .map(|_| {
+                        let g = weighted_kmeans(
+                            &centers,
+                            &weights,
+                            k,
+                            &mut self.repair_rng,
+                            &mut self.repair_checks,
+                        );
+                        (between(&centers, &weights, &g, k), g)
+                    })
+                    .min_by(|a, b| a.0.total_cmp(&b.0))
+                    .expect("at least one run")
+                    .1
+            };
+            let sse = within + between(&centers, &weights, &groups, k);
+            let mut counts = vec![0usize; k];
+            for (&g, &w) in groups.iter().zip(&weights) {
+                counts[g] += w as usize;
+            }
+            scores.push(bic(sse as f32, &counts, self.dim, self.params.price));
+            groupings.push(groups);
+        }
+        let k = pick(&scores, SplitRule::Coarsest(self.repair_share()), STRONG);
+        let mut groups: Vec<Vec<usize>> = vec![Vec::new(); k];
+        for (&c, &g) in children.iter().zip(&groupings[k - 1]) {
+            groups[g].push(c);
+        }
+        groups.retain(|g| !g.is_empty());
+        if groups.len() == m {
+            return None;
+        }
+        if groups.len() == 1 {
+            self.nodes[node].children.clear();
+            self.absorb(node, &children, store);
+        } else {
+            let alone = groups.iter().any(|g| g.len() == 1);
+            let mut kept = Vec::with_capacity(groups.len());
+            for group in groups {
+                if group.len() == 1 {
+                    kept.push(group[0]);
+                    continue;
+                }
+                let joined = self.join(node, &group);
+                if alone {
+                    self.absorb(joined, &group, store);
+                } else {
+                    for &c in &group {
+                        self.nodes[c].parent = Some(joined);
+                    }
+                    self.nodes[joined].children = group;
+                }
+                kept.push(joined);
+            }
+            self.nodes[node].children = kept;
+        }
+        Some(self.compact()[node])
+    }
+
+    /// Lifts the children of one child of node `node` up among its
+    /// siblings, if that child holds what should be siblings: a split that
+    /// took two clusters for one, its children the two. Lifting a child
+    /// changes the level's [`bic`] by an exact amount; it is taken if the
+    /// gain per child it adds is at least [`LIFT`] times the level's
+    /// average gain per child, where the children of a true cluster add a
+    /// tenth of it at most. The child that gains most is lifted.
+    ///
+    /// Returns the node's index after the change, if it made one.
+    fn lift(&mut self, node: usize) -> Option<usize> {
+        let children = self.nodes[node].children.clone();
+        let m = children.len();
+        if m < 2 {
+            return None;
+        }
+        let parent = &self.nodes[node];
+        let one = bic(
+            parent.within() as f32,
+            &[parent.count as usize],
+            self.dim,
+            self.params.price,
+        );
+        let now = self.level_score(&children);
+        let average = (one - now) / (m - 1) as f32;
+        if average <= 0.0 {
+            return None;
+        }
+        let (best, ratio) = children
+            .iter()
+            .filter(|&&c| self.nodes[c].children.len() >= 2)
+            .map(|&c| {
+                let kids = &self.nodes[c].children;
+                let mut parts: Vec<usize> = children.iter().copied().filter(|&o| o != c).collect();
+                parts.extend(kids);
+                let gain = (now - self.level_score(&parts)) / (kids.len() - 1) as f32;
+                (c, gain / average)
+            })
+            .max_by(|a, b| a.1.total_cmp(&b.1))?;
+        if ratio < LIFT {
+            return None;
+        }
+        let kids = std::mem::take(&mut self.nodes[best].children);
+        for &g in &kids {
+            self.nodes[g].parent = Some(node);
+        }
+        let n = &mut self.nodes[node];
+        n.children.retain(|&c| c != best);
+        n.children.extend(kids);
+        Some(self.compact()[node])
+    }
+
+    /// A new child of `node` holding the points of nodes `group`: their
+    /// summed counts and squared norms, and the mean of their centers.
+    fn join(&mut self, node: usize, group: &[usize]) -> usize {
+        let dim = self.dim;
+        let center = weighted_mean(
+            group
+                .iter()
+                .map(|&c| (&self.nodes[c].center[..], self.nodes[c].count as f32)),
+            dim,
+        );
+        let mut joined = Node::new(
+            center,
+            self.nodes[node].depth + 1,
+            Some(node),
+            self.params.split_at,
+        );
+        joined.count = group.iter().map(|&c| self.nodes[c].count).sum();
+        joined.sq = group.iter().map(|&c| self.nodes[c].sq).sum();
+        joined.settled = joined.count;
+        self.nodes.push(joined);
+        self.nodes.len() - 1
+    }
+
+    /// Makes node `target`, its statistics already those of `sources`'
+    /// points, take over their children and members in their stead. Where
+    /// both come together, the members descend to the leaves below.
+    fn absorb(&mut self, target: usize, sources: &[usize], store: &[f32]) {
+        let mut children = Vec::new();
+        let mut members = Vec::new();
+        for &s in sources {
+            children.append(&mut self.nodes[s].children);
+            members.append(&mut self.nodes[s].members);
+        }
+        for &c in &children {
+            self.nodes[c].parent = Some(target);
+        }
+        let t = &mut self.nodes[target];
+        t.children = children;
+        if t.is_leaf() {
+            // Split again once the evidence for it has doubled.
+            t.next_try = (2 * members.len() as u32).max(self.params.split_at);
+            t.settled = 0;
+            for &id in &members {
+                self.leaf_of[id as usize] = target as u32;
+            }
+            self.nodes[target].members = members;
+            return;
+        }
+        t.settled = t.count;
+        for id in members {
+            let x = self.point(store, id);
+            let mut node = target;
+            while !self.nodes[node].is_leaf() {
+                self.repair_checks += self.nodes[node].children.len() as u64;
+                node = self.nearest_child(node, x);
+                self.nodes[node].add(x);
+            }
+            self.nodes[node].members.push(id);
+            self.leaf_of[id as usize] = node as u32;
+        }
+    }
+
+    /// Drops the nodes no longer in the tree and renumbers the rest in
+    /// breadth-first order, depths and leaves anew. Returns every old
+    /// index's new one, `usize::MAX` for the dropped.
+    fn compact(&mut self) -> Vec<usize> {
+        let mut order = vec![0usize];
+        let mut i = 0;
+        while i < order.len() {
+            order.extend(self.nodes[order[i]].children.iter().copied());
+            i += 1;
+        }
+        let mut index = vec![usize::MAX; self.nodes.len()];
+        for (new, &old) in order.iter().enumerate() {
+            index[old] = new;
+        }
+        let mut old = std::mem::take(&mut self.nodes);
+        self.nodes = order
+            .iter()
+            .map(|&o| {
+                let mut n = std::mem::replace(&mut old[o], Node::new(Vec::new(), 0, None, 0));
+                n.parent = n.parent.map(|p| index[p]);
+                n.children.iter_mut().for_each(|c| *c = index[*c]);
+                n
+            })
+            .collect();
+        for i in 0..self.nodes.len() {
+            self.nodes[i].depth = self.nodes[i].parent.map_or(0, |p| self.nodes[p].depth + 1);
+            for &id in &self.nodes[i].members {
+                self.leaf_of[id as usize] = i as u32;
+            }
+        }
+        index
     }
 
     /// The ancestor of node `node` at `depth`, or `node` itself if it is
@@ -823,16 +1324,21 @@ mod tests {
     fn the_coarsest_rule_stops_where_the_gains_fall_off() {
         // Gains of 50, 40, 45, then 3: the level ends at k = 4.
         let scores = [0.0, -50.0, -90.0, -135.0, -138.0, -141.0];
-        assert_eq!(pick(&scores, SplitRule::Coarsest(0.2)), 4);
-        assert_eq!(pick(&scores, SplitRule::Criterion), 6);
+        assert_eq!(pick(&scores, SplitRule::Coarsest(0.2), 0.0), 4);
+        assert_eq!(pick(&scores, SplitRule::Criterion, 0.0), 6);
         assert_eq!(
-            pick(&[0.0, 5.0], SplitRule::Coarsest(0.2)),
+            pick(&[0.0, 5.0], SplitRule::Coarsest(0.2), 0.0),
             1,
             "no gain, no split"
         );
         // Halving a ring of six loses; going on to six gains.
         let ring = [0.0, 93.0, -14.0, -40.0, -127.0, -295.0, -262.0, -230.0];
-        assert_eq!(pick(&ring, SplitRule::Coarsest(0.2)), 6);
+        assert_eq!(pick(&ring, SplitRule::Coarsest(0.2), 0.0), 6);
+        // Three pairs of the ring gain a little, four groups lose: too weak
+        // a level for a repair, against what six gain.
+        let pairs = [-8435.0, -7918.0, -8498.0, -7995.0, -9013.0, -9940.0];
+        assert_eq!(pick(&pairs, SplitRule::Coarsest(0.2), 0.0), 3);
+        assert_eq!(pick(&pairs, SplitRule::Coarsest(0.2), STRONG), 6);
     }
 
     #[test]
@@ -855,6 +1361,7 @@ mod tests {
             );
             assert!(b.deferred > 0, "some splits waited for evidence");
             assert!(b.moved > 0 && b.recheck_checks > 0);
+            check(&b);
             for (id, &leaf) in b.leaf_of.iter().enumerate() {
                 assert!(
                     b.nodes[leaf as usize].members.contains(&(id as u32)),
@@ -866,6 +1373,123 @@ mod tests {
             careful > plain && careful > 0.97,
             "topics: plain {plain}, careful {careful}"
         );
+    }
+
+    #[test]
+    fn repair_mends_a_tree_split_in_haste() {
+        // Splitting from 100 points, one tree takes two topics for one and
+        // cuts others in two; the other waits for evidence and still takes
+        // two for one. Repairs merge the halves and lift the pairs apart.
+        for (name, base) in [
+            ("plain", TreeParams::default()),
+            ("careful", TreeParams::careful()),
+        ] {
+            let (mut hasty, mut mended) = ([0.0; 2], [0.0; 2]);
+            for seed in 1..=3 {
+                let (store, labels) = data(EmbedSpec::sphere64(), 20_000, seed);
+                let p = TreeParams {
+                    split_at: 100,
+                    ..base
+                };
+                let mut a = Tree::new(p, 64, seed);
+                let mut b = Tree::new(TreeParams { repair: true, ..p }, 64, seed);
+                for id in 0..20_000 {
+                    a.insert(id, &store);
+                    b.insert(id, &store);
+                }
+                for d in 0..2 {
+                    hasty[d] += ari_at(&a, &labels, d + 1) / 3.0;
+                    mended[d] += ari_at(&b, &labels, d + 1) / 3.0;
+                }
+                assert!(b.repairs > 0, "{name} seed {seed}: no repairs");
+                assert!(
+                    (b.repair_checks as f32) < 5.0 * 20_000.0,
+                    "{name} seed {seed}: {} distances repairing",
+                    b.repair_checks
+                );
+                assert!(
+                    leaf_ari(&b, &labels) > 0.9,
+                    "{name} seed {seed}: leaves {}",
+                    leaf_ari(&b, &labels)
+                );
+                check(&b);
+            }
+            for d in 0..2 {
+                assert!(
+                    mended[d] > 0.98 && mended[d] > hasty[d],
+                    "{name} depth {}: {} hasty, {} repaired",
+                    d + 1,
+                    hasty[d],
+                    mended[d]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn repair_mends_the_plane_too() {
+        let (store, labels) = data(EmbedSpec::plane(), 10_000, 1);
+        let p = TreeParams {
+            split_at: 50,
+            ..TreeParams::repaired()
+        };
+        let mut t = Tree::new(p, 2, 1);
+        for id in 0..10_000 {
+            t.insert(id, &store);
+        }
+        check(&t);
+        for d in 1..=3 {
+            assert!(
+                ari_at(&t, &labels, d) > 0.98,
+                "depth {d}: {}",
+                ari_at(&t, &labels, d)
+            );
+        }
+    }
+
+    #[test]
+    fn a_grouping_s_error_follows_from_its_parts() {
+        // The squared error of the root's points is that of its children's
+        // points about their centers plus what grouping them all adds.
+        let (tree, _, _) = grow(EmbedSpec::plane(), 5_000);
+        let kids = &tree.nodes[0].children;
+        let centers: Vec<&[f32]> = kids.iter().map(|&c| &tree.nodes[c].center[..]).collect();
+        let counts: Vec<f32> = kids.iter().map(|&c| tree.nodes[c].count as f32).collect();
+        let parts: f64 = kids.iter().map(|&c| tree.nodes[c].within()).sum();
+        let all = parts + between(&centers, &counts, &vec![0; kids.len()], 1);
+        let root = tree.nodes[0].within();
+        assert!((all - root).abs() < 1e-3 * root, "{all} against {root}");
+        assert!(
+            between(
+                &centers,
+                &counts,
+                &(0..kids.len()).collect::<Vec<_>>(),
+                kids.len()
+            ) < 1e-9
+        );
+    }
+
+    /// The tree's bookkeeping holds: every point where its leaf says, every
+    /// node's count its children's sum, its center their mean.
+    fn check(t: &Tree) {
+        for (id, &leaf) in t.leaf_of.iter().enumerate() {
+            assert!(
+                t.nodes[leaf as usize].members.contains(&(id as u32)),
+                "point {id}"
+            );
+        }
+        for (i, n) in t.nodes.iter().enumerate() {
+            if let Some(p) = n.parent {
+                assert!(t.nodes[p].children.contains(&i));
+                assert_eq!(n.depth, t.nodes[p].depth + 1);
+            }
+            if n.is_leaf() {
+                assert_eq!(n.count as usize, n.members.len(), "leaf {i}");
+            } else {
+                let sum: u32 = n.children.iter().map(|&c| t.nodes[c].count).sum();
+                assert_eq!(n.count, sum, "node {i}");
+            }
+        }
     }
 
     #[test]
