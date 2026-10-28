@@ -171,15 +171,16 @@ test('the clustering lab returns points, clusters and traces as typed arrays and
   const assigned = lab.assignments('balls')
   assert.ok(assigned instanceof Uint32Array)
   assert.equal(assigned.length, 500)
-  for (const model of ['balls', 'sketch']) {
+  for (const model of ['balls', 'ellipses', 'sketch']) {
     const clusters = lab.clusters(model)
-    assert.ok(clusters instanceof Float32Array && clusters.length % 6 === 0, model)
+    assert.ok(clusters instanceof Float32Array && clusters.length % 8 === 0, model)
     assert.equal(typeof JSON.parse(lab.trace(model)).point[0], 'number', model)
     assert.equal(lab.event_counts(model).length, 4, model)
   }
   assert.ok(lab.facilities() instanceof Float32Array)
-  assert.equal(lab.history().length % 7, 0)
-  assert.equal(JSON.parse(lab.params()).length, 11)
+  assert.equal(lab.history().length % 9, 0)
+  assert.equal(lab.stats().length, 14)
+  assert.equal(JSON.parse(lab.params()).length, 17)
   assert.equal(lab.paint(0.5, 0.5), true)
   lab.free()
 })

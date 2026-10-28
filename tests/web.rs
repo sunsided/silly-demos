@@ -395,7 +395,15 @@ fn the_stream_is_clustered_on_wasm32_as_natively() {
     let mut lab = ClusterLab::new(1);
     lab.step(8000);
     let s = lab.stats();
-    assert_eq!(&s[1..4], &[5.0, 5.0, 5.0], "true, balls, sketch");
+    // True clusters, then each model's count in strides of four.
+    assert_eq!(
+        [s[1], s[2], s[6], s[10]],
+        [5.0; 4],
+        "true, balls, ellipses, sketch"
+    );
+    assert!(lab.set_scenario("anisotropic"));
+    lab.step(15_000);
+    assert_eq!(lab.stats()[6], 4.0, "ellipses on long thin clusters");
     assert!(lab.set_scenario("drift"));
     lab.step(11_500);
     assert!(lab.event_counts("balls")[3] > 0.0, "a split");

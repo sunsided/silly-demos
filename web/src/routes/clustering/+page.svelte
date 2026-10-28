@@ -41,21 +41,22 @@
 
   const tally = (counts: number[]) =>
     `${counts[0]} spawns, ${counts[1]} merges, ${counts[2]} prunes, ${counts[3]} splits`
+  const checks = (m: { search: number; upkeep: number; total: number }) =>
+    `${m.search.toFixed(1)} + ${m.upkeep.toFixed(1)} of ${m.total}`
 </script>
 
 <SheetLayout
   title="Clustering lab"
-  summary="Points arrive one at a time and are seen once. Two methods find the clusters as they come, including how many there are, without being told: balls that spawn, merge, split and fade, and a one-pass sketch refined by ball k-means. Both are scored against the clusters that really made the points."
+  summary="Points arrive one at a time and are seen once. Three methods find the clusters as they come, including how many there are, without being told: balls that spawn, merge, split and fade, ellipses that do the same along each cluster's own axes, and a one-pass sketch refined by ball k-means. All are scored against the clusters that really made the points."
   readouts={[
     { label: 'Status', value: running ? 'Streaming' : 'Paused', tone: running ? 'cobalt' : 'ink' },
     { label: 'Points', value: stats.t.toLocaleString() },
     { label: 'True clusters', value: stats.truth },
-    { label: 'Balls find', value: stats.balls, tone: 'cobalt' },
-    { label: 'Sketch finds', value: stats.sketch, tone: 'amber' },
-    {
-      label: 'Ball checks per point',
-      value: `${stats.ballSearch.toFixed(1)} + ${stats.ballUpkeep.toFixed(1)} of ${stats.ballCount}`,
-    },
+    { label: 'Balls find', value: stats.models.balls.clusters, tone: 'cobalt' },
+    { label: 'Ellipses find', value: stats.models.ellipses.clusters, tone: 'verdigris' },
+    { label: 'Sketch finds', value: stats.models.sketch.clusters, tone: 'amber' },
+    { label: 'Ball checks per point', value: checks(stats.models.balls) },
+    { label: 'Ellipse checks per point', value: checks(stats.models.ellipses) },
   ]}
 >
   {#snippet drawing()}
@@ -117,7 +118,7 @@
     </ControlGroup>
 
     <ControlGroup title="Show">
-      <Toggle label="How far each ball reaches" bind:checked={showReach} />
+      <Toggle label="How far each ball and ellipse reaches" bind:checked={showReach} />
       <Toggle label="How the last point was placed, while paused" bind:checked={showTrace} />
     </ControlGroup>
   {/snippet}
@@ -132,7 +133,10 @@
         { tone: 'signal', label: 'Prune' },
       ]}
     />
-    <p class="credit">Balls: {tally(stats.events.balls)}. Sketch: {tally(stats.events.sketch)}.</p>
+    <p class="credit">
+      Balls: {tally(stats.models.balls.events)}. Ellipses: {tally(stats.models.ellipses.events)}. Sketch:
+      {tally(stats.models.sketch.events)}.
+    </p>
     <p>
       <strong>Balls.</strong> Each cluster is a ball: a center and a radius, the root mean square distance of its points.
       A point joins the nearest ball if it lies within that ball’s reach, a few radii out, and otherwise spawns a ball of
@@ -150,6 +154,16 @@
       starts anywhere, which is what a hierarchy would fix.
     </p>
     <p>
+      <strong>Ellipses.</strong> The same rules with a covariance per cluster: a point’s distance to a cluster is its
+      Mahalanobis distance, so the reach is a number of standard deviations along the cluster’s own axes and a long thin
+      cluster is one long thin ellipse instead of a chain of balls. Among the ellipses that reach a point it joins the one
+      it fits best by Gaussian likelihood, so a big loose ellipse doesn’t outbid a tight one. Two merge when the merged
+      ellipse is no bigger than the two together, and one splits when its halves are four of their own standard
+      deviations apart; one Gaussian’s halves sit about 2.7 apart however stretched, so a long cluster stays whole. The
+      search bounds each ellipse by its longest semi-axis and so stays exact, at the price of checking more neighbors
+      around thin ones.
+    </p>
+    <p>
       <strong>Sketch + ball k-means.</strong> Online facility location keeps a few dozen weighted centers in one pass: a point
       opens a new facility with probability d²/f, its squared distance to the nearest over the cost of opening one, and
       otherwise joins the nearest. When there are too many, f grows and the facilities are run through the same rule again.
@@ -157,7 +171,8 @@
       number is whatever balances error against that price. Pause and step to see the probability and the draw.
     </p>
     <p>
-      Both struggle where clusters aren’t ball-shaped: long thin ones come apart, and rings and moons are cut into arcs.
+      Balls and the sketch struggle where clusters aren’t ball-shaped: long thin ones come apart. Ellipses hold those, but
+      rings and moons, which aren’t ellipses either, are still cut into arcs by all three.
       Batch k-means, told the true number and given the recent points all at once, is the line to beat; on the rings it
       fails too. The adjusted Rand index is 1 when a method groups the newest 600 points exactly as their true clusters do,
       and about 0 when it does no better than chance.
