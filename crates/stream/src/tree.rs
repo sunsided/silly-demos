@@ -18,6 +18,18 @@
 //! within half the way to the next center, doesn't carry over: in 64
 //! dimensions hardly any point lies that close, and centers follow a few.
 //!
+//! Left at that, a leaf splits into the finest structure its points
+//! support, up to the cap, and in a hierarchy that cuts topics in two: the
+//! subtopics below are real clusters too. A careful tree
+//! ([`TreeParams::careful`]) chooses the coarsest strong level instead,
+//! where the criterion's gains fall off ([`SplitRule::Coarsest`]); splits
+//! only once two random halves of a leaf's points agree on that choice,
+//! waiting for more points otherwise, in the spirit of ODAC's rule of
+//! deciding once the evidence separates the options; and re-checks a few
+//! points per point taken, moving those that would now descend elsewhere,
+//! in the spirit of SPFresh's LIRE rebalancing. The research behind this
+//! is in `docs/research/online-hierarchical-splitting.md`.
+//!
 //! A one-pass facility-location sketch of each leaf's points, as the flat
 //! [`crate::sketch`] keeps, doesn't do here. In 64 dimensions the noise
 //! between two points of one cluster outweighs the gap between neighboring
@@ -41,6 +53,30 @@ pub struct TreeParams {
     /// A factor on the information criterion's penalty per child: above 1
     /// the tree splits less readily, below 1 more.
     pub price: f32,
+    /// How a split chooses its number of children.
+    pub rule: SplitRule,
+    /// k-means runs per number of children; the best is kept.
+    pub restarts: usize,
+    /// Split only when two random halves of a leaf's points choose the same
+    /// number of children; otherwise wait for more points.
+    pub confirm: bool,
+    /// Points re-checked per point taken: each is descended again and moved
+    /// if it would now land in another leaf. 0 re-checks none.
+    pub recheck: f32,
+}
+
+/// How a split chooses its number of children k.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SplitRule {
+    /// The k the information criterion likes best, up to the cap: the finest
+    /// structure the points support.
+    Criterion,
+    /// The coarsest strong level: the fewest children that have improved the
+    /// criterion and after which one more would add less than this share of
+    /// the average improvement per child so far. Where clusters nest, the
+    /// gains fall off sharply after the top level, and this stops there; an
+    /// early loss (six clusters in a ring don't halve well) doesn't stop it.
+    Coarsest(f32),
 }
 
 impl Default for TreeParams {
@@ -52,6 +88,31 @@ impl Default for TreeParams {
             max_depth: 4,
             max_children: 8,
             price: 1.0,
+            rule: SplitRule::Criterion,
+            restarts: 1,
+            confirm: false,
+            recheck: 0.0,
+        }
+    }
+}
+
+impl TreeParams {
+    /// The default tree made careful: children up to 10 chosen as the
+    /// coarsest strong level (a fifth of the average gain) from the best of
+    /// 2 k-means runs, every split confirmed on two halves of the leaf's
+    /// points, and half a point re-checked per point taken. On the 64-D
+    /// embeddings this finds topics and subtopics at 0.99 and 0.98 where the
+    /// default tree finds 0.93 and 0.94, for seven times its splitting cost.
+    /// A single run per k is too noisy for the coarsest rule, and more runs
+    /// or more children bought nothing.
+    pub fn careful() -> TreeParams {
+        TreeParams {
+            max_children: 10,
+            rule: SplitRule::Coarsest(0.2),
+            restarts: 2,
+            confirm: true,
+            recheck: 0.5,
+            ..TreeParams::default()
         }
     }
 }
@@ -156,14 +217,67 @@ pub fn bic(sse: f32, counts: &[usize], dim: usize, price: f32) -> f32 {
     -2.0 * weights + nd * (sse.max(1e-12) / nd).ln() + price * (k * (dim + 1)) as f32 * nf.ln()
 }
 
-/// The children `points` split into: k-means for every k from 1 to
-/// `max_children`, keeping the k with the best [`bic`]; `None` when that is
-/// a single cluster or fewer than two children would each hold a share of
-/// the points.
+/// The best of `restarts` k-means runs of `points` for every k from 1 to
+/// `max_k`, with its [`bic`]: (score, centers) per k.
+fn candidates(
+    points: &[&[f32]],
+    max_k: usize,
+    p: &TreeParams,
+    rng: &mut Rng,
+    checks: &mut u64,
+) -> Vec<(f32, Vec<Vec<f32>>)> {
+    let dim = points[0].len();
+    (1..=max_k)
+        .map(|k| {
+            (0..p.restarts.max(1))
+                .map(|_| {
+                    let (centers, sse, counts) = kmeans(points, k, rng, checks);
+                    (bic(sse, &counts, dim, p.price), centers)
+                })
+                .min_by(|a, b| a.0.total_cmp(&b.0))
+                .expect("at least one run")
+        })
+        .collect()
+}
+
+/// The number of children `rule` picks from the scores of k = 1, 2, ….
+fn pick(scores: &[f32], rule: SplitRule) -> usize {
+    match rule {
+        SplitRule::Criterion => scores
+            .iter()
+            .enumerate()
+            .min_by(|a, b| a.1.total_cmp(b.1))
+            .map_or(1, |(i, _)| i + 1),
+        SplitRule::Coarsest(share) => {
+            // The first k that has gained overall and whose next child would
+            // add less than `share` of the average gain per child so far.
+            let k_max = scores.len();
+            for k in 2..=k_max {
+                let gained = scores[0] - scores[k - 1];
+                if gained <= 0.0 {
+                    continue;
+                }
+                let next = if k < k_max {
+                    scores[k - 1] - scores[k]
+                } else {
+                    f32::NEG_INFINITY
+                };
+                if next < share * gained / (k - 1) as f32 {
+                    return k;
+                }
+            }
+            1
+        }
+    }
+}
+
+/// The children `points` split into: k-means for every k up to
+/// `max_children`, the number of children chosen by the tree's
+/// [`SplitRule`]; `None` when that is one, or when fewer than two children
+/// would each hold a share of the points.
 pub fn split_points(
     points: &[&[f32]],
-    max_children: usize,
-    price: f32,
+    p: &TreeParams,
     rng: &mut Rng,
     checks: &mut u64,
 ) -> Option<Vec<Vec<f32>>> {
@@ -171,23 +285,17 @@ pub fn split_points(
     if n < 4 {
         return None;
     }
-    let dim = points[0].len();
-    let mut best: Option<(f32, Vec<Vec<f32>>)> = None;
-    for k in 1..=max_children.min(n / 2) {
-        let (centers, sse, counts) = kmeans(points, k, rng, checks);
-        let score = bic(sse, &counts, dim, price);
-        if best.as_ref().is_none_or(|(b, _)| score < *b) {
-            best = Some((score, centers));
-        }
-    }
-    let (_, centers) = best?;
+    let mut runs = candidates(points, p.max_children.min(n / 2), p, rng, checks);
+    let scores: Vec<f32> = runs.iter().map(|r| r.0).collect();
+    let k = pick(&scores, p.rule);
+    let centers = std::mem::take(&mut runs[k - 1].1);
     if centers.len() < 2 {
         return None;
     }
     let mut counts = vec![0usize; centers.len()];
-    for p in points {
+    for x in points {
         let c = (0..centers.len())
-            .min_by(|&a, &b| dist2(p, &centers[a]).total_cmp(&dist2(p, &centers[b])))
+            .min_by(|&a, &b| dist2(x, &centers[a]).total_cmp(&dist2(x, &centers[b])))
             .expect("a center");
         counts[c] += 1;
     }
@@ -261,6 +369,16 @@ pub struct Tree {
     pub points: u64,
     /// Passes over the stored points it took, for a tree built in passes.
     pub passes: u32,
+    /// Splits put off because the two halves of a leaf disagreed.
+    pub deferred: u64,
+    /// Points moved by re-checking, and the distances that took.
+    pub moved: u64,
+    /// Distances computed re-checking points.
+    pub recheck_checks: u64,
+    /// Re-checks owed: grows by `recheck` per point taken.
+    debt: f32,
+    /// The next point id to re-check.
+    cursor: u32,
 }
 
 impl Tree {
@@ -276,6 +394,11 @@ impl Tree {
             split_checks: 0,
             points: 0,
             passes: 0,
+            deferred: 0,
+            moved: 0,
+            recheck_checks: 0,
+            debt: 0.0,
+            cursor: 0,
         }
     }
 
@@ -321,6 +444,9 @@ impl Tree {
         if leaf.members.len() as u32 >= leaf.next_try && leaf.depth < self.params.max_depth {
             self.split(node, store);
         }
+        if self.params.recheck > 0.0 {
+            self.recheck(store);
+        }
         self.leaf_of[id as usize] as usize
     }
 
@@ -338,13 +464,14 @@ impl Tree {
             sample.truncate(SPLIT_SAMPLE);
         }
         let points: Vec<&[f32]> = sample.iter().map(|&id| self.point(store, id)).collect();
-        let Some(centers) = split_points(
-            &points,
-            p.max_children,
-            p.price,
-            &mut self.rng,
-            &mut self.split_checks,
-        ) else {
+        if p.confirm && !self.halves_agree(&points) {
+            // Not enough evidence yet: try again with half as many points more.
+            let leaf = &mut self.nodes[node];
+            leaf.next_try += leaf.next_try / 2;
+            self.deferred += 1;
+            return false;
+        }
+        let Some(centers) = split_points(&points, &p, &mut self.rng, &mut self.split_checks) else {
             self.nodes[node].next_try *= 2;
             return false;
         };
@@ -379,6 +506,53 @@ impl Tree {
             }
         }
         true
+    }
+
+    /// Whether two random halves of `points` split into the same number of
+    /// children (or both into none): the evidence a careful split waits for.
+    fn halves_agree(&mut self, points: &[&[f32]]) -> bool {
+        let mut order: Vec<usize> = (0..points.len()).collect();
+        for i in (1..order.len()).rev() {
+            order.swap(i, self.rng.below(i + 1));
+        }
+        let half = order.len() / 2;
+        let p = self.params;
+        let count = |ids: &[usize], tree: &mut Tree| {
+            let part: Vec<&[f32]> = ids.iter().map(|&i| points[i]).collect();
+            split_points(&part, &p, &mut tree.rng, &mut tree.split_checks).map_or(1, |c| c.len())
+        };
+        let a = count(&order[..half], self);
+        let b = count(&order[half..], self);
+        a == b
+    }
+
+    /// Re-checks the points owed: descends each again from the root and
+    /// moves it if it lands in another leaf than the one it is in, as
+    /// centers have moved since it was placed.
+    fn recheck(&mut self, store: &[f32]) {
+        self.debt += self.params.recheck;
+        let n = self.leaf_of.len() as u32;
+        while self.debt >= 1.0 && n > 0 {
+            self.debt -= 1.0;
+            let id = self.cursor % n;
+            self.cursor = self.cursor.wrapping_add(1);
+            let x = self.point(store, id);
+            let mut node = 0;
+            while !self.nodes[node].is_leaf() {
+                self.recheck_checks += self.nodes[node].children.len() as u64;
+                node = self.nearest_child(node, x);
+            }
+            let from = self.leaf_of[id as usize] as usize;
+            if node != from {
+                let members = &mut self.nodes[from].members;
+                if let Some(at) = members.iter().position(|&m| m == id) {
+                    members.swap_remove(at);
+                }
+                self.nodes[node].members.push(id);
+                self.leaf_of[id as usize] = node as u32;
+                self.moved += 1;
+            }
+        }
     }
 
     /// A tree built in passes over `ids` of `store`, as a batch system would:
@@ -557,7 +731,7 @@ mod tests {
             .collect();
         let points: Vec<&[f32]> = rows.iter().map(|r| &r[..]).collect();
         let mut checks = 0;
-        let centers = split_points(&points, 8, 1.0, &mut rng, &mut checks).unwrap();
+        let centers = split_points(&points, &TreeParams::default(), &mut rng, &mut checks).unwrap();
         assert_eq!(centers.len(), 3);
         assert!(checks > 0);
         let one: Vec<Vec<f32>> = (0..300)
@@ -565,7 +739,7 @@ mod tests {
             .collect();
         let points: Vec<&[f32]> = one.iter().map(|r| &r[..]).collect();
         assert!(
-            split_points(&points, 8, 1.0, &mut rng, &mut checks).is_none(),
+            split_points(&points, &TreeParams::default(), &mut rng, &mut checks).is_none(),
             "one blob stays whole"
         );
     }
@@ -642,6 +816,55 @@ mod tests {
         assert!(
             narrow.1 < 20_000.0 / 20.0 && wide.1 > narrow.1,
             "distances {narrow:?} → {wide:?}"
+        );
+    }
+
+    #[test]
+    fn the_coarsest_rule_stops_where_the_gains_fall_off() {
+        // Gains of 50, 40, 45, then 3: the level ends at k = 4.
+        let scores = [0.0, -50.0, -90.0, -135.0, -138.0, -141.0];
+        assert_eq!(pick(&scores, SplitRule::Coarsest(0.2)), 4);
+        assert_eq!(pick(&scores, SplitRule::Criterion), 6);
+        assert_eq!(
+            pick(&[0.0, 5.0], SplitRule::Coarsest(0.2)),
+            1,
+            "no gain, no split"
+        );
+        // Halving a ring of six loses; going on to six gains.
+        let ring = [0.0, 93.0, -14.0, -40.0, -127.0, -295.0, -262.0, -230.0];
+        assert_eq!(pick(&ring, SplitRule::Coarsest(0.2)), 6);
+    }
+
+    #[test]
+    fn a_careful_tree_finds_the_topic_level() {
+        let (mut plain, mut careful) = (0.0, 0.0);
+        for seed in 1..=3 {
+            let (store, labels) = data(EmbedSpec::sphere64(), 20_000, seed);
+            let mut a = Tree::new(TreeParams::default(), 64, seed);
+            let mut b = Tree::new(TreeParams::careful(), 64, seed);
+            for id in 0..20_000 {
+                a.insert(id, &store);
+                b.insert(id, &store);
+            }
+            plain += ari_at(&a, &labels, 1) / 3.0;
+            careful += ari_at(&b, &labels, 1) / 3.0;
+            assert!(
+                leaf_ari(&b, &labels) > 0.85,
+                "seed {seed}: leaves {}",
+                leaf_ari(&b, &labels)
+            );
+            assert!(b.deferred > 0, "some splits waited for evidence");
+            assert!(b.moved > 0 && b.recheck_checks > 0);
+            for (id, &leaf) in b.leaf_of.iter().enumerate() {
+                assert!(
+                    b.nodes[leaf as usize].members.contains(&(id as u32)),
+                    "point {id} where it says"
+                );
+            }
+        }
+        assert!(
+            careful > plain && careful > 0.97,
+            "topics: plain {plain}, careful {careful}"
         );
     }
 
