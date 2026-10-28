@@ -98,7 +98,7 @@ impl Robot {
 
 /// How far a disc of `radius` at `p` reaches into the walls: `radius` less
 /// the signed distance to the nearest wall cell, or 0 if it touches none.
-/// With the centre inside a wall cell the distance is negative (how deep it
+/// With the center inside a wall cell the distance is negative (how deep it
 /// is in), so moving towards the cell's edge still reduces the overlap.
 pub fn overlap(walls: &Grid<bool>, p: Point, radius: f32) -> f32 {
     let lo = walls.cell_of(Point::new(p.x - radius, p.y - radius));
@@ -108,7 +108,7 @@ pub fn overlap(walls: &Grid<bool>, p: Point, radius: f32) -> f32 {
     for y in lo.1..=hi.1 {
         for x in lo.0..=hi.0 {
             if walls.get((x, y)).copied().unwrap_or(true) {
-                // Signed distance from the disc centre to the cell square.
+                // Signed distance from the disc center to the cell square.
                 let c = walls.center((x, y));
                 let ex = (p.x - c.x).abs() - half;
                 let ey = (p.y - c.y).abs() - half;
@@ -169,8 +169,8 @@ mod tests {
     }
 
     #[test]
-    fn a_body_centred_inside_a_wall_can_still_get_out() {
-        // A single wall cell around (1.025, 1.025), with the centre in it.
+    fn a_body_centered_inside_a_wall_can_still_get_out() {
+        // A single wall cell around (1.025, 1.025), with the center in it.
         let mut walls = Grid::new(40, 40, 0.05, false);
         walls.set((20, 20), true);
         let mut r = Robot::new(Pose::new(1.03, 1.02, 0.0), Body::default());

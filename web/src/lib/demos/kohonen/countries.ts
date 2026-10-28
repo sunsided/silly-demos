@@ -85,11 +85,11 @@ export function joinShapes(data: CountryData, world: World) {
 }
 
 /**
- * A colour for a position on the map, as in Kaski and Kohonen's figure: the
- * direction from the map's centre sets the hue, the distance the saturation.
- * `dx`, `dy` are relative to the centre, `maxR` the farthest any cell is.
+ * A color for a position on the map, as in Kaski and Kohonen's figure: the
+ * direction from the map's center sets the hue, the distance the saturation.
+ * `dx`, `dy` are relative to the center, `maxR` the farthest any cell is.
  */
-export function wheelColour(dx: number, dy: number, maxR: number, dark: boolean): string {
+export function wheelColor(dx: number, dy: number, maxR: number, dark: boolean): string {
   const hue = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360
   const sat = 20 + 70 * Math.min(1, Math.hypot(dx, dy) / maxR)
   return `hsl(${hue.toFixed(0)} ${sat.toFixed(0)}% ${dark ? 62 : 55}%)`

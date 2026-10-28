@@ -53,7 +53,7 @@ test('numeric arrays come back as typed-array copies', () => {
 test('the Kohonen labs take and return the typed arrays the pages use', () => {
   // The pages hand over pixels as Uint8ClampedArray and rows as Float32Array.
   const data = new wasm.SomData(1)
-  data.set_normalise(false)
+  data.set_normalize(false)
   assert.ok(data.set_lattice('grid', 4, 4))
   assert.ok(data.set_data(Float32Array.from({ length: 300 }, (_, i) => (i * 37) % 256), 3))
   data.step(500)

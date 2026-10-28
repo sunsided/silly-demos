@@ -23,7 +23,7 @@ export const DEMOS = [
     route: '/kohonen',
     name: 'Kohonen maps',
     blurb:
-      'Self-organising maps that sort colours into a palette, map the world’s countries by ten indicators from 1992 to 2022, and unfold over a density you paint.',
+      'Self-organizing maps that sort colors into a palette, map the world’s countries by ten indicators from 1992 to 2022, and unfold over a density you paint.',
     rust: 'SomData::step',
   },
   {

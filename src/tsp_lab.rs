@@ -62,8 +62,8 @@ impl TspLab {
         true
     }
 
-    /// "ring-som", "elastic", "growing", "nn" (nearest neighbour), "two-opt"
-    /// (nearest neighbour, then 2-opt and Or-opt) or "exact" (Held–Karp, up
+    /// "ring-som", "elastic", "growing", "nn" (nearest neighbor), "two-opt"
+    /// (nearest neighbor, then 2-opt and Or-opt) or "exact" (Held–Karp, up
     /// to 13 cities). Resets the parameters to the method's defaults and
     /// restarts. `false`, changing nothing, for an unknown method.
     pub fn set_method(&mut self, id: &str) -> bool {

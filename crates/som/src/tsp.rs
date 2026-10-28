@@ -1,4 +1,4 @@
-//! The travelling salesman problem with elastic rings: a ring of nodes laid
+//! The traveling salesman problem with elastic rings: a ring of nodes laid
 //! over the cities is pulled onto them until it reads as a tour. Three such
 //! methods, a Kohonen ring, Durbin and Willshaw's elastic net and
 //! Angéniol's growing ring, beside the classical heuristics and an exact
@@ -17,7 +17,7 @@ pub mod shapes;
 pub mod tour;
 
 use crate::rng::Rng;
-use baseline::{LocalSearch, nearest_neighbour};
+use baseline::{LocalSearch, nearest_neighbor};
 use cities::{Cities, Matrix};
 use elastic::Elastic;
 use exact::{MAX_EXACT, held_karp};
@@ -69,7 +69,7 @@ pub enum Method {
     /// Angéniol's ring that grows and prunes its nodes.
     Growing,
     /// Greedy nearest neighbor from the first city.
-    NearestNeighbour,
+    NearestNeighbor,
     /// 2-opt and Or-opt local search from a nearest-neighbor start.
     LocalSearch,
     /// Held–Karp dynamic programming, for at most [`MAX_EXACT`] cities.
@@ -82,7 +82,7 @@ impl Method {
         Method::RingSom,
         Method::Elastic,
         Method::Growing,
-        Method::NearestNeighbour,
+        Method::NearestNeighbor,
         Method::LocalSearch,
         Method::Exact,
     ];
@@ -98,7 +98,7 @@ impl Method {
             Method::RingSom => "ring-som",
             Method::Elastic => "elastic",
             Method::Growing => "growing",
-            Method::NearestNeighbour => "nn",
+            Method::NearestNeighbor => "nn",
             Method::LocalSearch => "two-opt",
             Method::Exact => "exact",
         }
@@ -166,7 +166,7 @@ impl Run {
             Method::RingSom => State::RingSom(RingSom::new(unit, values, rng)),
             Method::Elastic => State::Elastic(Elastic::new(unit, values)),
             Method::Growing => State::Growing(Growing::new(unit, values, rng)),
-            Method::NearestNeighbour => State::Greedy(cities.matrix(), None),
+            Method::NearestNeighbor => State::Greedy(cities.matrix(), None),
             Method::LocalSearch => {
                 let m = cities.matrix();
                 let search = LocalSearch::new(&m);
@@ -192,7 +192,7 @@ impl Run {
                 State::RingSom(s) => s.step(unit),
                 State::Elastic(s) => s.step(unit),
                 State::Growing(s) => s.step(unit),
-                State::Greedy(m, tour) => *tour = Some(nearest_neighbour(m, 0)),
+                State::Greedy(m, tour) => *tour = Some(nearest_neighbor(m, 0)),
                 State::LocalSearch(m, search, t) => {
                     search.step(m);
                     *t += 1;
@@ -292,7 +292,7 @@ pub fn centroid(cities: &[[f32; 2]]) -> [f32; 2] {
 
 /// Where the fixed-size rings start: `m` nodes on a small circle round the
 /// cities' centroid, radius 0.1 of the unit square.
-pub fn centre_circle(cities: &[[f32; 2]], m: usize) -> Vec<[f32; 2]> {
+pub fn center_circle(cities: &[[f32; 2]], m: usize) -> Vec<[f32; 2]> {
     const RADIUS: f32 = 0.1;
     let c = centroid(cities);
     (0..m)
@@ -341,7 +341,7 @@ mod tests {
         assert!(Run::new(Method::Elastic, c.clone(), &[2.5, 0.2, 2.0, 0.9], 1).is_none());
         assert!(Run::new(Method::Elastic, c.clone(), &[2.5, 0.2, 2.0], 1).is_none());
         assert!(Run::new(Method::Elastic, c.clone(), &[2.5, f32::NAN, 2.0, 0.2], 1).is_none());
-        assert!(Run::new(Method::NearestNeighbour, c, &[], 1).is_some());
+        assert!(Run::new(Method::NearestNeighbor, c, &[], 1).is_some());
     }
 
     #[test]

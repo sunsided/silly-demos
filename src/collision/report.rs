@@ -57,7 +57,7 @@ pub enum Tone {
     Faint = 2,
     /// Blue for shape B, gaps and rejected pairs.
     Cobalt = 3,
-    /// Alert colour for overlaps and hits.
+    /// Alert color for overlaps and hits.
     Signal = 4,
     /// Green for capsule cores and cells holding only one of A or B.
     Verdigris = 5,
@@ -74,7 +74,7 @@ pub enum Note {
         a: Vec2,
         /// End point.
         b: Vec2,
-        /// Colour of the mark.
+        /// Color of the mark.
         tone: Tone,
         /// Whether the line is dashed.
         dashed: bool,
@@ -87,7 +87,7 @@ pub enum Note {
         b: Vec2,
         /// Sideways offset of the dimension line in px; the sign picks the side.
         offset: f32,
-        /// Colour of the mark.
+        /// Color of the mark.
         tone: Tone,
         /// Label written along the line.
         text: String,
@@ -96,16 +96,16 @@ pub enum Note {
     Point {
         /// Where the dot sits.
         p: Vec2,
-        /// Colour of the mark.
+        /// Color of the mark.
         tone: Tone,
     },
     /// A circle outline.
     Circle {
-        /// Centre.
+        /// Center.
         c: Vec2,
         /// Radius in px.
         r: f32,
-        /// Colour of the mark.
+        /// Color of the mark.
         tone: Tone,
         /// Whether the outline is dashed.
         dashed: bool,
@@ -114,7 +114,7 @@ pub enum Note {
     Polygon {
         /// Vertices in drawing order; the last joins back to the first.
         points: Vec<Vec2>,
-        /// Colour of the mark.
+        /// Color of the mark.
         tone: Tone,
         /// Whether the outline is dashed.
         dashed: bool,
@@ -125,7 +125,7 @@ pub enum Note {
     Label {
         /// Anchor of the text.
         p: Vec2,
-        /// Colour of the text.
+        /// Color of the text.
         tone: Tone,
         /// Text to draw.
         text: String,
@@ -140,7 +140,7 @@ pub enum Note {
         t0: f32,
         /// End parameter.
         t1: f32,
-        /// Colour of the mark.
+        /// Color of the mark.
         tone: Tone,
     },
     /// An arrow from `a` pointing at `b`.
@@ -149,7 +149,7 @@ pub enum Note {
         a: Vec2,
         /// Head.
         b: Vec2,
-        /// Colour of the mark.
+        /// Color of the mark.
         tone: Tone,
     },
 }

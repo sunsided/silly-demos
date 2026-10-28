@@ -1,9 +1,9 @@
 //! A Kohonen map on a closed ring of nodes: shown cities one at a time, the
-//! nearest node and its ring neighbours move towards them, and as the
-//! neighbourhood shrinks the ring settles on a tour.
+//! nearest node and its ring neighbors move towards them, and as the
+//! neighborhood shrinks the ring settles on a tour.
 
 use super::tour::nearest;
-use super::{Param, centre_circle};
+use super::{Param, center_circle};
 use crate::rng::Rng;
 use crate::schedule::{Decay, Schedule, kernel};
 
@@ -40,7 +40,7 @@ impl RingSom {
         let m = ((values[0] * n as f32).round() as usize).max(3);
         let steps = (values[1] * n as f32).round() as u64;
         Self {
-            nodes: centre_circle(cities, m),
+            nodes: center_circle(cities, m),
             schedule: Schedule {
                 steps: steps.max(1),
                 alpha: (values[2], ALPHA_END),

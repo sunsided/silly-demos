@@ -273,7 +273,7 @@ fn minkowski_outline(sa: &Shape, sb: &Shape) -> Vec<Vec2> {
         .collect()
 }
 
-/// Draws the sampled `A − B` outline, the origin and the final simplex, coloured
+/// Draws the sampled `A − B` outline, the origin and the final simplex, colored
 /// by whether the shapes intersect. Does nothing unless sketching.
 fn sketch_minkowski<P: Probe>(sa: &Shape, sb: &Shape, s: &Simplex, intersect: bool, p: &mut P) {
     if !p.sketching() {

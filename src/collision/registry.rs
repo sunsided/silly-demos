@@ -8,7 +8,7 @@ use super::report::Contact;
 use super::shape::{Shape, ShapeKind};
 use ShapeKind::*;
 
-/// Entry point of a method, monomorphised for probe `P`.
+/// Entry point of a method, monomorphized for probe `P`.
 type Run<P> = fn(&Shape, &Shape, &mut P) -> Contact;
 
 /// A narrowphase collision method, with the text the UI shows for it.

@@ -15,18 +15,18 @@
   let error = $state<string | null>(null)
 
   $effect(() => {
-    let cancelled = false
+    let canceled = false
     loadWasm().then(
       m => {
-        if (!cancelled) wasm = m
+        if (!canceled) wasm = m
       },
       (e: unknown) => {
         console.error('Failed to load WASM module:', e)
-        if (!cancelled) error = e instanceof Error ? e.message : String(e)
+        if (!canceled) error = e instanceof Error ? e.message : String(e)
       },
     )
     return () => {
-      cancelled = true
+      canceled = true
     }
   })
 </script>

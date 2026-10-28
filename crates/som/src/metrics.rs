@@ -16,12 +16,12 @@ pub fn quantization_error(cb: &Codebook, samples: &[f32]) -> f32 {
 }
 
 /// The share of samples whose nearest and second-nearest nodes are not
-/// neighbours on the lattice: 0 for a map whose order matches the data's,
+/// neighbors on the lattice: 0 for a map whose order matches the data's,
 /// higher where it is folded or twisted.
 pub fn topographic_error(cb: &Codebook, lattice: &Lattice, samples: &[f32]) -> f32 {
     mean(samples.chunks_exact(cb.dim).map(|x| {
         let (a, b) = cb.bmu2(x);
-        if lattice.neighbours(a, b) { 0.0 } else { 1.0 }
+        if lattice.neighbors(a, b) { 0.0 } else { 1.0 }
     }))
 }
 

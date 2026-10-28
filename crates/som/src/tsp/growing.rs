@@ -1,6 +1,6 @@
-//! Angéniol, de La Croix Vaubois and Le Texier's self-organising ring
+//! Angéniol, de La Croix Vaubois and Le Texier's self-organizing ring
 //! (1988): it starts as a single node and grows. Each city in turn pulls
-//! its nearest node and that node's ring neighbours; a node that wins two
+//! its nearest node and that node's ring neighbors; a node that wins two
 //! cities in one pass splits, and one that wins none for three passes
 //! goes. The gain's reach G shrinks after every pass.
 

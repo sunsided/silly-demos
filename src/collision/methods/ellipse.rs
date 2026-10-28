@@ -75,8 +75,8 @@ fn closest_first_quadrant<P: Probe>(e0: f32, e1: f32, y0: f32, y1: f32, p: &mut 
     }
 }
 
-/// Finds the exact closest point on the ellipse to the circle's centre and
-/// compares its distance with the radius; works with the centre inside the ellipse too.
+/// Finds the exact closest point on the ellipse to the circle's center and
+/// compares its distance with the radius; works with the center inside the ellipse too.
 pub fn circle_ellipse<P: Probe>(a: &Shape, b: &Shape, p: &mut P) -> Contact {
     let (
         Shape::Circle { c, r },

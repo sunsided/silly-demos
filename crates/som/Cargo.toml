@@ -1,7 +1,7 @@
 [package]
 name = "som"
 version = "0.1.0"
-description = "Self-organising (Kohonen) maps: lattices, training schedules, error measures and a paintable sampling density"
+description = "Self-organizing (Kohonen) maps: lattices, training schedules, error measures and a paintable sampling density"
 authors = ["Markus Mayer <widemeadows@gmail.com>"]
 repository = "https://github.com/sunsided/silly-demos"
 license = "MIT OR Apache-2.0 OR EUPL-1.2"

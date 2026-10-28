@@ -150,7 +150,7 @@ impl Poly {
 pub enum Shape {
     /// A disk.
     Circle {
-        /// Centre.
+        /// Center.
         c: Vec2,
         /// Radius, non-negative.
         r: f32,
@@ -164,7 +164,7 @@ pub enum Shape {
     },
     /// `u` is the unit local x axis; the local y axis is `u.perp()`.
     Obb {
-        /// Centre.
+        /// Center.
         c: Vec2,
         /// Half extents along `u` and `u.perp()`.
         half: Vec2,
@@ -177,7 +177,7 @@ pub enum Shape {
     Polygon(Poly),
     /// Semi-axes `a` along `u` and `b` along `u.perp()`.
     Ellipse {
-        /// Centre.
+        /// Center.
         c: Vec2,
         /// Semi-axis along `u`.
         a: f32,
@@ -286,7 +286,7 @@ impl Shape {
         }
     }
 
-    /// A representative centre: the true centre for round shapes and boxes, the
+    /// A representative center: the true center for round shapes and boxes, the
     /// vertex mean for polygons and the core's midpoint for capsules.
     pub fn center(&self) -> Vec2 {
         match *self {
@@ -461,7 +461,7 @@ impl Shape {
 pub struct Body {
     /// The world-space shape the volumes bound.
     pub shape: Shape,
-    /// Cached [`Shape::bounding_circle`] as `(centre, radius)`.
+    /// Cached [`Shape::bounding_circle`] as `(center, radius)`.
     pub circle: (Vec2, f32),
     /// Cached [`Shape::aabb`] as `(min, max)`.
     pub aabb: (Vec2, Vec2),

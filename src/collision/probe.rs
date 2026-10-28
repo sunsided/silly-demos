@@ -8,9 +8,9 @@ use super::report::Note;
 pub struct Counts {
     /// Dot and cross products (including projections onto axes).
     pub dots: u32,
-    /// Square roots, including those inside normalisation.
+    /// Square roots, including those inside normalization.
     pub sqrts: u32,
-    /// Divisions, including those inside normalisation.
+    /// Divisions, including those inside normalization.
     pub divs: u32,
     /// Separating axes tested.
     pub axes: u32,

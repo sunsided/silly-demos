@@ -123,7 +123,7 @@
     oy: number
   }
 
-  /** The bounds fitted into the canvas, centred, aspect kept. */
+  /** The bounds fitted into the canvas, centered, aspect kept. */
   function view(b: Bounds, width: number, height: number): View {
     const scale = Math.min(width / b.width, height / b.height)
     return {

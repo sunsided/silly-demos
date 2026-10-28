@@ -11,7 +11,7 @@
   import ImagePicker from '#lib/components/molecules/ImagePicker.svelte'
   import MetricChart from '#lib/components/molecules/MetricChart.svelte'
   import PlaneGrid from '#lib/components/molecules/PlaneGrid.svelte'
-  import ColourMap from '#lib/components/organisms/ColourMap.svelte'
+  import ColorMap from '#lib/components/organisms/ColorMap.svelte'
   import CountryMap from '#lib/components/organisms/CountryMap.svelte'
   import RaceTable from '#lib/components/organisms/RaceTable.svelte'
   import SomCanvas from '#lib/components/organisms/SomCanvas.svelte'
@@ -61,7 +61,7 @@
   import WasmGate from '#lib/wasm/WasmGate.svelte'
   import { loadWasm, type Wasm } from '#lib/wasm/wasm.ts'
 
-  let mode = $state<ModeId>('colours')
+  let mode = $state<ModeId>('colors')
   let scenario = $state<Scenario | null>(null)
 
   let lattice = $state<LatticeId>('grid')
@@ -162,15 +162,15 @@
     restart++
   }
 
-  // Colours: random colours or an image's pixels.
-  let colourSource = $state<'rgb' | 'image'>('image')
-  let colourImageId = $state('')
-  let colourPixels = $state.raw<Pixels | null>(null)
+  // Colors: random colors or an image's pixels.
+  let colorSource = $state<'rgb' | 'image'>('image')
+  let colorImageId = $state('')
+  let colorPixels = $state.raw<Pixels | null>(null)
   let showUmatrix = $state(false)
 
-  function pickColourImage(img: HTMLImageElement, id: string) {
-    colourPixels = toPixels(img, 256)
-    colourImageId = id
+  function pickColorImage(img: HTMLImageElement, id: string) {
+    colorPixels = toPixels(img, 256)
+    colorImageId = id
     imageError = ''
   }
 
@@ -279,18 +279,18 @@
     running = true
   }
 
-  function setColourSource(source: 'rgb' | 'image') {
-    colourSource = source
+  function setColorSource(source: 'rgb' | 'image') {
+    colorSource = source
     if (source === 'rgb') dataDefaults('grid', 20, 20)
     else dataDefaults('grid', 8, 8)
   }
 
   // The image source starts with The Starry Night.
   $effect(() => {
-    if (mode !== 'colours' || colourSource !== 'image' || colourPixels) return
+    if (mode !== 'colors' || colorSource !== 'image' || colorPixels) return
     const first = BUNDLED.find(b => b.id === 'starry-night') ?? BUNDLED[0]
     loadImage(first.src).then(
-      img => pickColourImage(img, first.id),
+      img => pickColorImage(img, first.id),
       () => (imageError = "Couldn't read that image"),
     )
   })
@@ -300,7 +300,7 @@
     mode = next
     imageError = ''
     if (next === 'unfolding') pick(SCENARIOS[0])
-    else if (next === 'colours') setColourSource(colourSource)
+    else if (next === 'colors') setColorSource(colorSource)
     else if (next === 'countries') dataDefaults('hex', 16, 10)
     else {
       citySource = 'tsplib'
@@ -312,13 +312,13 @@
 
   const SUMMARIES: Record<ModeId, string> = {
     unfolding:
-      'A self-organising map is a lattice of nodes, each with a position in input space. Shown a sample, the nearest node and its lattice neighbours move towards it; as the neighbourhood shrinks, the lattice unfolds over the data while keeping its order. Paint the density it learns from by dragging on the sheet.',
-    colours:
-      'Here the input is colour: three numbers per sample. The map can no longer be drawn in input space, so each node is drawn as a cell in its own colour, where it sits on the lattice. Ordering itself, the map lays the colour cube out flat.',
+      'A self-organizing map is a lattice of nodes, each with a position in input space. Shown a sample, the nearest node and its lattice neighbors move towards it; as the neighborhood shrinks, the lattice unfolds over the data while keeping its order. Paint the density it learns from by dragging on the sheet.',
+    colors:
+      'Here the input is color: three numbers per sample. The map can no longer be drawn in input space, so each node is drawn as a cell in its own color, where it sits on the lattice. Ordering itself, the map lays the color cube out flat.',
     countries:
-      'Countries described by ten development indicators, in 1992 and 2022, on one map: neighbouring cells hold countries that are alike across all ten. After Kaski and Kohonen’s 1996 world poverty map.',
+      'Countries described by ten development indicators, in 1992 and 2022, on one map: neighboring cells hold countries that are alike across all ten. After Kaski and Kohonen’s 1996 world poverty map.',
     tours:
-      'A ring of nodes laid over a set of cities and pulled onto them until it reads as a tour: neural answers to the travelling salesman problem, after Durbin and Willshaw and after Angéniol, raced against the classical heuristics on the same cities.',
+      'A ring of nodes laid over a set of cities and pulled onto them until it reads as a tour: neural answers to the traveling salesman problem, after Durbin and Willshaw and after Angéniol, raced against the classical heuristics on the same cities.',
   }
 
   const dataLattices = LATTICES.filter(l => l.value === 'grid' || l.value === 'hex')
@@ -376,11 +376,11 @@
             {stepRequest}
             onstats={s => (stats = s)}
           />
-        {:else if mode === 'colours'}
-          <ColourMap
+        {:else if mode === 'colors'}
+          <ColorMap
             {wasm}
-            source={colourSource}
-            pixels={colourPixels}
+            source={colorSource}
+            pixels={colorPixels}
             {config}
             {training}
             {running}
@@ -457,23 +457,23 @@
       </ControlGroup>
     {/if}
 
-    {#if mode === 'colours'}
-      <ControlGroup title="Colours">
+    {#if mode === 'colors'}
+      <ControlGroup title="Colors">
         <Choice
-          name="colour-source"
-          bind:value={() => colourSource, setColourSource}
+          name="color-source"
+          bind:value={() => colorSource, setColorSource}
           options={[
-            { value: 'rgb', label: 'Random colours' },
+            { value: 'rgb', label: 'Random colors' },
             { value: 'image', label: 'An image’s pixels' },
           ]}
         />
-        {#if colourSource === 'image'}
-          <ImagePicker selected={colourImageId} onpick={pickColourImage} onerror={m => (imageError = m)} />
+        {#if colorSource === 'image'}
+          <ImagePicker selected={colorImageId} onpick={pickColorImage} onerror={m => (imageError = m)} />
           {#if imageError}
             <StatusMessage>{imageError}</StatusMessage>
           {/if}
         {/if}
-        <Toggle label="Shade by distance to neighbours (U-matrix)" bind:checked={showUmatrix} />
+        <Toggle label="Shade by distance to neighbors (U-matrix)" bind:checked={showUmatrix} />
       </ControlGroup>
     {/if}
 
@@ -698,7 +698,7 @@
       />
       <p>
         A ring of nodes is a tour waiting to happen: read the cities in the order of their nearest nodes round the ring
-        and you have one. Kohonen's ring is his self-organising map on a closed chain. Durbin and Willshaw's elastic net
+        and you have one. Kohonen's ring is his self-organizing map on a closed chain. Durbin and Willshaw's elastic net
         (1987) lets every city pull on every node while the ring's tension keeps it short, and Angéniol's ring (1988)
         grows from a single node, splitting where cities compete for one.
       </p>
@@ -741,9 +741,9 @@
       {/if}
       <p>
         Each country is a row of ten indicators, once for 1992 and once for 2022, and the map is trained on all of them
-        at once, so a country's two cells can be compared. Neighbouring cells hold countries that are alike across all
-        ten; dark seams in the U-matrix separate groups that differ. The world map colours each country by where its
-        cell sits on the map, as in Kaski and Kohonen's 1996 figure, so similar countries share a colour.
+        at once, so a country's two cells can be compared. Neighboring cells hold countries that are alike across all
+        ten; dark seams in the U-matrix separate groups that differ. The world map colors each country by where its
+        cell sits on the map, as in Kaski and Kohonen's 1996 figure, so similar countries share a color.
       </p>
       <p class="credit">
         Data: <a href="https://data.worldbank.org">World Bank, World Development Indicators</a>, licensed under
@@ -752,21 +752,21 @@
         <a href="https://www.naturalearthdata.com">Natural Earth</a> (public domain), projected and simplified.
       </p>
     {/if}
-    {#if mode === 'colours'}
+    {#if mode === 'colors'}
       <p>
-        Each cell is a node, painted in its own colour. Colours are three numbers, red, green and blue, so the map
-        squeezes a cube onto a sheet: similar colours end up side by side, and where the sheet can't keep a
-        neighbourhood together, the U-matrix shows a ridge.
+        Each cell is a node, painted in its own color. Colors are three numbers, red, green and blue, so the map
+        squeezes a cube onto a sheet: similar colors end up side by side, and where the sheet can't keep a
+        neighborhood together, the U-matrix shows a ridge.
       </p>
-      {#if colourSource === 'image'}
-        {@const bundled = BUNDLED.find(b => b.id === colourImageId)}
+      {#if colorSource === 'image'}
+        {@const bundled = BUNDLED.find(b => b.id === colorImageId)}
         {#if bundled}
           <p class="credit">Image: <a href={bundled.source}>{bundled.credit}</a>, public domain.</p>
         {/if}
         <p>
-          Trained on an image's pixels, the nodes settle where the image has many pixels of similar colour: the map
-          becomes the image's palette. On the right, every pixel is replaced by its nearest node's colour, so a map of
-          {gridWidth * gridHeight} nodes repaints the image in {gridWidth * gridHeight} colours.
+          Trained on an image's pixels, the nodes settle where the image has many pixels of similar color: the map
+          becomes the image's palette. On the right, every pixel is replaced by its nearest node's color, so a map of
+          {gridWidth * gridHeight} nodes repaints the image in {gridWidth * gridHeight} colors.
         </p>
       {/if}
     {/if}
@@ -774,7 +774,7 @@
     <p>
       Quantization error (QE) is the mean distance from a sample to its nearest node: how well the nodes cover the data.
       Topographic error (TE) is the share of samples whose nearest and second-nearest nodes are not lattice
-      neighbours: how often the map's order breaks, at a fold or a twist.{#if mode === 'unfolding'}
+      neighbors: how often the map's order breaks, at a fold or a twist.{#if mode === 'unfolding'}
         Pause and step to see a single update.{/if}
     </p>
     {/if}

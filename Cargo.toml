@@ -47,7 +47,7 @@ missing_docs_in_private_items = "warn"
 opt-level = "s"
 lto = "fat"
 
-# The rover simulation runs whole explorations in its tests; unoptimised it
+# The rover simulation runs whole explorations in its tests; unoptimized it
 # takes over a minute.
 [profile.dev.package.rover]
 opt-level = 2

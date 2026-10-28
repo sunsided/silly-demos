@@ -2,7 +2,7 @@
 
 use som::codebook::Codebook;
 use som::density::Density;
-use som::init::{Init, initialise};
+use som::init::{Init, initialize};
 use som::lattice::{Kind, Lattice};
 use som::metrics::{History, quantization_error, topographic_error};
 use som::rng::Rng;
@@ -30,7 +30,7 @@ enum Training {
     Batch,
 }
 
-/// A self-organising map training on a 2D density. The map lives in WASM;
+/// A self-organizing map training on a 2D density. The map lives in WASM;
 /// JS steps it, paints the density and reads flat snapshots for drawing.
 #[wasm_bindgen]
 pub struct SomLab {
@@ -213,12 +213,12 @@ impl SomLab {
         self.restart();
     }
 
-    /// Back to t = 0 with a freshly initialised map. The random numbers
+    /// Back to t = 0 with a freshly initialized map. The random numbers
     /// start over from the seed too, so a restart replays the same run.
     pub fn restart(&mut self) {
         self.rng = Rng::new(self.seed);
         self.draw_samples();
-        self.som.codebook = initialise(self.init, &self.som.lattice, &self.eval, 2, &mut self.rng);
+        self.som.codebook = initialize(self.init, &self.som.lattice, &self.eval, 2, &mut self.rng);
         self.som.t = 0;
         self.trace = None;
         self.history.clear();
@@ -598,7 +598,7 @@ mod tests {
         lab.paint(0.8, 0.8, 0.1, 1.0);
         assert_eq!(lab.status(), "training");
         assert_eq!(lab.progress()[0], 0.0);
-        // Initialised from the painted samples, not piled up in the middle.
+        // Initialized from the painted samples, not piled up in the middle.
         assert!(
             lab.weights()
                 .chunks(2)

@@ -73,7 +73,7 @@ export function toPixels(img: HTMLImageElement, maxSide = 256): Pixels {
 
 /**
  * The image as a density on a `side`×`side` grid: darkness (or lightness,
- * inverted) from 0 to 1, fitted into the square and centred; the margins
+ * inverted) from 0 to 1, fitted into the square and centered; the margins
  * stay empty.
  */
 export function toDensity(img: HTMLImageElement, side = 128, invert = false): Float32Array {

@@ -85,13 +85,13 @@ impl<T: Clone> Grid<T> {
     }
 }
 
-/// The four edge neighbours of `c`.
-pub fn neighbours4((x, y): Cell) -> [Cell; 4] {
+/// The four edge neighbors of `c`.
+pub fn neighbors4((x, y): Cell) -> [Cell; 4] {
     [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
 }
 
-/// The eight neighbours of `c`, with the length of the step to each in cells.
-pub fn neighbours8((x, y): Cell) -> [(Cell, f32); 8] {
+/// The eight neighbors of `c`, with the length of the step to each in cells.
+pub fn neighbors8((x, y): Cell) -> [(Cell, f32); 8] {
     const D: f32 = std::f32::consts::SQRT_2;
     [
         ((x + 1, y), 1.0),

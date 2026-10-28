@@ -15,14 +15,14 @@ export const METHODS: readonly { value: MethodId; label: string; detail: string;
     value: 'ring-som',
     label: 'Kohonen ring',
     detail:
-      'A self-organising map on a closed ring of nodes: shown one city at a time, the nearest node and its ring neighbours move towards it, and as the neighbourhood σ shrinks the ring settles onto a tour.',
+      'A self-organizing map on a closed ring of nodes: shown one city at a time, the nearest node and its ring neighbors move towards it, and as the neighborhood σ shrinks the ring settles onto a tour.',
     readout: 'σ',
   },
   {
     value: 'elastic',
     label: 'Elastic net',
     detail:
-      'Durbin and Willshaw, 1987. Every city pulls every node, its pull shared among them by a Gaussian of width K, while the ring’s tension keeps neighbours together. As K shrinks, each city ends up with a node of its own.',
+      'Durbin and Willshaw, 1987. Every city pulls every node, its pull shared among them by a Gaussian of width K, while the ring’s tension keeps neighbors together. As K shrinks, each city ends up with a node of its own.',
     readout: 'K',
   },
   {
@@ -34,14 +34,14 @@ export const METHODS: readonly { value: MethodId; label: string; detail: string;
   },
   {
     value: 'nn',
-    label: 'Nearest neighbour',
+    label: 'Nearest neighbor',
     detail: 'Start at a city and always go to the nearest one not yet visited. Quick, and typically 20–25 % too long.',
   },
   {
     value: 'two-opt',
     label: '2-opt + Or-opt',
     detail:
-      'The nearest-neighbour tour, improved until no move helps: 2-opt swaps two edges for two shorter ones, Or-opt moves a stretch of 1–3 cities elsewhere.',
+      'The nearest-neighbor tour, improved until no move helps: 2-opt swaps two edges for two shorter ones, Or-opt moves a stretch of 1–3 cities elsewhere.',
   },
   {
     value: 'exact',

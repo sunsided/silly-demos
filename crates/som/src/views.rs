@@ -1,17 +1,17 @@
 //! What a trained map shows when drawn as a picture: the distances between
-//! neighbouring nodes (U-matrix), one component across all nodes (a
+//! neighboring nodes (U-matrix), one component across all nodes (a
 //! component plane), and which nodes the samples land on.
 
 use crate::codebook::Codebook;
 use crate::lattice::Lattice;
 
-/// Per node, the mean distance to its lattice neighbours: low inside a
+/// Per node, the mean distance to its lattice neighbors: low inside a
 /// cluster, high on the boundary between two.
 pub fn umatrix(cb: &Codebook, lattice: &Lattice) -> Vec<f32> {
     (0..cb.len())
         .map(|i| {
             let (sum, n) = (0..cb.len())
-                .filter(|&j| lattice.neighbours(i, j))
+                .filter(|&j| lattice.neighbors(i, j))
                 .map(|j| {
                     let d: f32 = cb
                         .node(i)

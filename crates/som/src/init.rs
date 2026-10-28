@@ -4,7 +4,7 @@ use crate::codebook::Codebook;
 use crate::lattice::Lattice;
 use crate::rng::Rng;
 
-/// How [`initialise`] places the nodes before training.
+/// How [`initialize`] places the nodes before training.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Init {
     /// Each node on a randomly picked sample: no order at all to start with.
@@ -34,7 +34,7 @@ const CLUSTER_RADIUS: f32 = 0.02;
 
 /// A codebook for `lattice` from `samples` (flat, `dim` values each).
 /// Without samples every node starts at 0.5 in every dimension.
-pub fn initialise(
+pub fn initialize(
     init: Init,
     lattice: &Lattice,
     samples: &[f32],
@@ -180,7 +180,7 @@ mod tests {
     fn pca_init_spans_the_data() {
         let samples = uniform_samples(1000);
         let lattice = Lattice::new(Kind::Grid, 12, 12).unwrap();
-        let cb = initialise(Init::Pca, &lattice, &samples, 2, &mut Rng::new(1));
+        let cb = initialize(Init::Pca, &lattice, &samples, 2, &mut Rng::new(1));
         assert_eq!(cb.len(), 144);
         for axis in 0..2 {
             let values = cb.weights.iter().skip(axis).step_by(2);
@@ -194,7 +194,7 @@ mod tests {
         // Samples on a line from (0.1, 0.1) to (0.9, 0.9).
         let samples: Vec<f32> = (0..200).flat_map(|i| [0.1 + i as f32 * 0.004; 2]).collect();
         let lattice = Lattice::new(Kind::Chain, 20, 1).unwrap();
-        let cb = initialise(Init::Pca, &lattice, &samples, 2, &mut Rng::new(1));
+        let cb = initialize(Init::Pca, &lattice, &samples, 2, &mut Rng::new(1));
         for w in cb.weights.chunks(2) {
             assert!((w[0] - w[1]).abs() < 1e-3, "{w:?}");
         }
@@ -206,7 +206,7 @@ mod tests {
         let samples = uniform_samples(1000);
         let m = mean(&samples);
         let lattice = Lattice::new(Kind::Grid, 12, 12).unwrap();
-        let cb = initialise(Init::Cluster, &lattice, &samples, 2, &mut Rng::new(1));
+        let cb = initialize(Init::Cluster, &lattice, &samples, 2, &mut Rng::new(1));
         for w in cb.weights.chunks(2) {
             assert!((w[0] - m[0]).hypot(w[1] - m[1]) <= 0.02 + 1e-6, "{w:?}");
         }
@@ -216,7 +216,7 @@ mod tests {
     fn random_init_picks_samples() {
         let samples = uniform_samples(100);
         let lattice = Lattice::new(Kind::Ring, 30, 1).unwrap();
-        let cb = initialise(Init::Random, &lattice, &samples, 2, &mut Rng::new(1));
+        let cb = initialize(Init::Random, &lattice, &samples, 2, &mut Rng::new(1));
         for w in cb.weights.chunks(2) {
             assert!(samples.chunks(2).any(|s| s == w), "{w:?}");
         }
@@ -226,7 +226,7 @@ mod tests {
     fn no_samples_starts_in_the_middle() {
         let lattice = Lattice::new(Kind::Grid, 3, 3).unwrap();
         for init in [Init::Random, Init::Cluster, Init::Pca] {
-            let cb = initialise(init, &lattice, &[], 2, &mut Rng::new(1));
+            let cb = initialize(init, &lattice, &[], 2, &mut Rng::new(1));
             assert!(cb.weights.iter().all(|&v| v == 0.5), "{init:?}");
         }
     }

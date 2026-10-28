@@ -29,7 +29,7 @@ export interface RoverStats {
   status: StatusId
 }
 
-/** World (metres) to canvas (CSS px): uniform scale, centred, with a margin. */
+/** World (meters) to canvas (CSS px): uniform scale, centered, with a margin. */
 export interface View {
   scale: number
   x: number
@@ -93,7 +93,7 @@ const CLEARANCE_CAP = 2
 /**
  * Renders the clearance field into an offscreen canvas, one pixel per cell:
  * known free cells shaded in cobalt, darker nearer to a wall, in 0.1 m bands;
- * the edge where it drops below the hard limit (the robot's centre can't go
+ * the edge where it drops below the hard limit (the robot's center can't go
  * nearer) outlined in signal red, and where it drops below the soft limit
  * (paths cost extra) in cobalt.
  */
@@ -115,7 +115,7 @@ export class ClearanceImage {
     const hardEdge = rgba(t.signal)
     const bands = CLEARANCE_CAP / BAND
     const px = this.image.data
-    // Whether cell i is free but below `limit` while an edge neighbour is free at or above it.
+    // Whether cell i is free but below `limit` while an edge neighbor is free at or above it.
     const edge = (i: number, x: number, y: number, limit: number) => {
       const d = clear[i]
       if (d < 0 || d >= limit) return false
@@ -157,7 +157,7 @@ export class ClearanceImage {
   }
 }
 
-/** The clearance under the pointer, labelled beside it. */
+/** The clearance under the pointer, labeled beside it. */
 export function drawClearanceAt(
   ctx: CanvasRenderingContext2D,
   t: Theme,

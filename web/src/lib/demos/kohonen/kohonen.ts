@@ -8,14 +8,14 @@ export type InitId = 'random' | 'cluster' | 'pca'
 export type TrainingId = 'online' | 'batch'
 export type DecayId = 'exp' | 'linear'
 export type DensityId = 'uniform' | 'annulus' | 'moons' | 'blobs' | 'lshape' | 'gradient' | 'blank' | 'image'
-export type ModeId = 'unfolding' | 'colours' | 'countries' | 'tours'
+export type ModeId = 'unfolding' | 'colors' | 'countries' | 'tours'
 export type StatusId = 'training' | 'converged' | 'empty'
 
 export const MODES: readonly { value: ModeId; label: string; detail: string }[] = [
   {
-    value: 'colours',
-    label: 'Colours',
-    detail: 'The map sorts colours onto a 2D sheet: random colours, or the pixels of an image, which it turns into a palette.',
+    value: 'colors',
+    label: 'Colors',
+    detail: 'The map sorts colors onto a 2D sheet: random colors, or the pixels of an image, which it turns into a palette.',
   },
   {
     value: 'countries',
@@ -30,7 +30,7 @@ export const MODES: readonly { value: ModeId; label: string; detail: string }[] 
   {
     value: 'tours',
     label: 'Tours',
-    detail: 'A ring of nodes pulled onto cities until it reads as a travelling salesman’s tour, raced against the classical heuristics.',
+    detail: 'A ring of nodes pulled onto cities until it reads as a traveling salesman’s tour, raced against the classical heuristics.',
   },
 ]
 
@@ -58,7 +58,7 @@ export const TRAININGS: readonly { value: TrainingId; label: string; detail: str
     value: 'batch',
     label: 'Batch',
     detail:
-      'Each epoch assigns all samples to their nearest node, then sets every node to the kernel-weighted mean of the samples its lattice neighbours won. No learning rate, and the order of the samples does not matter.',
+      'Each epoch assigns all samples to their nearest node, then sets every node to the kernel-weighted mean of the samples its lattice neighbors won. No learning rate, and the order of the samples does not matter.',
   },
 ]
 
@@ -129,7 +129,7 @@ export function applyDataConfig(lab: SomData, c: SomConfig) {
   lab.set_seed(c.seed)
 }
 
-/** The unit square input space on the canvas: a square sheet, centred. */
+/** The unit square input space on the canvas: a square sheet, centered. */
 export interface Sheet {
   x: number
   y: number
@@ -359,7 +359,7 @@ export const SCENARIOS: readonly Scenario[] = [
     label: 'Classic unfold',
     config: classic,
     density: 'uniform',
-    note: 'Nodes start on random samples, with no order at all. A wide σ first pulls the whole lattice into one ordered clump; as σ shrinks, it unfolds and spreads over the square, neighbours staying neighbours.',
+    note: 'Nodes start on random samples, with no order at all. A wide σ first pulls the whole lattice into one ordered clump; as σ shrinks, it unfolds and spreads over the square, neighbors staying neighbors.',
   },
   {
     id: 'bowtie',

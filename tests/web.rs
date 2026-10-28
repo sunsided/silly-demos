@@ -251,13 +251,13 @@ fn som_lab_refuses_what_it_cant_use() {
 }
 
 #[wasm_bindgen_test]
-fn a_colour_map_orders_itself_and_repaints_pixels() {
+fn a_color_map_orders_itself_and_repaints_pixels() {
     let mut lab = SomData::new(1);
     assert_eq!(lab.status(), "empty");
-    lab.set_normalise(false);
+    lab.set_normalize(false);
     assert!(lab.set_lattice("grid", 10, 10));
-    // A fixed spread of colours over the cube.
-    let colours: Vec<f32> = (0..2000u32)
+    // A fixed spread of colors over the cube.
+    let colors: Vec<f32> = (0..2000u32)
         .flat_map(|i| {
             [
                 (i * 37 % 256) as f32,
@@ -266,7 +266,7 @@ fn a_colour_map_orders_itself_and_repaints_pixels() {
             ]
         })
         .collect();
-    assert!(lab.set_data(&colours, 3));
+    assert!(lab.set_data(&colors, 3));
     while lab.step(1000) > 0 {}
     assert!(lab.progress()[5] < 0.1, "TE {}", lab.progress()[5]);
     let out = lab.quantize(&[10, 200, 30, 99, 250, 250, 250, 7]);

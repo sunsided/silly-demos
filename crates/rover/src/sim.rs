@@ -6,7 +6,7 @@ use crate::control::{Explorer, Phase, Reactive};
 use crate::floorplan::FloorPlan;
 use crate::frontier::{self, Cluster};
 use crate::geom::Point;
-use crate::grid::{Grid, neighbours4};
+use crate::grid::{Grid, neighbors4};
 use crate::laser::Laser;
 use crate::map::Map;
 use crate::robot::{Body, Command, Robot};
@@ -211,7 +211,7 @@ fn flood_free(walls: &Grid<bool>, from: (i32, i32)) -> usize {
     let mut n = 0;
     while let Some(c) = queue.pop_front() {
         n += 1;
-        for m in neighbours4(c) {
+        for m in neighbors4(c) {
             if walls.get(m) == Some(&false) && seen.get(m) == Some(&false) {
                 seen.set(m, true);
                 queue.push_back(m);

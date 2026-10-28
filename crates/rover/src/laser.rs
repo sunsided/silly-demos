@@ -7,7 +7,7 @@ use crate::grid::{Grid, trace};
 /// field of view, up to 4 m.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Laser {
-    /// Full field of view in radians, centred on the heading.
+    /// Full field of view in radians, centered on the heading.
     pub fov: f32,
     /// Beams per scan, spread evenly across the field of view, both edges included.
     pub samples: usize,

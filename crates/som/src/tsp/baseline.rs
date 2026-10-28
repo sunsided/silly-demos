@@ -1,5 +1,5 @@
 //! The classical heuristics the rings are measured against: a greedy
-//! nearest-neighbour tour, and that tour improved by 2-opt and Or-opt
+//! nearest-neighbor tour, and that tour improved by 2-opt and Or-opt
 //! moves until none helps.
 
 use super::cities::Matrix;
@@ -8,7 +8,7 @@ use super::cities::Matrix;
 const EPS: f64 = 1e-9;
 
 /// Start at `start` and always go to the nearest city not yet visited.
-pub fn nearest_neighbour(m: &Matrix, start: usize) -> Vec<u32> {
+pub fn nearest_neighbor(m: &Matrix, start: usize) -> Vec<u32> {
     let n = m.len();
     let mut visited = vec![false; n];
     let mut tour = Vec::with_capacity(n);
@@ -27,7 +27,7 @@ pub fn nearest_neighbour(m: &Matrix, start: usize) -> Vec<u32> {
     tour
 }
 
-/// Local search from the nearest-neighbour tour, one position at a time so
+/// Local search from the nearest-neighbor tour, one position at a time so
 /// it can be watched: a step tries every 2-opt move whose first edge leaves
 /// the city at the current position, then every Or-opt move of the 1 to 3
 /// cities after it, and applies the first that shortens the tour. A full
@@ -46,7 +46,7 @@ impl LocalSearch {
     /// A search starting from the nearest-neighbor tour from city 0.
     pub fn new(m: &Matrix) -> Self {
         Self {
-            tour: nearest_neighbour(m, 0),
+            tour: nearest_neighbor(m, 0),
             position: 0,
             stale: 0,
         }
@@ -100,7 +100,7 @@ fn reverse(tour: &mut [u32], from: usize, to: usize) {
 
 /// The first Or-opt move that shortens the tour: take the 1 to 3 cities
 /// after position `i` out and put them, either way round, between two
-/// other neighbouring cities.
+/// other neighboring cities.
 pub fn or_opt_at(m: &Matrix, tour: &mut Vec<u32>, i: usize) -> bool {
     let n = tour.len();
     for len in 1..=3 {
@@ -165,9 +165,9 @@ mod tests {
     }
 
     #[test]
-    fn nearest_neighbour_goes_to_the_nearest() {
+    fn nearest_neighbor_goes_to_the_nearest() {
         let c = Cities::new(&[0.0, 0.0, 10.0, 0.0, 1.0, 0.0, 3.0, 0.0], Metric::Euclid).unwrap();
-        assert_eq!(nearest_neighbour(&c.matrix(), 0), vec![0, 2, 3, 1]);
+        assert_eq!(nearest_neighbor(&c.matrix(), 0), vec![0, 2, 3, 1]);
     }
 
     #[test]
@@ -181,7 +181,7 @@ mod tests {
     fn local_search_never_lengthens_and_ends_two_opt_optimal() {
         for seed in 0..10 {
             let m = random(60, seed).matrix();
-            let start = m.tour_length(&nearest_neighbour(&m, 0));
+            let start = m.tour_length(&nearest_neighbor(&m, 0));
             let mut search = finish(&m);
             assert!(is_valid(&search.tour, 60));
             assert!(m.tour_length(&search.tour) <= start + EPS, "seed {seed}");

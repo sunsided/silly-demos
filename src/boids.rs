@@ -19,7 +19,7 @@ pub struct FlockParams {
     pub separation_radius: f32,
     /// Radius within which other boids' velocities are matched.
     pub alignment_radius: f32,
-    /// Radius within which boids steer towards the centre of the others.
+    /// Radius within which boids steer towards the center of the others.
     pub cohesion_radius: f32,
     /// Scale of the separation force.
     pub separation_weight: f32,
@@ -225,7 +225,7 @@ pub struct Flock {
     pub height: f32,
     /// Source of spawn positions and wander.
     rng: Rng,
-    /// Neighbour lookup grid, kept between steps to reuse its buffers.
+    /// Neighbor lookup grid, kept between steps to reuse its buffers.
     grid: Grid,
     /// Scratch buffer the next state is written into, then swapped with `boids`.
     next: Vec<Boid>,

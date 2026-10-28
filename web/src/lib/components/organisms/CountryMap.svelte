@@ -1,8 +1,8 @@
 <!--
   @component
-  The world poverty map: countries in 1992 and 2022 on one self-organising
+  The world poverty map: countries in 1992 and 2022 on one self-organizing
   map, drawn as hex cells with their U-matrix (or one indicator's plane), and
-  a world map with every country in the colour of its cell. Hovering a cell
+  a world map with every country in the color of its cell. Hovering a cell
   outlines its countries on the world map; hovering a country marks its cell.
 -->
 <script lang="ts">
@@ -17,7 +17,7 @@
     loadCountries,
     loadWorld,
     trainingRows,
-    wheelColour,
+    wheelColor,
     type Country,
     type CountryData,
     type Planes,
@@ -93,15 +93,15 @@
   let kind = $derived<'grid' | 'hex'>(config.lattice === 'hex' ? 'hex' : 'grid')
   let shapes = $derived(data && world ? joinShapes(data, world) : null)
   let index = $derived(new Map(data?.countries.map((c, i) => [c.iso3, i]) ?? []))
-  /** The colour of every cell: hue by direction from the map's centre, saturation by distance. */
+  /** The color of every cell: hue by direction from the map's center, saturation by distance. */
   let wheel = $derived.by(() => {
     const unit = cellLayout(kind, config.width, config.height, { x: 0, y: 0, width: 1, height: 1 })
-    const n = unit.centres.length
-    const cx = unit.centres.reduce((s, p) => s + p.x, 0) / n
-    const cy = unit.centres.reduce((s, p) => s + p.y, 0) / n
-    const maxR = Math.max(...unit.centres.map(p => Math.hypot(p.x - cx, p.y - cy)), 1e-9)
+    const n = unit.centers.length
+    const cx = unit.centers.reduce((s, p) => s + p.x, 0) / n
+    const cy = unit.centers.reduce((s, p) => s + p.y, 0) / n
+    const maxR = Math.max(...unit.centers.map(p => Math.hypot(p.x - cx, p.y - cy)), 1e-9)
     const dark = darkScheme()
-    return unit.centres.map(p => wheelColour(p.x - cx, p.y - cy, maxR, dark))
+    return unit.centers.map(p => wheelColor(p.x - cx, p.y - cy, maxR, dark))
   })
 
   /** A country's cell in the year shown (2022 when both are). */
@@ -179,7 +179,7 @@
   function shade(ctx: CanvasRenderingContext2D, layout: CellLayout, values: ArrayLike<number>, color: string, max: number) {
     ctx.save()
     ctx.fillStyle = color
-    for (let i = 0; i < layout.centres.length; i++) {
+    for (let i = 0; i < layout.centers.length; i++) {
       ctx.globalAlpha = Math.max(0, Math.min(1, values[i] / max))
       ctx.beginPath()
       cellPath(ctx, layout, i)
@@ -209,10 +209,10 @@
     const layout = cellLayout(kind, config.width, config.height, { x: m, y: m, width: width - 2 * m, height: height - 2 * m })
     const n = data.countries.length
 
-    // Cells: the position colour, darkened by the U-matrix; or one indicator's plane.
+    // Cells: the position color, darkened by the U-matrix; or one indicator's plane.
     ctx.save()
     ctx.globalAlpha = plane === null ? 0.5 : 0.12
-    for (let i = 0; i < layout.centres.length; i++) {
+    for (let i = 0; i < layout.centers.length; i++) {
       ctx.beginPath()
       cellPath(ctx, layout, i)
       ctx.fillStyle = wheel[i] ?? t.inkFaint
@@ -231,7 +231,7 @@
     ctx.save()
     ctx.strokeStyle = t.paper
     ctx.lineWidth = 1
-    for (let i = 0; i < layout.centres.length; i++) {
+    for (let i = 0; i < layout.centers.length; i++) {
       ctx.beginPath()
       cellPath(ctx, layout, i)
       ctx.stroke()
@@ -247,8 +247,8 @@
       // Two hundred arrows at once are a thicket; faint, they show the drift, and a hovered one stands out.
       ctx.globalAlpha = hoverIso === null ? 0.3 : 0.12
       for (let i = 0; i < n; i++) {
-        const a = layout.centres[bmus[i]]
-        const b = layout.centres[bmus[n + i]]
+        const a = layout.centers[bmus[i]]
+        const b = layout.centers[bmus[n + i]]
         if (!a || !b || bmus[i] === bmus[n + i]) continue
         if (hoverIso !== null && data.countries[i].iso3 === hoverIso) continue
         drawArrow(ctx, a, b)
@@ -258,7 +258,7 @@
         if (i !== undefined && bmus[i] !== bmus[n + i]) {
           ctx.globalAlpha = 1
           ctx.lineWidth = 2
-          drawArrow(ctx, layout.centres[bmus[i]], layout.centres[bmus[n + i]])
+          drawArrow(ctx, layout.centers[bmus[i]], layout.centers[bmus[n + i]])
         }
       }
       ctx.restore()
@@ -275,7 +275,7 @@
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     for (const [cell, codes] of perCell) {
-      const { x, y } = layout.centres[cell]
+      const { x, y } = layout.centers[cell]
       const lines = codes.length <= 2 ? codes : [codes[0], `+${codes.length - 1}`]
       const lh = layout.radius * 0.5
       lines.forEach((code, k) => {
@@ -291,7 +291,7 @@
     ctx.strokeStyle = t.signal
     ctx.lineWidth = 2
     for (const cell of marked) {
-      if (cell < 0 || cell >= layout.centres.length) continue
+      if (cell < 0 || cell >= layout.centers.length) continue
       ctx.beginPath()
       cellPath(ctx, layout, cell)
       ctx.stroke()
@@ -302,7 +302,7 @@
     if (under !== hoverCell) hoverCell = under
     if (hoverCell >= 0) {
       const count = perCell.get(hoverCell)?.length ?? 0
-      const { x, y } = layout.centres[hoverCell]
+      const { x, y } = layout.centers[hoverCell]
       label(ctx, t, `${count} ${count === 1 ? 'country' : 'countries'}`, { x, y: y - layout.radius - 8 }, t.signal)
     }
 
@@ -323,7 +323,7 @@
     arrowhead(ctx, b, dx / len, dy / len, 5)
   }
 
-  /** Fill for a country on the world map: its cell's colour, or none without data. */
+  /** Fill for a country on the world map: its cell's color, or none without data. */
   function fill(iso: string): string | null {
     const i = index.get(iso)
     if (i === undefined) return null
@@ -341,12 +341,12 @@
     {#if error}
       <p class="error">{error}</p>
     {:else}
-      <canvas {@attach canvas.attach}>The countries on a hexagonal self-organising map</canvas>
+      <canvas {@attach canvas.attach}>The countries on a hexagonal self-organizing map</canvas>
     {/if}
   </div>
   <div class="panel world">
     {#if world && shapes}
-      <svg viewBox="0 0 {world.width} {world.height}" role="img" aria-label="World map, countries coloured by their cell on the map">
+      <svg viewBox="0 0 {world.width} {world.height}" role="img" aria-label="World map, countries colored by their cell on the map">
         <defs>
           <pattern id="no-data" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="6" class="hatch" />

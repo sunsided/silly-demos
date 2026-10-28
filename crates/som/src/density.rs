@@ -39,8 +39,8 @@ impl Density {
             },
             "moons" => moons,
             "blobs" => |x, y| {
-                const CENTRES: [(f32, f32); 3] = [(0.3, 0.3), (0.7, 0.35), (0.45, 0.72)];
-                let w: f32 = CENTRES
+                const CENTERS: [(f32, f32); 3] = [(0.3, 0.3), (0.7, 0.35), (0.45, 0.72)];
+                let w: f32 = CENTERS
                     .iter()
                     .map(|&(cx, cy)| {
                         (-((x - cx).powi(2) + (y - cy).powi(2)) / (2.0 * 0.07f32.powi(2))).exp()
@@ -59,7 +59,7 @@ impl Density {
         };
         let cells = (0..SIZE * SIZE)
             .map(|i| {
-                let (x, y) = centre(SIZE, i);
+                let (x, y) = center(SIZE, i);
                 weight(x, y)
             })
             .collect();
@@ -107,7 +107,7 @@ impl Density {
             return;
         }
         for (i, cell) in self.cells.iter_mut().enumerate() {
-            let (cx, cy) = centre(self.side, i);
+            let (cx, cy) = center(self.side, i);
             let d = (cx - x).hypot(cy - y);
             if d < radius {
                 let falloff = (1.0 - (d / radius).powi(2)).powi(2);
@@ -167,7 +167,7 @@ impl Density {
 }
 
 /// The center of cell `i` of a `side`×`side` grid, in the unit square.
-fn centre(side: usize, i: usize) -> (f32, f32) {
+fn center(side: usize, i: usize) -> (f32, f32) {
     let cell = 1.0 / side as f32;
     (
         ((i % side) as f32 + 0.5) * cell,

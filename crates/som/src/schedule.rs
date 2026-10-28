@@ -1,5 +1,5 @@
-//! How the learning rate α and the neighbourhood radius σ shrink over
-//! training, and the neighbourhood kernel σ shapes.
+//! How the learning rate α and the neighborhood radius σ shrink over
+//! training, and the neighborhood kernel σ shapes.
 
 /// How a scheduled value travels from its start to its end.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,7 +67,7 @@ impl Schedule {
     }
 }
 
-/// The Gaussian neighbourhood kernel: 1 at the best-matching unit, falling
+/// The Gaussian neighborhood kernel: 1 at the best-matching unit, falling
 /// off with squared lattice distance `d2`.
 pub fn kernel(d2: f32, sigma: f32) -> f32 {
     (-d2 / (2.0 * sigma * sigma)).exp()
@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn kernel_is_one_at_the_centre_and_falls_off() {
+    fn kernel_is_one_at_the_center_and_falls_off() {
         assert_eq!(kernel(0.0, 2.0), 1.0);
         assert!((kernel(4.0, 2.0) - (-0.5f32).exp()).abs() < 1e-6);
     }

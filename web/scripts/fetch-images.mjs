@@ -1,4 +1,4 @@
-// Downloads the public-domain images the Kohonen lab offers as colour and
+// Downloads the public-domain images the Kohonen lab offers as color and
 // density sources, scales them to 256 px with ImageMagick and writes them
 // with their credits to web/static/images/som/.
 //

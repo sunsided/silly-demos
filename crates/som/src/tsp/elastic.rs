@@ -1,9 +1,9 @@
 //! Durbin and Willshaw's elastic net (1987): a ring of nodes, every one
 //! pulled by every city, each city's pull shared among the nodes by a
-//! Gaussian of width K, while the ring's tension keeps neighbours close.
+//! Gaussian of width K, while the ring's tension keeps neighbors close.
 //! As K shrinks, each city ends up pulling a node of its own onto itself.
 
-use super::{Param, centre_circle, tour::worst_fit};
+use super::{Param, center_circle, tour::worst_fit};
 
 /// The net's tunables, in the order [`Elastic::new`] reads them.
 pub const PARAMS: &[Param] = &[
@@ -48,7 +48,7 @@ impl Elastic {
     pub fn new(cities: &[[f32; 2]], values: &[f32]) -> Self {
         let m = ((values[0] * cities.len() as f32).round() as usize).max(3);
         Self {
-            nodes: centre_circle(cities, m),
+            nodes: center_circle(cities, m),
             alpha: values[1],
             beta: values[2],
             k: values[3],
@@ -71,7 +71,7 @@ impl Elastic {
 
     /// One iteration moves every node once:
     /// Δyⱼ = α Σᵢ wᵢⱼ (xᵢ − yⱼ) + β K (yⱼ₊₁ − 2yⱼ + yⱼ₋₁),
-    /// with wᵢⱼ the Gaussian of |xᵢ − yⱼ| at width K, normalised over j.
+    /// with wᵢⱼ the Gaussian of |xᵢ − yⱼ| at width K, normalized over j.
     pub fn step(&mut self, cities: &[[f32; 2]]) {
         if self.done {
             return;

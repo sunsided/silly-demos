@@ -2,7 +2,7 @@
 //!
 //! Like the 2013 lab, the search flood-fills the free space reachable from
 //! the robot, so frontiers behind walls it has seen don't count. Frontier
-//! cells (free cells with an unknown edge neighbour) are then grouped into
+//! cells (free cells with an unknown edge neighbor) are then grouped into
 //! clusters of touching cells (Yamauchi, 1997).
 //!
 //! Unknown cells right next to a known wall don't make a frontier: they are
@@ -12,7 +12,7 @@
 use std::collections::VecDeque;
 
 use crate::geom::Point;
-use crate::grid::{Cell, Grid, neighbours4, neighbours8};
+use crate::grid::{Cell, Grid, neighbors4, neighbors8};
 use crate::map::Known;
 
 /// A group of touching frontier cells.
@@ -37,7 +37,7 @@ pub fn find(map: &Grid<Known>, from: Cell, min_cells: usize) -> Vec<Cluster> {
     }
     let mut cells = Vec::new();
     while let Some(c) = queue.pop_front() {
-        for n in neighbours4(c) {
+        for n in neighbors4(c) {
             match map.get(n) {
                 Some(Known::Unknown) if !beside_wall(map, n) => {
                     if frontier.get(c) == Some(&false) {
@@ -66,7 +66,7 @@ pub fn find(map: &Grid<Known>, from: Cell, min_cells: usize) -> Vec<Cluster> {
         queue.push_back(start);
         while let Some(c) = queue.pop_front() {
             cells.push(c);
-            for (n, _) in neighbours8(c) {
+            for (n, _) in neighbors8(c) {
                 if frontier.get(n) == Some(&true) && grouped.get(n) == Some(&false) {
                     grouped.set(n, true);
                     queue.push_back(n);
@@ -80,7 +80,7 @@ pub fn find(map: &Grid<Known>, from: Cell, min_cells: usize) -> Vec<Cluster> {
             let centroid = sum * (1.0 / cells.len() as f32);
             let mut unknown = Vec::new();
             for &c in &cells {
-                for n in neighbours4(c) {
+                for n in neighbors4(c) {
                     if map.get(n) == Some(&Known::Unknown)
                         && !beside_wall(map, n)
                         && listed.get(n) == Some(&false)
@@ -102,7 +102,7 @@ pub fn find(map: &Grid<Known>, from: Cell, min_cells: usize) -> Vec<Cluster> {
 
 /// Whether `c` has a known wall among its edge neighbors.
 fn beside_wall(map: &Grid<Known>, c: Cell) -> bool {
-    neighbours4(c)
+    neighbors4(c)
         .iter()
         .any(|&n| map.get(n) == Some(&Known::Wall))
 }

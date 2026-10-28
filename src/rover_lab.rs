@@ -53,12 +53,12 @@ impl RoverLab {
         self.sim.step(dt.clamp(0.0, 10.0));
     }
 
-    /// Floor plan size in metres, `[width, height]`.
+    /// Floor plan size in meters, `[width, height]`.
     pub fn size(&self) -> Vec<f32> {
         vec![self.sim.plan.width, self.sim.plan.height]
     }
 
-    /// Wall segments `[ax, ay, bx, by, ...]` in metres.
+    /// Wall segments `[ax, ay, bx, by, ...]` in meters.
     pub fn walls(&self) -> Vec<f32> {
         self.sim
             .plan
@@ -91,7 +91,7 @@ impl RoverLab {
         out
     }
 
-    /// Clearance per cell in metres, row by row: the distance to the nearest
+    /// Clearance per cell in meters, row by row: the distance to the nearest
     /// wall the robot knows of, capped at 2 m, as the explorer plans with
     /// it; −1 for cells not known to be free. Computed on each call.
     pub fn clearance(&self) -> Vec<f32> {
@@ -104,8 +104,8 @@ impl RoverLab {
             .collect()
     }
 
-    /// The explorer's clearance thresholds `[hard, soft]` in metres: its
-    /// centre never comes closer to a wall than `hard`, and paths cost extra
+    /// The explorer's clearance thresholds `[hard, soft]` in meters: its
+    /// center never comes closer to a wall than `hard`, and paths cost extra
     /// within `soft`.
     pub fn room(&self) -> Vec<f32> {
         let r = self.sim.explorer.room();

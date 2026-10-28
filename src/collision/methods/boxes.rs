@@ -166,7 +166,7 @@ fn circle_vs_local_box<P: Probe>(
     )
 }
 
-/// Draws the clamp from the circle's centre `c` to the box point `q`, plus the
+/// Draws the clamp from the circle's center `c` to the box point `q`, plus the
 /// gap or overlap when the contact has one.
 fn sketch_clamp<P: Probe>(c: Vec2, q: Vec2, contact: &Contact, p: &mut P) {
     p.note(|| Note::dashed(c, q, Tone::Soft));

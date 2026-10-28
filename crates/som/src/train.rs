@@ -134,7 +134,7 @@ impl Som {
 mod tests {
     use super::*;
     use crate::density::Density;
-    use crate::init::{Init, initialise};
+    use crate::init::{Init, initialize};
     use crate::lattice::Kind;
     use crate::metrics::{quantization_error, topographic_error};
     use crate::rng::Rng;
@@ -167,7 +167,7 @@ mod tests {
         let mut rng = Rng::new(seed);
         let eval = draw(&mut density, &mut rng, 1000);
         let lattice = Lattice::new(kind, w, h).unwrap();
-        let codebook = initialise(init, &lattice, &eval, 2, &mut rng);
+        let codebook = initialize(init, &lattice, &eval, 2, &mut rng);
         let schedule = Schedule {
             steps,
             alpha: (0.5, 0.01),

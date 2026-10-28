@@ -1,6 +1,6 @@
 <!--
   @component
-  A self-organising map training in WASM on a 2D density you can paint:
+  A self-organizing map training in WASM on a 2D density you can paint:
   the density, the nodes' Voronoi regions, the lattice, and, while paused,
   the anatomy of the last update.
 -->
@@ -222,4 +222,4 @@
   })
 </script>
 
-<canvas {@attach canvas.attach} {@attach paint}>A self-organising map unfolding over a density you can paint</canvas>
+<canvas {@attach canvas.attach} {@attach paint}>A self-organizing map unfolding over a density you can paint</canvas>

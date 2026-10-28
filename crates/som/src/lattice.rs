@@ -12,7 +12,7 @@ pub enum Kind {
     Chain,
     /// A chain whose ends are linked.
     Ring,
-    /// A rectangular grid; neighbours include the diagonals.
+    /// A rectangular grid; neighbors include the diagonals.
     Grid,
     /// A hexagonal grid in offset rows: odd rows shift half a node right.
     Hex,
@@ -108,7 +108,7 @@ impl Lattice {
     }
 
     /// Where node `i` sits on the lattice; hex rows are √3/2 apart, so
-    /// neighbouring hex nodes are 1 apart like grid ones.
+    /// neighboring hex nodes are 1 apart like grid ones.
     pub fn coords(&self, i: usize) -> (f32, f32) {
         self.coords[i]
     }
@@ -127,7 +127,7 @@ impl Lattice {
 
     /// Whether `i` and `j` are adjacent, for the topographic error. A grid
     /// counts its diagonals, so a diagonal step is not an error.
-    pub fn neighbours(&self, i: usize, j: usize) -> bool {
+    pub fn neighbors(&self, i: usize, j: usize) -> bool {
         if i == j {
             return false;
         }
@@ -160,7 +160,7 @@ impl Lattice {
                 .collect(),
             Kind::Hex => (0..n)
                 .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
-                .filter(|&(i, j)| self.neighbours(i, j))
+                .filter(|&(i, j)| self.neighbors(i, j))
                 .map(|(i, j)| (i as u32, j as u32))
                 .collect(),
         }
@@ -171,9 +171,9 @@ impl Lattice {
 mod tests {
     use super::*;
 
-    fn count_neighbours(l: &Lattice, i: usize) -> usize {
+    fn count_neighbors(l: &Lattice, i: usize) -> usize {
         (0..l.len())
-            .filter(|&j| j != i && l.neighbours(i, j))
+            .filter(|&j| j != i && l.neighbors(i, j))
             .count()
     }
 
@@ -182,27 +182,27 @@ mod tests {
         let l = Lattice::new(Kind::Ring, 10, 1).unwrap();
         assert_eq!(l.dist2(0, 9), 1.0);
         assert_eq!(l.dist2(0, 5), 25.0);
-        assert!(l.neighbours(0, 9));
+        assert!(l.neighbors(0, 9));
         let chain = Lattice::new(Kind::Chain, 10, 1).unwrap();
         assert_eq!(chain.dist2(0, 9), 81.0);
-        assert!(!chain.neighbours(0, 9));
+        assert!(!chain.neighbors(0, 9));
     }
 
     #[test]
-    fn hex_interior_has_six_neighbours() {
+    fn hex_interior_has_six_neighbors() {
         let l = Lattice::new(Kind::Hex, 7, 7).unwrap();
         let i = 3 * 7 + 3;
-        assert_eq!(count_neighbours(&l, i), 6);
-        for j in (0..l.len()).filter(|&j| j != i && l.neighbours(i, j)) {
+        assert_eq!(count_neighbors(&l, i), 6);
+        for j in (0..l.len()).filter(|&j| j != i && l.neighbors(i, j)) {
             assert!((l.dist2(i, j) - 1.0).abs() < 1e-5, "{j}");
         }
     }
 
     #[test]
-    fn grid_neighbours_include_diagonals() {
+    fn grid_neighbors_include_diagonals() {
         let l = Lattice::new(Kind::Grid, 5, 5).unwrap();
-        assert_eq!(count_neighbours(&l, 2 * 5 + 2), 8);
-        assert_eq!(count_neighbours(&l, 0), 3);
+        assert_eq!(count_neighbors(&l, 2 * 5 + 2), 8);
+        assert_eq!(count_neighbors(&l, 0), 3);
     }
 
     #[test]
@@ -214,7 +214,7 @@ mod tests {
         let hex = Lattice::new(Kind::Hex, 3, 3).unwrap();
         let pairs = (0..hex.len())
             .flat_map(|i| (i + 1..hex.len()).map(move |j| (i, j)))
-            .filter(|&(i, j)| hex.neighbours(i, j))
+            .filter(|&(i, j)| hex.neighbors(i, j))
             .count();
         assert_eq!(hex.edges().len(), pairs);
     }

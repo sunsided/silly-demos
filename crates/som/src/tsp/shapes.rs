@@ -24,7 +24,7 @@ pub fn generate(kind: &str, n: usize, rng: &mut Rng) -> Option<Vec<f32>> {
         "clusters" => {
             const BLOBS: usize = 5;
             const SPREAD: f32 = 60.0;
-            let centres: Vec<[f32; 2]> = (0..BLOBS)
+            let centers: Vec<[f32; 2]> = (0..BLOBS)
                 .map(|_| {
                     [
                         150.0 + rng.next_f32() * 700.0,
@@ -33,7 +33,7 @@ pub fn generate(kind: &str, n: usize, rng: &mut Rng) -> Option<Vec<f32>> {
                 })
                 .collect();
             for k in 0..n {
-                let c = centres[k % BLOBS];
+                let c = centers[k % BLOBS];
                 let (dx, dy) = gaussian(rng);
                 xy.push((c[0] + dx * SPREAD).clamp(0.0, SIDE));
                 xy.push((c[1] + dy * SPREAD).clamp(0.0, SIDE));
