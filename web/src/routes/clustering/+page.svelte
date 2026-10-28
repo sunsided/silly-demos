@@ -24,14 +24,13 @@
     TREES,
     emptyTreeStats,
     readSearch,
-    type SearchCurve,
     type SpaceId,
     type TreeParam,
     type TreeQuality,
     type TreeStats,
-    type TreeTone,
     type WhichTree,
   } from '#lib/demos/clustering/tree.ts'
+  import type { ChartCurve } from '#lib/demos/search.ts'
   import WasmGate from '#lib/wasm/WasmGate.svelte'
   import type { TreeLab } from 'silly_demos'
 
@@ -82,7 +81,7 @@
   let buildRequest = $state(0)
   let treeStats = $state.raw<TreeStats>(emptyTreeStats())
   let treeLab = $state.raw<TreeLab | null>(null)
-  let curves = $state.raw<{ label: string; tone: TreeTone; curve: SearchCurve }[] | null>(null)
+  let curves = $state.raw<ChartCurve[] | null>(null)
   let streaming = $derived(treeStats.points < treeStats.total)
 
   /** Search every tree for the queries' neighbors; a few hundred ms on 20 000 points. */
@@ -90,7 +89,7 @@
     if (!treeLab) return
     curves = TREES.flatMap(({ id, label, tone }) => {
       const curve = readSearch(treeLab!, id)
-      return curve ? [{ label, tone, curve }] : []
+      return curve ? [{ label, tone, effort: 'beam', curve }] : []
     })
   }
 
@@ -281,7 +280,7 @@
   {#snippet notes()}
     {#if mode === 'tree'}
       {#if curves}
-        <SearchChart {curves} />
+        <SearchChart {curves} note="a point per beam of 1, 2, 4 and 8." />
       {:else}
         <p class="hint">Search is measured once every point is in.</p>
       {/if}
