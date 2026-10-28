@@ -6,9 +6,13 @@ use crate::grid::Grid;
 /// A floor plan: wall segments in metres, and where the robot starts.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FloorPlan {
+    /// Extent along x in meters, margin included.
     pub width: f32,
+    /// Extent along y in meters, margin included.
     pub height: f32,
+    /// Wall segments as end points in meters.
     pub walls: Vec<(Point, Point)>,
+    /// Where and facing which way the robot starts.
     pub start: Pose,
 }
 

@@ -15,9 +15,12 @@ use crate::geom::Point;
 use crate::grid::{Cell, Grid, neighbours4, neighbours8};
 use crate::map::Known;
 
+/// A group of touching frontier cells.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Cluster {
+    /// Its frontier cells: free cells with an unknown edge neighbor not beside a known wall.
     pub cells: Vec<Cell>,
+    /// The mean of its cells' centers, in meters.
     pub centroid: Point,
     /// The unknown cells it borders: what a scan has to reach to push it back.
     pub unknown: Vec<Cell>,
@@ -97,6 +100,7 @@ pub fn find(map: &Grid<Known>, from: Cell, min_cells: usize) -> Vec<Cluster> {
     clusters
 }
 
+/// Whether `c` has a known wall among its edge neighbors.
 fn beside_wall(map: &Grid<Known>, c: Cell) -> bool {
     neighbours4(c)
         .iter()

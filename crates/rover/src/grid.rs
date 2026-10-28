@@ -8,9 +8,13 @@ pub type Cell = (i32, i32);
 /// A `width` × `height` grid of `cell` m squares, with its origin at (0, 0).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Grid<T> {
+    /// Columns.
     pub width: i32,
+    /// Rows.
     pub height: i32,
+    /// Side of a cell in meters.
     pub cell: f32,
+    /// `width` × `height` values, row by row.
     pub data: Vec<T>,
 }
 
@@ -39,14 +43,17 @@ impl<T: Clone> Grid<T> {
         Grid::new(self.width, self.height, self.cell, fill)
     }
 
+    /// Whether `c` lies inside the grid.
     pub fn contains(&self, (x, y): Cell) -> bool {
         x >= 0 && y >= 0 && x < self.width && y < self.height
     }
 
+    /// The position of `c` in `data`; meaningful only for a cell inside the grid.
     pub fn index(&self, (x, y): Cell) -> usize {
         (y * self.width + x) as usize
     }
 
+    /// The value at `c`; `None` outside the grid.
     pub fn get(&self, c: Cell) -> Option<&T> {
         self.contains(c).then(|| &self.data[self.index(c)])
     }
@@ -67,6 +74,7 @@ impl<T: Clone> Grid<T> {
         )
     }
 
+    /// The center of `c` in meters.
     pub fn center(&self, (x, y): Cell) -> Point {
         Point::new((x as f32 + 0.5) * self.cell, (y as f32 + 0.5) * self.cell)
     }

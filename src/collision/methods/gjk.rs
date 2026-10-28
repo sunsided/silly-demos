@@ -4,6 +4,7 @@
 
 use super::prelude::*;
 
+/// Caps GJK, which settles in a few steps on polygons but only creeps towards curved shapes.
 const MAX_GJK_ITERATIONS: usize = 32;
 /// Caps EPA on curved shapes, which it otherwise keeps refining.
 const MAX_EPA_ITERATIONS: usize = 48;
@@ -19,11 +20,16 @@ const EPA_TOLERANCE: f32 = 1e-3;
 /// A point of the Minkowski difference `A − B` with the support points it came from.
 #[derive(Clone, Copy, Debug, Default)]
 struct Vertex {
+    /// Point of `A − B`, i.e. `a − b`.
     w: Vec2,
+    /// Support point on A.
     a: Vec2,
+    /// Support point on B.
     b: Vec2,
 }
 
+/// Support point of `A − B` in direction `d`: A's along `d` minus B's along `-d`.
+/// Counts as two support evaluations.
 fn support<P: Probe>(sa: &Shape, sb: &Shape, d: Vec2, p: &mut P) -> Vertex {
     p.support();
     p.support();
@@ -34,16 +40,21 @@ fn support<P: Probe>(sa: &Shape, sb: &Shape, d: Vec2, p: &mut P) -> Vertex {
 /// Up to three Minkowski vertices with barycentric weights of the point closest to the origin.
 #[derive(Clone, Copy, Debug, Default)]
 struct Simplex {
+    /// Vertices; only the first `n` are live.
     v: [Vertex; 3],
+    /// Barycentric weights of the closest point, summing to 1 over the live vertices.
     l: [f32; 3],
+    /// Number of live vertices, 1 to 3.
     n: usize,
 }
 
 impl Simplex {
+    /// Point of the simplex closest to the origin, from the barycentric weights.
     fn closest(&self) -> Vec2 {
         (0..self.n).fold(Vec2::default(), |s, i| s + self.v[i].w * self.l[i])
     }
 
+    /// Closest points on A and on B, from the vertices' support points with the same weights.
     fn witnesses(&self) -> (Vec2, Vec2) {
         (0..self.n).fold((Vec2::default(), Vec2::default()), |(a, b), i| {
             (a + self.v[i].a * self.l[i], b + self.v[i].b * self.l[i])
@@ -62,6 +73,8 @@ impl Simplex {
         (-a.dot(e) / ee).clamp(0.0, 1.0)
     }
 
+    /// Reduces the simplex to the segment `v[i]`–`v[j]` at parameter `t`, or to
+    /// one endpoint when `t` is clamped to it.
     fn keep_segment(&mut self, i: usize, j: usize, t: f32) {
         let (vi, vj) = (self.v[i], self.v[j]);
         if t <= 0.0 {
@@ -113,8 +126,12 @@ impl Simplex {
     }
 }
 
+/// Outcome of a GJK run.
 struct Gjk {
+    /// Whether the shapes overlap, or touch within `TOUCH`.
     intersect: bool,
+    /// Final simplex: the enclosing triangle on overlap, otherwise the feature
+    /// nearest the origin when the search stopped.
     simplex: Simplex,
 }
 
@@ -169,10 +186,16 @@ fn gjk<P: Probe>(sa: &Shape, sb: &Shape, early_out: bool, p: &mut P) -> Gjk {
     }
 }
 
+/// Penetration found by EPA.
 struct Epa {
+    /// Penetration depth in px, positive.
     depth: f32,
+    /// Unit outward normal of the nearest edge of `A − B`; moving B along it by
+    /// `depth` separates the shapes.
     normal: Vec2,
+    /// Contact points on A and on B, interpolated along the nearest edge.
     points: (Vec2, Vec2),
+    /// Final polytope vertices, collected only when sketching.
     polytope: Vec<Vec2>,
 }
 
@@ -250,6 +273,8 @@ fn minkowski_outline(sa: &Shape, sb: &Shape) -> Vec<Vec2> {
         .collect()
 }
 
+/// Draws the sampled `A − B` outline, the origin and the final simplex, coloured
+/// by whether the shapes intersect. Does nothing unless sketching.
 fn sketch_minkowski<P: Probe>(sa: &Shape, sb: &Shape, s: &Simplex, intersect: bool, p: &mut P) {
     if !p.sketching() {
         return;

@@ -8,15 +8,20 @@ use crate::grid::Grid;
 /// clockwise positive, i.e. positive turns right).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Command {
+    /// Forward speed, m/s; negative backs up.
     pub v: f32,
+    /// Turn rate, rad/s, positive to the right.
     pub w: f32,
 }
 
 /// Body and drive limits; sized after a VolksBot (about 0.4 m across).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Body {
+    /// Body radius, m, for collisions and planning room.
     pub radius: f32,
+    /// Top forward speed, m/s.
     pub max_v: f32,
+    /// Top turn rate, rad/s.
     pub max_w: f32,
     /// m/s²
     pub accel: f32,
@@ -36,18 +41,23 @@ impl Default for Body {
     }
 }
 
+/// The simulated robot: where it is, its body, and how fast it is moving.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Robot {
+    /// Where it is and which way it faces.
     pub pose: Pose,
+    /// Its size and drive limits.
     pub body: Body,
     /// Current speed and turn rate.
     pub v: f32,
+    /// Current turn rate, rad/s; `v` is the speed.
     pub w: f32,
     /// Whether the last step was blocked by a wall.
     pub bumped: bool,
 }
 
 impl Robot {
+    /// A robot standing still at `pose`.
     pub fn new(pose: Pose, body: Body) -> Self {
         Self {
             pose,

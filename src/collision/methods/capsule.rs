@@ -5,6 +5,7 @@ use super::gap_dimension;
 use super::prelude::*;
 use super::{closest_between_segments, closest_on_segment, inside_convex, segments_cross};
 
+/// Unpacks a capsule as `(p, q, r)`; panics on other shapes.
 fn capsule(s: &Shape) -> (Vec2, Vec2, f32) {
     match *s {
         Shape::Capsule { p, q, r } => (p, q, r),
@@ -39,6 +40,7 @@ fn inflate<P: Probe>(ca: Vec2, cb: Vec2, ra: f32, rb: f32, p: &mut P) -> Contact
     Contact::signed(gap, Some(n), Some((pa, pb)))
 }
 
+/// Draws a core segment from `a` to `b`.
 fn sketch_core<P: Probe>(a: Vec2, b: Vec2, p: &mut P) {
     p.note(|| Note::dashed(a, b, Tone::Verdigris));
 }

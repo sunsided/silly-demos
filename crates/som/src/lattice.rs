@@ -5,6 +5,7 @@
 /// the n² batch kernel slow in the browser.
 pub const MAX_NODES: usize = 400;
 
+/// The shape of a lattice, which sets its coordinates, distances and links.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     /// Nodes in a line, each linked to the one before and after.
@@ -18,6 +19,7 @@ pub enum Kind {
 }
 
 impl Kind {
+    /// The kind for a UI id, `chain`, `ring`, `grid` or `hex`; `None` for anything else.
     pub fn parse(id: &str) -> Option<Kind> {
         match id {
             "chain" => Some(Kind::Chain),
@@ -28,6 +30,7 @@ impl Kind {
         }
     }
 
+    /// Whether the lattice is a single row of nodes.
     fn is_1d(self) -> bool {
         matches!(self, Kind::Chain | Kind::Ring)
     }
@@ -36,12 +39,17 @@ impl Kind {
 /// Node `i` sits at column `i % width`, row `i / width`.
 #[derive(Clone, Debug)]
 pub struct Lattice {
+    /// The shape of the lattice.
     kind: Kind,
+    /// Nodes per row.
     width: usize,
+    /// Rows; 1 for chains and rings.
     height: usize,
+    /// Each node's position on the lattice, cached at construction.
     coords: Vec<(f32, f32)>,
 }
 
+/// The vertical distance between hex rows, so diagonal hex neighbors are 1 apart.
 const ROW_SPACING_HEX: f32 = 0.866_025_4; // √3 / 2
 
 impl Lattice {
@@ -74,22 +82,27 @@ impl Lattice {
         })
     }
 
+    /// The shape of the lattice.
     pub fn kind(&self) -> Kind {
         self.kind
     }
 
+    /// Nodes per row.
     pub fn width(&self) -> usize {
         self.width
     }
 
+    /// Rows; 1 for chains and rings.
     pub fn height(&self) -> usize {
         self.height
     }
 
+    /// Number of nodes.
     pub fn len(&self) -> usize {
         self.coords.len()
     }
 
+    /// Whether there are no nodes; never true of a lattice from [`Lattice::new`].
     pub fn is_empty(&self) -> bool {
         self.coords.is_empty()
     }

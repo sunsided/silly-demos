@@ -43,15 +43,21 @@ const ARRIVED: f32 = 0.05;
 /// describes small motions; bigger steps overshoot.
 const MAX_TURN: f32 = 0.2;
 
+/// The IK algorithms on offer; see the module docs for how each works.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Solver {
+    /// Forward and backward reaching IK, moving joint positions directly.
     Fabrik,
+    /// Cyclic coordinate descent, turning one joint at a time from the tip inwards.
     Ccd,
+    /// Gradient steps on the joint angles along the transposed Jacobian.
     JacobianTranspose,
+    /// Damped least-squares (Levenberg–Marquardt style) steps on the joint angles.
     DampedLeastSquares,
 }
 
 impl Solver {
+    /// Every solver, in menu order.
     pub const ALL: [Self; 4] = [
         Self::Fabrik,
         Self::Ccd,
@@ -59,6 +65,7 @@ impl Solver {
         Self::DampedLeastSquares,
     ];
 
+    /// Stable string id used by the JS side.
     pub const fn id(self) -> &'static str {
         match self {
             Self::Fabrik => "fabrik",
@@ -68,6 +75,7 @@ impl Solver {
         }
     }
 
+    /// The solver with string id `id`, or `None` if there is none.
     pub fn from_id(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|s| s.id() == id)
     }
@@ -83,6 +91,7 @@ pub struct Limits {
 }
 
 impl Limits {
+    /// Whether either limit is set.
     fn any(self) -> bool {
         self.clearance.is_some() || self.floor.is_some()
     }
@@ -91,6 +100,7 @@ impl Limits {
 /// What a call to [`Chain::solve`] did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Outcome {
+    /// Iterations actually run; fewer than asked when the target was reached early.
     pub iterations: u32,
     /// Whether a step was cut back to respect the limits.
     pub contact: bool,
@@ -112,10 +122,14 @@ struct Reroute {
     been_up: bool,
 }
 
+/// A planar chain of rigid segments, pinned at its base.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Chain {
+    /// Joint positions in px, base first and end effector last; one more than `lengths`.
     pub joints: Vec<Vec2>,
+    /// Segment lengths in px, segment `i` joining joints `i` and `i + 1`.
     pub lengths: Vec<f32>,
+    /// The reroute in progress, if the arm got stuck.
     reroute: Option<Reroute>,
     /// Target and error where the arm last got stuck, so it doesn't reroute
     /// again and again for a target it can't reach within the limits.
@@ -136,10 +150,12 @@ impl Chain {
         }
     }
 
+    /// Position of the pinned base joint.
     pub fn base(&self) -> Vec2 {
         self.joints[0]
     }
 
+    /// Position of the end effector.
     pub fn end(&self) -> Vec2 {
         self.joints[self.joints.len() - 1]
     }
@@ -149,10 +165,12 @@ impl Chain {
         self.lengths.iter().sum()
     }
 
+    /// Distance in px from the end effector to `target`.
     pub fn error(&self, target: Vec2) -> f32 {
         (target - self.end()).length()
     }
 
+    /// Moves every joint by `d`, keeping the pose.
     pub fn translate(&mut self, d: Vec2) {
         for p in &mut self.joints {
             *p += d;
@@ -444,6 +462,8 @@ impl Chain {
         false
     }
 
+    /// One FABRIK iteration: a backward and a forward pass, or a straight
+    /// stretch towards `target` when it is out of reach.
     fn fabrik(&mut self, target: Vec2) {
         let n = self.lengths.len();
         let base = self.base();
@@ -471,6 +491,7 @@ impl Chain {
         }
     }
 
+    /// One CCD sweep, turning each joint from the tip inwards so the end effector points at `target`.
     fn ccd(&mut self, target: Vec2) {
         for i in (0..self.lengths.len()).rev() {
             let pivot = self.joints[i];

@@ -7,11 +7,16 @@ use super::sketch_axis;
 use crate::collision::shape::MAX_VERTS;
 /// Candidate axes contributed by one shape, with the index of the edge each is normal to.
 struct Axes {
+    /// Unit axes; only the first `n` are live.
     v: [Vec2; MAX_VERTS],
+    /// Index of the edge each axis is normal to, for sketching.
     edge: [u8; MAX_VERTS],
+    /// Number of live axes.
     n: usize,
 }
 
+/// Unit edge normals of a polygonal shape as candidate axes: two for boxes,
+/// one per non-degenerate edge otherwise, none for circles.
 fn axes<P: Probe>(shape: &Shape, p: &mut P) -> Axes {
     let mut out = Axes {
         v: [Vec2::default(); MAX_VERTS],
@@ -92,11 +97,15 @@ fn circle_axis<P: Probe>(circle: &Shape, poly: &Poly, p: &mut P) -> Option<(Vec2
 
 /// The axis of least overlap so far.
 struct Best {
+    /// Overlap along the axis in px.
     depth: f32,
     /// The axis oriented from A towards B.
     normal: Vec2,
+    /// The axis as tested, before orienting; kept for sketching.
     axis: Vec2,
+    /// Position of the axis in the test order, for labels.
     index: usize,
+    /// Projections of A and B onto `axis`.
     intervals: ((f32, f32), (f32, f32)),
 }
 

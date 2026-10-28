@@ -15,17 +15,27 @@ use crate::vec2::Vec2;
 /// Tunable flocking parameters. Distances in px, speeds in px/s, forces in px/s².
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlockParams {
+    /// Radius within which other boids are steered away from.
     pub separation_radius: f32,
+    /// Radius within which other boids' velocities are matched.
     pub alignment_radius: f32,
+    /// Radius within which boids steer towards the centre of the others.
     pub cohesion_radius: f32,
+    /// Scale of the separation force.
     pub separation_weight: f32,
+    /// Scale of the alignment force.
     pub alignment_weight: f32,
+    /// Scale of the cohesion force.
     pub cohesion_weight: f32,
+    /// Slowest a boid may fly; slower boids are sped up along their heading.
     pub min_speed: f32,
+    /// Fastest a boid may fly, and the speed every steering force aims for.
     pub max_speed: f32,
+    /// Cap on each steering force before it is weighted.
     pub max_force: f32,
     /// Width of the band along each edge in which boids steer back inwards.
     pub edge_margin: f32,
+    /// Scale of the containment force at full depth into the margin.
     pub edge_weight: f32,
     /// Magnitude of the random acceleration applied each step.
     pub wander: f32,
@@ -53,9 +63,12 @@ impl Default for FlockParams {
     }
 }
 
+/// A single boid.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Boid {
+    /// Position in px, within the world.
     pub pos: Vec2,
+    /// Velocity in px/s.
     pub vel: Vec2,
     /// Number of neighbors within the cohesion radius during the last step.
     pub neighbors: u32,
@@ -66,11 +79,13 @@ pub struct Boid {
 pub struct Rng(u64);
 
 impl Rng {
+    /// Seeds the generator; any seed, including zero, is valid.
     pub fn new(seed: u64) -> Self {
         // Zero is a fixed point of xorshift; nudge it away.
         Self(seed ^ 0x9E37_79B9_7F4A_7C15 | 1)
     }
 
+    /// Advances the state by one xorshift64 step and returns it.
     fn next_u64(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x << 13;
@@ -85,6 +100,7 @@ impl Rng {
         (self.next_u64() >> 40) as f32 / (1u64 << 24) as f32
     }
 
+    /// Unit vector in a uniformly random direction.
     pub fn unit_vec(&mut self) -> Vec2 {
         let angle = self.next_f32() * std::f32::consts::TAU;
         Vec2::new(angle.cos(), angle.sin())
@@ -94,21 +110,28 @@ impl Rng {
 /// Uniform spatial grid holding boid indices, rebuilt every step.
 #[derive(Debug, Default)]
 struct Grid {
+    /// Cell edge length in px, at least 1.
     cell: f32,
+    /// Number of cell columns.
     cols: usize,
+    /// Number of cell rows.
     rows: usize,
     /// `starts[c]..starts[c + 1]` indexes `items` for cell `c`.
     starts: Vec<usize>,
+    /// Boid indices, grouped by cell.
     items: Vec<usize>,
 }
 
 impl Grid {
+    /// Column and row of the cell holding `p`; points outside the world map to the border cells.
     fn cell_of(&self, p: Vec2) -> (usize, usize) {
         let cx = ((p.x / self.cell).floor().max(0.0) as usize).min(self.cols - 1);
         let cy = ((p.y / self.cell).floor().max(0.0) as usize).min(self.rows - 1);
         (cx, cy)
     }
 
+    /// Re-buckets `boids` into cells of edge `cell` covering a `width` × `height` world,
+    /// by counting sort.
     fn rebuild(&mut self, boids: &[Boid], width: f32, height: f32, cell: f32) {
         self.cell = cell.max(1.0);
         self.cols = ((width / self.cell).ceil() as usize).max(1);
@@ -190,17 +213,27 @@ fn edge_desired(push: Vec2, vel: Vec2, max_speed: f32) -> Vec2 {
     n * max_speed + tangent
 }
 
+/// A flock of boids in the world `[0, width] × [0, height]`.
 pub struct Flock {
+    /// The boids as of the last step.
     pub boids: Vec<Boid>,
+    /// Parameters the next step uses.
     pub params: FlockParams,
+    /// World width in px.
     pub width: f32,
+    /// World height in px.
     pub height: f32,
+    /// Source of spawn positions and wander.
     rng: Rng,
+    /// Neighbour lookup grid, kept between steps to reuse its buffers.
     grid: Grid,
+    /// Scratch buffer the next state is written into, then swapped with `boids`.
     next: Vec<Boid>,
 }
 
 impl Flock {
+    /// Creates `count` randomly placed boids with the default parameters; `seed`
+    /// makes the run reproducible.
     pub fn new(count: usize, width: f32, height: f32, seed: u64) -> Self {
         let mut flock = Self {
             boids: Vec::new(),
@@ -215,6 +248,8 @@ impl Flock {
         flock
     }
 
+    /// A boid at a random position, flying in a random direction at the middle of
+    /// the speed range.
     fn spawn(&mut self) -> Boid {
         let speed = 0.5 * (self.params.min_speed + self.params.max_speed);
         Boid {
@@ -243,6 +278,8 @@ impl Flock {
         self.set_count(count);
     }
 
+    /// Changes the world size, at least 1 px each way. Boids left outside are put
+    /// back on the wall during the next step.
     pub fn resize(&mut self, width: f32, height: f32) {
         self.width = width.max(1.0);
         self.height = height.max(1.0);

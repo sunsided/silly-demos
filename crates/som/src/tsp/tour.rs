@@ -45,6 +45,7 @@ pub fn nearest(nodes: &[[f32; 2]], p: [f32; 2]) -> usize {
     best.0
 }
 
+/// The squared distance between two points; cheaper than the distance for comparing.
 pub fn dist2(a: [f32; 2], b: [f32; 2]) -> f32 {
     (a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)
 }

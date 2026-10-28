@@ -9,3 +9,10 @@ edition = "2024"
 publish = false
 
 [dependencies]
+
+# Every item is documented, private ones included; `task lint` denies warnings.
+[lints.rust]
+missing_docs = "warn"
+
+[lints.clippy]
+missing_docs_in_private_items = "warn"

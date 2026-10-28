@@ -20,12 +20,19 @@ pub enum Metric {
 /// The Earth's mean radius, km.
 const EARTH_RADIUS: f64 = 6371.0;
 
+/// A set of cities, kept both as given and scaled into the unit square, with the metric their tours
+/// are scored in.
 #[derive(Clone, Debug)]
 pub struct Cities {
+    /// Positions as given.
     xy: Vec<[f32; 2]>,
+    /// Positions scaled into the unit square, aspect ratio kept.
     unit: Vec<[f32; 2]>,
+    /// The smallest x and y given, which maps to (0, 0) in the unit square.
     origin: [f32; 2],
+    /// The larger of the two extents, which maps to 1; 1 when every city coincides.
     scale: f32,
+    /// How tours are scored.
     metric: Metric,
 }
 
@@ -70,10 +77,12 @@ impl Cities {
         })
     }
 
+    /// Number of cities, 3 to [`MAX_CITIES`].
     pub fn len(&self) -> usize {
         self.xy.len()
     }
 
+    /// Always false: a set has at least 3 cities.
     pub fn is_empty(&self) -> bool {
         self.xy.is_empty()
     }
@@ -96,10 +105,12 @@ impl Cities {
         ]
     }
 
+    /// How tours are scored.
     pub fn metric(&self) -> &Metric {
         &self.metric
     }
 
+    /// The distance between cities `i` and `j` in the set's metric.
     pub fn dist(&self, i: usize, j: usize) -> f64 {
         let (a, b) = (self.xy[i], self.xy[j]);
         let euclid = || (a[0] as f64 - b[0] as f64).hypot(a[1] as f64 - b[1] as f64);
@@ -145,23 +156,29 @@ pub fn haversine(a: [f64; 2], b: [f64; 2]) -> f64 {
 /// Pairwise distances, row-major.
 #[derive(Clone, Debug)]
 pub struct Matrix {
+    /// Cities per side.
     n: usize,
+    /// `n` × `n` distances, symmetric with a zero diagonal.
     d: Vec<f64>,
 }
 
 impl Matrix {
+    /// Number of cities.
     pub fn len(&self) -> usize {
         self.n
     }
 
+    /// Whether there are no cities.
     pub fn is_empty(&self) -> bool {
         self.n == 0
     }
 
+    /// The distance from city `i` to city `j`.
     pub fn get(&self, i: u32, j: u32) -> f64 {
         self.d[i as usize * self.n + j as usize]
     }
 
+    /// The length of the closed tour visiting `tour` in order.
     pub fn tour_length(&self, tour: &[u32]) -> f64 {
         let n = tour.len();
         (0..n).map(|k| self.get(tour[k], tour[(k + 1) % n])).sum()

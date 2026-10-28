@@ -9,6 +9,7 @@ pub mod gjk;
 pub mod polygon;
 pub mod sat;
 
+/// Imports every method module needs.
 mod prelude {
     pub use super::super::probe::Probe;
     pub use super::super::report::{Contact, Note, Tone, fmt};

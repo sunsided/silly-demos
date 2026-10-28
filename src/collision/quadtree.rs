@@ -12,12 +12,16 @@ pub const MAX_DEPTH: u32 = 6;
 /// An axis-aligned box as `(min, max)`.
 pub type Aabb = (Vec2, Vec2);
 
+/// Whether two boxes overlap; touching edges count.
 pub fn overlaps(a: &Aabb, b: &Aabb) -> bool {
     a.0.x <= b.1.x && b.0.x <= a.1.x && a.0.y <= b.1.y && b.0.y <= a.1.y
 }
 
+/// A cell of the quadtree.
 pub struct Node {
+    /// Region the cell covers.
     pub bounds: Aabb,
+    /// Distance from the root, which is at depth 0.
     pub depth: u32,
     /// Index of the first of four consecutive children, once split.
     pub children: Option<usize>,
@@ -26,12 +30,15 @@ pub struct Node {
 }
 
 impl Node {
+    /// Whether the node has not been split.
     pub fn is_leaf(&self) -> bool {
         self.children.is_none()
     }
 }
 
+/// A quadtree stored as a flat list of nodes.
 pub struct Quadtree {
+    /// All nodes, root first; a split node's four children are consecutive.
     pub nodes: Vec<Node>,
     /// Box-against-quadrant overlap tests made while building.
     pub tests: u32,
@@ -65,6 +72,8 @@ impl Quadtree {
         tree
     }
 
+    /// Splits node `i` into quadrants when it is over `CAPACITY` and shallower than `MAX_DEPTH`,
+    /// then recurses. An item goes into every quadrant its box overlaps.
     fn split(&mut self, i: usize, boxes: &[Aabb]) {
         let node = &self.nodes[i];
         if node.items.len() <= CAPACITY || node.depth >= MAX_DEPTH {
@@ -100,10 +109,12 @@ impl Quadtree {
         }
     }
 
+    /// The nodes that were never split, which hold all the items.
     pub fn leaves(&self) -> impl Iterator<Item = &Node> {
         self.nodes.iter().filter(|n| n.is_leaf())
     }
 
+    /// Depth of the deepest node.
     pub fn depth(&self) -> u32 {
         self.nodes.iter().map(|n| n.depth).max().unwrap_or(0)
     }

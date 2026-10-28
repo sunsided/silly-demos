@@ -27,14 +27,21 @@ use ring_som::RingSom;
 /// A method's tunable value.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Param {
+    /// The key the page passes the value by.
     pub id: &'static str,
+    /// The name shown beside its slider.
     pub label: &'static str,
+    /// The value a run starts with unless told otherwise.
     pub default: f32,
+    /// The smallest value [`Run::new`] accepts.
     pub min: f32,
+    /// The largest value [`Run::new`] accepts.
     pub max: f32,
 }
 
 impl Param {
+    /// A parameter from its id, label, default and range; `const` so methods can list theirs in
+    /// statics.
     pub const fn new(
         id: &'static str,
         label: &'static str,
@@ -52,17 +59,25 @@ impl Param {
     }
 }
 
+/// A way of finding a tour: one of the three rings or one of the baselines.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Method {
+    /// Kohonen's self-organizing ring.
     RingSom,
+    /// Durbin and Willshaw's elastic net.
     Elastic,
+    /// Angéniol's ring that grows and prunes its nodes.
     Growing,
+    /// Greedy nearest neighbor from the first city.
     NearestNeighbour,
+    /// 2-opt and Or-opt local search from a nearest-neighbor start.
     LocalSearch,
+    /// Held–Karp dynamic programming, for at most [`MAX_EXACT`] cities.
     Exact,
 }
 
 impl Method {
+    /// Every method, in the order the page lists them.
     pub const ALL: [Method; 6] = [
         Method::RingSom,
         Method::Elastic,
@@ -72,10 +87,12 @@ impl Method {
         Method::Exact,
     ];
 
+    /// The method with this id; `None` for an unknown one.
     pub fn parse(id: &str) -> Option<Method> {
         Self::ALL.into_iter().find(|m| m.id() == id)
     }
 
+    /// The id the page knows the method by.
     pub fn id(self) -> &'static str {
         match self {
             Method::RingSom => "ring-som",
@@ -87,6 +104,7 @@ impl Method {
         }
     }
 
+    /// The method's tunable values; empty for the baselines.
     pub fn params(self) -> &'static [Param] {
         match self {
             Method::RingSom => ring_som::PARAMS,
@@ -96,6 +114,7 @@ impl Method {
         }
     }
 
+    /// Each parameter's default, in `params()` order.
     pub fn defaults(self) -> Vec<f32> {
         self.params().iter().map(|p| p.default).collect()
     }
@@ -104,18 +123,26 @@ impl Method {
 /// One method working on one set of cities.
 #[derive(Clone, Debug)]
 pub struct Run {
+    /// The cities being toured, in the page's coordinates.
     cities: Cities,
+    /// The method and its progress.
     state: State,
 }
 
+/// Each method's working state.
 #[derive(Clone, Debug)]
 enum State {
+    /// A Kohonen ring.
     RingSom(RingSom),
+    /// An elastic net.
     Elastic(Elastic),
+    /// A growing ring.
     Growing(Growing),
     /// A baseline: its distance matrix, and the tour once it has one.
     Greedy(Matrix, Option<Vec<u32>>),
+    /// Local search: its distance matrix, the search, and the iterations run.
     LocalSearch(Matrix, LocalSearch, u64),
+    /// The exact solver: its distance matrix, and the optimal tour once found.
     Exact(Matrix, Option<Vec<u32>>),
     /// The exact solver with more cities than it takes.
     TooBig,
@@ -151,6 +178,7 @@ impl Run {
         Some(Run { cities, state })
     }
 
+    /// The cities being toured.
     pub fn cities(&self) -> &Cities {
         &self.cities
     }
@@ -177,6 +205,7 @@ impl Run {
         ran
     }
 
+    /// Whether the method has nothing more to do.
     pub fn done(&self) -> bool {
         match &self.state {
             State::RingSom(s) => s.done(),
@@ -188,10 +217,12 @@ impl Run {
         }
     }
 
+    /// Whether this is the exact solver turned down for having too many cities.
     pub fn too_big(&self) -> bool {
         matches!(self.state, State::TooBig)
     }
 
+    /// Iterations run so far; a greedy or exact baseline counts its single pass as 1.
     pub fn iterations(&self) -> u64 {
         match &self.state {
             State::RingSom(s) => s.iterations(),

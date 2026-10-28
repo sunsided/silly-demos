@@ -12,14 +12,19 @@ pub const MAX_SIDE: usize = 256;
 /// Presets keep this far from the edges, so the map stays on the sheet.
 const MARGIN: f32 = 0.05;
 
+/// A density on a grid of `side`×`side` cells, sampled through a lazily
+/// rebuilt cumulative sum.
 #[derive(Clone, Debug)]
 pub struct Density {
+    /// Cells per side.
     side: usize,
     /// Row-major; row 0 covers y in [0, 1 / side).
     cells: Vec<f32>,
     /// Running sums of `cells`, rebuilt on the first sample after an edit.
     cumulative: Vec<f32>,
+    /// Set by edits; `cumulative` is stale until the next sample.
     dirty: bool,
+    /// Bumped by every edit.
     version: u64,
 }
 
@@ -87,6 +92,7 @@ impl Density {
         })
     }
 
+    /// Cells per side.
     pub fn side(&self) -> usize {
         self.side
     }
@@ -112,10 +118,12 @@ impl Density {
         self.version += 1;
     }
 
+    /// Total weight over all cells; 0 means nothing can be sampled.
     pub fn mass(&self) -> f32 {
         self.cells.iter().sum()
     }
 
+    /// The weights, row-major from y = 0.
     pub fn cells(&self) -> &[f32] {
         &self.cells
     }
@@ -158,6 +166,7 @@ impl Density {
     }
 }
 
+/// The center of cell `i` of a `side`×`side` grid, in the unit square.
 fn centre(side: usize, i: usize) -> (f32, f32) {
     let cell = 1.0 / side as f32;
     (
@@ -166,6 +175,7 @@ fn centre(side: usize, i: usize) -> (f32, f32) {
     )
 }
 
+/// Whether (x, y) lies within the presets' margin.
 fn inside(x: f32, y: f32) -> bool {
     (MARGIN..=1.0 - MARGIN).contains(&x) && (MARGIN..=1.0 - MARGIN).contains(&y)
 }

@@ -1,18 +1,26 @@
+//! Delaunay triangulation (Bowyer–Watson) and the dual Voronoi edges, plus
+//! the drifting point cloud the Voronoi demo animates.
+
 #![allow(dead_code)]
 
 use crate::rand::{frand01, hash_u32};
 use wasm_bindgen::prelude::*;
 
+/// Namespace for the Voronoi demo's functions when exported to WASM.
 #[wasm_bindgen]
 pub struct VoronoiTests;
 
+/// A 2D point or vector in canvas px.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Pt {
+    /// Horizontal coordinate.
     x: f32,
+    /// Vertical coordinate.
     y: f32,
 }
 
 impl Pt {
+    /// Component-wise difference `self - o`.
     #[inline]
     fn sub(self, o: Pt) -> Pt {
         Pt {
@@ -21,6 +29,7 @@ impl Pt {
         }
     }
 
+    /// Component-wise sum `self + o`.
     #[inline]
     fn add(self, o: Pt) -> Pt {
         Pt {
@@ -29,6 +38,7 @@ impl Pt {
         }
     }
 
+    /// Scales both components by `s`.
     #[inline]
     fn mul(self, s: f32) -> Pt {
         Pt {
@@ -37,11 +47,13 @@ impl Pt {
         }
     }
 
+    /// Dot product with `o`.
     #[inline]
     fn dot(self, o: Pt) -> f32 {
         self.x * o.x + self.y * o.y
     }
 
+    /// Squared length, avoiding the square root.
     #[inline]
     fn len2(self) -> f32 {
         self.dot(self)
@@ -49,11 +61,15 @@ impl Pt {
 }
 
 #[derive(Clone, Copy)]
+/// The circle through a triangle's three corners.
 struct Circumcircle {
+    /// Center (the circumcenter).
     c: Pt,
+    /// Squared radius.
     r2: f32,
 }
 
+/// Circumcircle of triangle `abc`, or `None` when the corners are (nearly) collinear.
 fn circumcircle(a: Pt, b: Pt, c: Pt) -> Option<Circumcircle> {
     // Robust-ish circumcenter calculation; return None for near-collinear
     let d = 2.0 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
@@ -72,6 +88,7 @@ fn circumcircle(a: Pt, b: Pt, c: Pt) -> Option<Circumcircle> {
     })
 }
 
+/// Whether `p` lies inside or on the circumcircle of `abc`; false for a degenerate triangle.
 fn in_circumcircle(p: Pt, a: Pt, b: Pt, c: Pt) -> bool {
     if let Some(cc) = circumcircle(a, b, c) {
         p.sub(cc.c).len2() <= cc.r2
@@ -81,12 +98,16 @@ fn in_circumcircle(p: Pt, a: Pt, b: Pt, c: Pt) -> bool {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// An undirected edge between two point indices, stored with `a < b` so both directions hash alike.
 struct Edge {
+    /// Smaller point index.
     a: usize,
+    /// Larger point index.
     b: usize,
 }
 
 impl Edge {
+    /// The edge between `i` and `j`, in either order.
     fn new(i: usize, j: usize) -> Self {
         if i < j {
             Edge { a: i, b: j }
@@ -97,13 +118,18 @@ impl Edge {
 }
 
 #[derive(Clone, Copy)]
+/// A triangle as three indices into the point list.
 struct Tri {
+    /// First corner.
     a: usize,
+    /// Second corner.
     b: usize,
+    /// Third corner.
     c: usize,
 }
 
 impl Tri {
+    /// The three sides as normalized edges.
     fn edges(&self) -> [Edge; 3] {
         [
             Edge::new(self.a, self.b),
@@ -113,6 +139,8 @@ impl Tri {
     }
 }
 
+/// Delaunay triangulation of `points` by Bowyer–Watson, inserting points one by one
+/// into a super triangle that is dropped at the end. Indices refer to `points`.
 fn bowyer_watson(points: &[Pt]) -> Vec<Tri> {
     // Super triangle bounding all points
     let mut minx = f32::INFINITY;
@@ -214,6 +242,8 @@ fn bowyer_watson(points: &[Pt]) -> Vec<Tri> {
     tris
 }
 
+/// Voronoi edges as segments joining the circumcenters of each pair of triangles
+/// sharing a side; hull edges get no outward ray.
 fn compute_voronoi_edges(points: &[Pt], tris: &[Tri]) -> Vec<(Pt, Pt)> {
     // Map each edge to the first triangle index that saw it, and when seen again connect circumcenters
     use std::collections::HashMap;

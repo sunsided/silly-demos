@@ -8,6 +8,7 @@ use super::tour::{nearest, worst_fit};
 use super::{Param, centroid};
 use crate::rng::Rng;
 
+/// The ring's tunables, in the order [`Growing::new`] reads them.
 pub const PARAMS: &[Param] = &[
     Param::new("alpha", "α, G shrink per pass", 0.2, 0.01, 0.5),
     Param::new("g", "G start", 10.0, 1.0, 50.0),
@@ -17,12 +18,15 @@ pub const PARAMS: &[Param] = &[
 const IDLE_PASSES: u32 = 3;
 /// Done when every city has a node this near (unit square), or after this many passes.
 const FIT: f32 = 0.01;
+/// Passes after which the ring stops, fitted or not.
 const MAX_PASSES: u32 = 500;
 /// Nodes the ring may grow to, per city.
 const MAX_NODES_PER_CITY: usize = 3;
 
+/// One node of the growing ring.
 #[derive(Clone, Debug)]
 struct Node {
+    /// Its position in the unit square.
     at: [f32; 2],
     /// Cities won in this pass.
     wins: u32,
@@ -32,17 +36,26 @@ struct Node {
     inhibited: bool,
 }
 
+/// Angéniol's growing ring at work on a set of cities in the unit square.
 #[derive(Clone, Debug)]
 pub struct Growing {
+    /// The ring's nodes in ring order; never fewer than one.
     nodes: Vec<Node>,
+    /// α, the share G loses after every pass.
     alpha: f32,
+    /// G, the reach of a winner's pull along the ring, in nodes; shrinks every pass.
     pub g: f32,
+    /// The order cities are shown in this pass, reshuffled after each.
     order: Vec<usize>,
     /// Position in `order` within the current pass.
     next: usize,
+    /// Passes completed.
     passes: u32,
+    /// Iterations run, one city each.
     t: u64,
+    /// Set once every city has a node within [`FIT`], or after [`MAX_PASSES`].
     done: bool,
+    /// Shuffles `order` before every pass.
     rng: Rng,
 }
 
@@ -69,26 +82,32 @@ impl Growing {
         ring
     }
 
+    /// Whether the ring has fitted the cities or run out of passes.
     pub fn done(&self) -> bool {
         self.done
     }
 
+    /// Iterations run so far, one city each.
     pub fn iterations(&self) -> u64 {
         self.t
     }
 
+    /// The nodes' positions in the unit square, in ring order.
     pub fn nodes(&self) -> Vec<[f32; 2]> {
         self.nodes.iter().map(|n| n.at).collect()
     }
 
+    /// Number of nodes now on the ring.
     pub fn len(&self) -> usize {
         self.nodes.len()
     }
 
+    /// Always false: the ring keeps at least one node.
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
 
+    /// Fisher–Yates shuffles the order the next pass shows cities in.
     fn shuffle(&mut self) {
         for i in (1..self.order.len()).rev() {
             let j = self.rng.below(i + 1);
@@ -146,6 +165,8 @@ impl Growing {
         }
     }
 
+    /// Ends a pass: counts idle passes, drops nodes idle too long (keeping at least three), shrinks
+    /// G, reshuffles and checks whether the ring is done.
     fn end_pass(&mut self, cities: &[[f32; 2]]) {
         for n in &mut self.nodes {
             if n.wins == 0 && !n.inhibited {

@@ -22,46 +22,65 @@ const SENSE_HZ: f32 = 10.0;
 /// Smallest frontier cluster worth driving to, in cells.
 const MIN_FRONTIER: usize = 4;
 
+/// Which controller drives the robot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
+    /// The 2013 lab's [`Reactive`] controller, stopping once no frontier is left.
     Reactive,
+    /// The planning [`Explorer`], which maps everything and drives home.
     Explorer,
 }
 
 /// What the run is doing, for readouts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
+    /// Driving to frontiers, or wandering for the reactive controller.
     Exploring,
+    /// The explorer, map complete, driving back to where it started.
     Returning,
     /// Nothing left to explore (and, for the explorer, back at the start).
     Done,
 }
 
+/// The world, the robot in it, what it has mapped so far, and the controller driving it.
 #[derive(Clone, Debug)]
 pub struct Sim {
+    /// The floor plan the walls come from.
     pub plan: FloorPlan,
+    /// The true walls, rasterized at [`CELL`]; what the laser and collisions see.
     pub walls: Grid<bool>,
+    /// The scanner on the robot.
     pub laser: Laser,
+    /// The robot's body and motion.
     pub robot: Robot,
+    /// What the robot has mapped, on the same grid as `walls`.
     pub map: Map,
+    /// The latest scan, one range per beam, m.
     pub ranges: Vec<f32>,
+    /// Frontier clusters reachable in the map at the latest scan.
     pub frontiers: Vec<Cluster>,
+    /// Which controller is driving.
     pub mode: Mode,
+    /// The planning controller; kept even in reactive mode, and restarted on a mode switch.
     pub explorer: Explorer,
-    /// Positions every 0.1 s.
+    /// Positions along the way, one each time the robot is more than 5 cm from the last.
     pub trail: Vec<Point>,
     /// Distance driven, m.
     pub distance: f32,
     /// Simulated time, s.
     pub time: f32,
+    /// What the run is doing, for readouts.
     pub status: Status,
+    /// The command decided at the latest scan, held until the next.
     cmd: Command,
+    /// Seconds since the latest scan.
     since_sense: f32,
     /// Free cells of the true floor plan the robot could see, for coverage.
     reachable: usize,
 }
 
 impl Sim {
+    /// A fresh run on `plan` with an empty map, after a first scan from the start.
     pub fn new(plan: FloorPlan, mode: Mode) -> Self {
         let walls = plan.rasterize(CELL, WALL);
         let reachable = flood_free(&walls, walls.cell_of(plan.start.position()));
@@ -96,6 +115,7 @@ impl Sim {
         self.sense();
     }
 
+    /// Switches controller; a new explorer starts, and comes home to where the robot is now.
     pub fn set_mode(&mut self, mode: Mode) {
         if mode != self.mode {
             self.mode = mode;
@@ -133,6 +153,7 @@ impl Sim {
         }
     }
 
+    /// Scans, folds the scan into the map, and finds the frontiers reachable from the robot.
     fn sense(&mut self) {
         self.ranges = self.laser.scan(&self.walls, self.robot.pose);
         self.map
@@ -141,6 +162,7 @@ impl Sim {
         self.frontiers = frontier::find(&self.map.grid, here, MIN_FRONTIER);
     }
 
+    /// What the current controller says to do, updating the status on the way.
     fn decide(&mut self) -> Command {
         match self.mode {
             Mode::Reactive => {

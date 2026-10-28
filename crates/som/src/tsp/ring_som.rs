@@ -7,6 +7,7 @@ use super::{Param, centre_circle};
 use crate::rng::Rng;
 use crate::schedule::{Decay, Schedule, kernel};
 
+/// The ring's tunables, in the order [`RingSom::new`] reads them.
 pub const PARAMS: &[Param] = &[
     Param::new("nodes", "Nodes per city", 2.0, 1.0, 4.0),
     Param::new("samples", "Samples per city", 100.0, 10.0, 500.0),
@@ -16,13 +17,19 @@ pub const PARAMS: &[Param] = &[
 
 /// Where α and σ end: σ in nodes, so the last updates move one node.
 const ALPHA_END: f32 = 0.02;
+/// σ's end, in nodes; see [`ALPHA_END`].
 const SIGMA_END: f32 = 0.5;
 
+/// A Kohonen ring at work on a set of cities in the unit square.
 #[derive(Clone, Debug)]
 pub struct RingSom {
+    /// The ring's nodes in the unit square, in ring order.
     pub nodes: Vec<[f32; 2]>,
+    /// α and σ over the run: as many steps as samples to show, decaying exponentially.
     schedule: Schedule,
+    /// Cities shown so far.
     t: u64,
+    /// Picks which city to show next.
     rng: Rng,
 }
 
@@ -46,10 +53,12 @@ impl RingSom {
         }
     }
 
+    /// Whether every sample has been shown.
     pub fn done(&self) -> bool {
         self.schedule.finished(self.t)
     }
 
+    /// Cities shown so far.
     pub fn iterations(&self) -> u64 {
         self.t
     }

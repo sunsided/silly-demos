@@ -9,6 +9,7 @@ use crate::grid::{Grid, trace};
 pub struct Laser {
     /// Full field of view in radians, centred on the heading.
     pub fov: f32,
+    /// Beams per scan, spread evenly across the field of view, both edges included.
     pub samples: usize,
     /// Longest distance measured; beams that hit nothing report this.
     pub range: f32,

@@ -91,6 +91,7 @@ pub fn optimum(kind: &str, n: usize) -> Option<f64> {
     }
 }
 
+/// The radius of the circle set, centered in the square, in its 0..1000 units.
 const CIRCLE_RADIUS: f32 = 400.0;
 
 /// The rectangle nearest `n` cities with an even count and both sides at

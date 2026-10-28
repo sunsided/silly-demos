@@ -5,6 +5,7 @@
 
 use super::{Param, centre_circle, tour::worst_fit};
 
+/// The net's tunables, in the order [`Elastic::new`] reads them.
 pub const PARAMS: &[Param] = &[
     Param::new("nodes", "Nodes per city", 2.5, 1.5, 4.0),
     Param::new("alpha", "α, city pull", 0.2, 0.01, 1.0),
@@ -14,18 +15,27 @@ pub const PARAMS: &[Param] = &[
 
 /// K shrinks by this factor every [`K_EVERY`] iterations.
 const K_DECAY: f32 = 0.99;
+/// Iterations between K shrinking, and between checks for being done.
 const K_EVERY: u64 = 25;
 /// Done when every city has a node this near (unit square), or K is spent.
 const FIT: f32 = 0.01;
+/// Done once K falls below this.
 const K_END: f32 = 0.005;
 
+/// Durbin and Willshaw's elastic net at work on a set of cities in the unit square.
 #[derive(Clone, Debug)]
 pub struct Elastic {
+    /// The ring's nodes in the unit square, in ring order.
     pub nodes: Vec<[f32; 2]>,
+    /// α, how hard the cities pull.
     alpha: f32,
+    /// β, how hard the ring's tension pulls neighbors together.
     beta: f32,
+    /// K, the width of the Gaussian sharing each city's pull; shrinks over time.
     pub k: f32,
+    /// Iterations run.
     t: u64,
+    /// Set once every city has a node within [`FIT`], or K is below [`K_END`].
     done: bool,
     /// Scratch: each node's move this iteration.
     delta: Vec<[f32; 2]>,
@@ -49,10 +59,12 @@ impl Elastic {
         }
     }
 
+    /// Whether the net has fitted the cities or run out of K.
     pub fn done(&self) -> bool {
         self.done
     }
 
+    /// Iterations run so far.
     pub fn iterations(&self) -> u64 {
         self.t
     }

@@ -9,10 +9,15 @@ use wasm_bindgen::prelude::*;
 /// race is one lab per method on the same cities.
 #[wasm_bindgen]
 pub struct TspLab {
+    /// The cities to tour, or `None` before any are set.
     cities: Option<Cities>,
+    /// The method each restart runs.
     method: Method,
+    /// The method's parameter values, in the order of `method.params()`.
     values: Vec<f32>,
+    /// Seed every restart starts the random numbers from.
     seed: u64,
+    /// The run in progress, or `None` without cities.
     run: Option<Run>,
 }
 
@@ -145,6 +150,8 @@ impl TspLab {
         self.run.as_ref().map_or(f64::NAN, Run::length)
     }
 
+    /// Iterations run so far (a single pass counts as 1 for the greedy and
+    /// exact methods); 0 without a run.
     pub fn iterations(&self) -> f64 {
         self.run.as_ref().map_or(0.0, |r| r.iterations() as f64)
     }

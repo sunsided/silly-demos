@@ -34,13 +34,16 @@ pub fn nearest_neighbour(m: &Matrix, start: usize) -> Vec<u32> {
 /// round of positions without one leaves a tour no such move improves.
 #[derive(Clone, Debug)]
 pub struct LocalSearch {
+    /// The tour so far, as city indices; always a permutation of all cities.
     pub tour: Vec<u32>,
+    /// The tour position the next step tries.
     position: usize,
     /// Positions tried since the last improvement.
     stale: usize,
 }
 
 impl LocalSearch {
+    /// A search starting from the nearest-neighbor tour from city 0.
     pub fn new(m: &Matrix) -> Self {
         Self {
             tour: nearest_neighbour(m, 0),
@@ -49,6 +52,7 @@ impl LocalSearch {
         }
     }
 
+    /// Whether a full round of positions has passed without an improvement.
     pub fn done(&self) -> bool {
         self.stale >= self.tour.len()
     }

@@ -1,3 +1,6 @@
+//! WASM entry point for the silly demos: the bindings JS calls for the
+//! collision lab, point-line test, boids, IK chain, Voronoi, Kohonen and rover labs.
+
 mod boids;
 mod collision;
 mod geometry;
@@ -28,6 +31,7 @@ pub use voronoi::VoronoiTests;
 use wasm_bindgen::prelude::*;
 
 // Called by our JS entry point to run the example,
+/// Installs the panic hook so Rust panics show up in the browser console; call once on load.
 #[wasm_bindgen]
 pub fn run() -> Result<(), JsValue> {
     set_panic_hook();
@@ -44,12 +48,15 @@ pub struct GeometryTests;
 /// Two shapes and the collision methods that apply to them.
 #[wasm_bindgen]
 pub struct CollisionLab {
+    /// Shapes A and B, the pair under test.
     bodies: [Body; 2],
+    /// Background shapes that only take part in the quadtree stage.
     crowd: Crowd,
 }
 
 #[wasm_bindgen]
 impl CollisionLab {
+    /// Two circles of radius 80 at `x = ±140` and an empty crowd.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         let circle = |x| {
@@ -98,6 +105,7 @@ impl CollisionLab {
             .collect()
     }
 
+    /// Display name of method `id`, or an empty string if there is none.
     pub fn method_name(id: &str) -> String {
         registry::METHODS
             .iter()
@@ -106,6 +114,7 @@ impl CollisionLab {
             .unwrap_or_default()
     }
 
+    /// One-line description of method `id`, or an empty string if there is none.
     pub fn method_summary(id: &str) -> String {
         registry::METHODS
             .iter()
@@ -215,6 +224,7 @@ impl CollisionLab {
 }
 
 impl CollisionLab {
+    /// Looks up method `id` for the current pair of shape kinds, or `None` if it does not apply.
     fn resolve(&self, id: &str) -> Option<registry::Resolved> {
         let [a, b] = self.bodies.map(|b| b.shape.kind());
         registry::find(id, a, b)
@@ -230,16 +240,23 @@ impl Default for CollisionLab {
 /// Result of one recorded collision test.
 #[wasm_bindgen]
 pub struct CollisionReport {
+    /// What the method found: intersection, and distance, normal and points if measured.
     contact: Contact,
+    /// The `Stage` the test ended at, as its numeric value; see `stage()`.
     stage: u32,
+    /// Operations the method performed.
     counts: Counts,
+    /// Quadtree statistics, or `None` when the quadtree stage was off.
     scene: Option<SceneStats>,
+    /// Encoded construction notes; see `Note::encode`.
     notes: Vec<f32>,
+    /// Texts the label indices in `notes` refer to.
     labels: Vec<String>,
 }
 
 #[wasm_bindgen]
 impl CollisionReport {
+    /// Whether A and B overlap.
     #[wasm_bindgen(getter)]
     pub fn intersect(&self) -> bool {
         self.contact.intersect
@@ -306,21 +323,30 @@ impl CollisionReport {
         self.notes.clone()
     }
 
+    /// Label texts, indexed by the label slot of each note in `notes()`.
     pub fn labels(&self) -> Vec<String> {
         self.labels.clone()
     }
 }
 
+/// Where a point lies relative to a line segment.
 #[wasm_bindgen]
 pub struct PointLineResult {
+    /// Distance from the point to the closest point on the segment.
     #[wasm_bindgen(readonly)]
     pub distance: f32,
+    /// x of the closest point on the segment.
     #[wasm_bindgen(readonly)]
     pub closest_x: f32,
+    /// y of the closest point on the segment.
     #[wasm_bindgen(readonly)]
     pub closest_y: f32,
+    /// Whether the point projects onto the segment rather than past an end;
+    /// always true for a degenerate segment.
     #[wasm_bindgen(readonly)]
     pub on_segment: bool,
+    /// Cross product of the segment direction and the vector to the point:
+    /// its sign gives the side, its size is segment length × distance to the infinite line.
     #[wasm_bindgen(readonly)]
     pub side: f32, // positive = right side, negative = left side, 0 = on line
 }
@@ -331,6 +357,8 @@ pub struct PointLineResult {
 /// point_x, point_y: the point to test
 #[wasm_bindgen]
 impl GeometryTests {
+    /// Measures the point `(point_x, point_y)` against the segment from
+    /// `(line_x1, line_y1)` to `(line_x2, line_y2)`.
     pub fn point_line_test(
         line_x1: f32,
         line_y1: f32,
@@ -347,17 +375,29 @@ impl GeometryTests {
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub struct BoidsParams {
+    /// Neighbors closer than this push the boid away.
     pub separation_radius: f32,
+    /// Neighbors within this radius pull the boid towards their heading.
     pub alignment_radius: f32,
+    /// Neighbors within this radius pull the boid towards their center.
     pub cohesion_radius: f32,
+    /// Strength of the separation force.
     pub separation_weight: f32,
+    /// Strength of the alignment force.
     pub alignment_weight: f32,
+    /// Strength of the cohesion force.
     pub cohesion_weight: f32,
+    /// Slowest a boid may fly.
     pub min_speed: f32,
+    /// Fastest a boid may fly; raised to `min_speed` if set below it.
     pub max_speed: f32,
+    /// Cap on each steering force.
     pub max_force: f32,
+    /// Width of the band along each edge in which boids steer back inwards.
     pub edge_margin: f32,
+    /// Strength of the force steering boids away from the edges.
     pub edge_weight: f32,
+    /// Magnitude of the random acceleration applied each step.
     pub wander: f32,
     /// Full field-of-view angle in degrees.
     pub view_angle: f32,
@@ -422,11 +462,13 @@ impl From<&BoidsParams> for boids::FlockParams {
 /// Rust side; JS only reads a flat snapshot for drawing.
 #[wasm_bindgen]
 pub struct BoidsSim {
+    /// The simulated flock and its parameters.
     flock: boids::Flock,
 }
 
 #[wasm_bindgen]
 impl BoidsSim {
+    /// `count` boids scattered over a `width` × `height` world (px), seeded by `seed`.
     #[wasm_bindgen(constructor)]
     pub fn new(count: usize, width: f32, height: f32, seed: u32) -> Self {
         Self {
@@ -434,14 +476,17 @@ impl BoidsSim {
         }
     }
 
+    /// Replaces the flocking parameters; takes effect on the next step.
     pub fn set_params(&mut self, params: &BoidsParams) {
         self.flock.params = params.into();
     }
 
+    /// Grows or shrinks the flock to `count`, keeping existing boids in place.
     pub fn set_count(&mut self, count: usize) {
         self.flock.set_count(count);
     }
 
+    /// Changes the world size (px, at least 1) without moving any boid.
     pub fn resize(&mut self, width: f32, height: f32) {
         self.flock.resize(width, height);
     }
@@ -460,6 +505,7 @@ impl BoidsSim {
         }
     }
 
+    /// Number of boids in the flock.
     pub fn count(&self) -> usize {
         self.flock.boids.len()
     }
@@ -485,9 +531,13 @@ impl BoidsSim {
 /// `follow`), so the arm moves smoothly even when the goal jumps.
 #[wasm_bindgen]
 pub struct IkChain {
+    /// Pose the solvers work on.
     goal: ik::Chain,
+    /// Pose drawn on screen, easing after `goal`.
     shown: ik::Chain,
+    /// Clearance and floor the arm must respect.
     limits: ik::Limits,
+    /// What the last solve reported.
     outcome: ik::Outcome,
 }
 

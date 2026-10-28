@@ -10,9 +10,11 @@ use wasm_bindgen::prelude::*;
 /// JS steps it and reads flat snapshots for drawing.
 #[wasm_bindgen]
 pub struct RoverLab {
+    /// The floor plan, robot, map and controller being simulated.
     sim: Sim,
 }
 
+/// The controller for `id`: "reactive", or the explorer for anything else.
 fn mode_from(id: &str) -> Mode {
     match id {
         "reactive" => Mode::Reactive,
@@ -116,6 +118,7 @@ impl RoverLab {
         vec![p.x, p.y, p.theta]
     }
 
+    /// The robot's body radius, in meters.
     pub fn radius(&self) -> f32 {
         self.sim.robot.body.radius
     }

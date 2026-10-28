@@ -4,6 +4,7 @@ use crate::codebook::Codebook;
 use crate::lattice::Lattice;
 use crate::rng::Rng;
 
+/// How [`initialise`] places the nodes before training.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Init {
     /// Each node on a randomly picked sample: no order at all to start with.
@@ -17,6 +18,7 @@ pub enum Init {
 }
 
 impl Init {
+    /// The init for a UI id, `random`, `cluster` or `pca`; `None` for anything else.
     pub fn parse(id: &str) -> Option<Init> {
         match id {
             "random" => Some(Init::Random),
@@ -27,6 +29,7 @@ impl Init {
     }
 }
 
+/// How far from the data's mean [`Init::Cluster`] scatters nodes, in input units.
 const CLUSTER_RADIUS: f32 = 0.02;
 
 /// A codebook for `lattice` from `samples` (flat, `dim` values each).
@@ -73,6 +76,7 @@ pub fn initialise(
     Codebook { dim, weights }
 }
 
+/// The per-dimension mean of flat samples, `dim` values each; there must be at least one.
 fn mean(samples: &[f32], dim: usize) -> Vec<f32> {
     let count = (samples.len() / dim) as f32;
     let mut m = vec![0.0; dim];
@@ -83,6 +87,8 @@ fn mean(samples: &[f32], dim: usize) -> Vec<f32> {
     m
 }
 
+/// Weights for [`Init::Pca`]: each node's lattice coordinates, scaled to [−1, 1] per lattice axis,
+/// mapped onto the plane of the data's two main axes at ±2 standard deviations around `mean`.
 fn pca(lattice: &Lattice, samples: &[f32], dim: usize, mean: &[f32]) -> Vec<f32> {
     let count = (samples.len() / dim) as f32;
     let mut cov = vec![0.0f32; dim * dim];

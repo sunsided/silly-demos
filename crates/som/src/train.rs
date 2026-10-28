@@ -18,16 +18,21 @@ pub struct StepTrace {
     pub previous: Vec<f32>,
 }
 
+/// A self-organizing map in training: its lattice, its weights and where it is in its schedule.
 #[derive(Clone, Debug)]
 pub struct Som {
+    /// How the nodes are arranged.
     pub lattice: Lattice,
+    /// Each node's weight vector in input space.
     pub codebook: Codebook,
+    /// How α and σ change as samples are presented.
     pub schedule: Schedule,
     /// Samples presented so far.
     pub t: u64,
 }
 
 impl Som {
+    /// Whether the schedule has run out; a continuous schedule never does.
     pub fn finished(&self) -> bool {
         self.schedule.finished(self.t)
     }

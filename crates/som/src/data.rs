@@ -4,7 +4,9 @@
 /// deviation (1 for a constant column). NaN stays NaN.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Normaliser {
+    /// Per-column mean, subtracted first.
     pub mean: Vec<f32>,
+    /// Per-column divisor, never 0.
     pub scale: Vec<f32>,
 }
 
@@ -48,6 +50,7 @@ impl Normaliser {
         }
     }
 
+    /// Flat rows in raw units to z-scores, column by column.
     pub fn apply(&self, values: &[f32]) -> Vec<f32> {
         let dim = self.mean.len();
         values
@@ -57,6 +60,7 @@ impl Normaliser {
             .collect()
     }
 
+    /// Z-scores back to raw units; undoes [`Normaliser::apply`].
     pub fn invert(&self, values: &[f32]) -> Vec<f32> {
         let dim = self.mean.len();
         values

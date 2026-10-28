@@ -18,15 +18,19 @@ const BATCH_ROWS: usize = 2000;
 /// Up to this many rows, the errors are measured on all of them; above,
 /// on a fixed random subset of [`EVAL_SAMPLES`].
 const EVAL_ALL_UP_TO: usize = 2000;
+/// Size of the random subset the errors are measured on for larger data.
 const EVAL_SAMPLES: usize = 1000;
 /// Online samples between two measurements.
 const METRIC_EVERY: u64 = 250;
 /// History entries kept.
 const HISTORY_CAP: usize = 400;
 
+/// How the map learns from the rows.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Training {
+    /// One random row at a time, each counting as one step of the schedule.
     Online,
+    /// A whole epoch over the batch subset at once.
     Batch,
 }
 
@@ -35,20 +39,31 @@ enum Training {
 /// than in input space. NaN in the data marks a missing value.
 #[wasm_bindgen]
 pub struct SomData {
+    /// The map: codebook, lattice, schedule and step count.
     som: Som,
+    /// How the codebook is seeded on a restart.
     init: Init,
+    /// Online or batch learning.
     training: Training,
+    /// Seed the random generator is reset to on every restart.
     seed: u64,
+    /// Drives initialization, online sampling and the row subsets.
     rng: Rng,
+    /// Whether to train on per-column z-scores rather than raw values.
     normalise: bool,
+    /// Maps raw rows to training space and back.
     normaliser: Normaliser,
     /// The rows as given, flat.
     raw: Vec<f32>,
     /// The rows normalised, which is what the map trains on.
     data: Vec<f32>,
+    /// Normalized rows a batch epoch covers: all of them, or a fixed subset of [`BATCH_ROWS`].
     batch: Vec<f32>,
+    /// Normalized rows the errors are measured on.
     eval: Vec<f32>,
+    /// Recorded `(step, quantization error, topographic error)` over training.
     history: History,
+    /// Latest quantization and topographic error.
     errors: (f32, f32),
 }
 
@@ -368,6 +383,8 @@ impl SomData {
         self.data = self.normaliser.apply(&self.raw);
     }
 
+    /// Measures both errors on the evaluation rows, appending them to the
+    /// history if `record`; does nothing before there is a codebook or data.
     fn measure(&mut self, record: bool) {
         let cb = &self.som.codebook;
         if cb.is_empty() || self.eval.is_empty() {

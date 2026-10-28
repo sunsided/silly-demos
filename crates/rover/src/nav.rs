@@ -87,6 +87,7 @@ pub struct Room {
 }
 
 impl Room {
+    /// Whether the robot may enter `c`: seen free, with at least `hard` clearance.
     pub fn passable(&self, map: &Grid<Known>, clear: &Grid<f32>, c: Cell) -> bool {
         map.get(c) == Some(&Known::Free) && clear.get(c).is_some_and(|&d| d >= self.hard)
     }
@@ -101,6 +102,7 @@ impl Room {
     }
 }
 
+/// A planned route through the known map.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Path {
     /// Corner points, start first, after line-of-sight smoothing.
@@ -111,6 +113,8 @@ pub struct Path {
     pub cost: f32,
 }
 
+/// A cell on Dijkstra's open list with its cost so far, ordered so the cheapest pops first from a
+/// max-heap.
 #[derive(PartialEq)]
 struct Open(f32, Cell);
 
@@ -178,6 +182,7 @@ pub fn plan(
     None
 }
 
+/// The cells from the start to `c`, following each cell's predecessor in `came`.
 fn walk_back(came: &Grid<Option<Cell>>, mut c: Cell) -> Vec<Cell> {
     let mut cells = vec![c];
     while let Some(&Some(p)) = came.get(c) {

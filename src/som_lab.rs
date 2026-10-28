@@ -21,9 +21,12 @@ const METRIC_EVERY: u64 = 250;
 /// History entries kept; when full, every other one is dropped.
 const HISTORY_CAP: usize = 400;
 
+/// How the map learns from the density.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Training {
+    /// One fresh sample at a time, each counting as one step of the schedule.
     Online,
+    /// A whole epoch over the batch samples at once.
     Batch,
 }
 
@@ -31,17 +34,27 @@ enum Training {
 /// JS steps it, paints the density and reads flat snapshots for drawing.
 #[wasm_bindgen]
 pub struct SomLab {
+    /// The map: codebook, lattice, schedule and step count.
     som: Som,
+    /// How the codebook is seeded on a restart.
     init: Init,
+    /// Online or batch learning.
     training: Training,
+    /// The 2D distribution the samples are drawn from.
     density: Density,
+    /// Seed the random generator is reset to on every restart.
     seed: u64,
+    /// Drives initialization and sampling.
     rng: Rng,
+    /// Samples a batch epoch trains on, `x, y` per sample.
     batch: Vec<f32>,
+    /// Samples the errors are measured on, `x, y` per sample.
     eval: Vec<f32>,
+    /// What the last traced update did, for drawing it; `None` after a restart.
     trace: Option<StepTrace>,
     /// (t, QE, TE) triples.
     history: History,
+    /// Latest quantization and topographic error.
     errors: (f32, f32),
 }
 
