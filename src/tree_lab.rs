@@ -1,7 +1,8 @@
 //! WASM bindings for the clustering lab's hierarchy mode (`stream::tree`):
-//! mock embeddings streamed into a tree of clusters that grows online, the
-//! same points built into a tree in passes, both scored against the true
-//! hierarchy and searched for nearest neighbors.
+//! mock embeddings streamed into two trees of clusters that grow online, a
+//! plain one and a careful one, the same points built into a tree in
+//! passes, all scored against the true hierarchy and searched for nearest
+//! neighbors.
 
 use stream::embed::{BRANCHING, EmbedSpec, Embedder, LEVELS, Projection};
 use stream::metrics::adjusted_rand;
@@ -64,7 +65,7 @@ const PARAMS: [Param; 6] = [
     },
     Param {
         id: "max_children",
-        label: "Children at most",
+        label: "Children at most, plain tree",
         default: 8.0,
         min: 2.0,
         max: 12.0,
@@ -93,6 +94,8 @@ const PARAMS: [Param; 6] = [
 enum Which {
     /// Grown online as the points arrived.
     Online,
+    /// Grown online, carefully: coarsest level, confirmed splits, re-checks.
+    Careful,
     /// Built in passes over the stored points.
     Passes,
 }
@@ -102,6 +105,7 @@ impl Which {
     fn parse(id: &str) -> Option<Which> {
         match id {
             "online" => Some(Which::Online),
+            "careful" => Some(Which::Careful),
             "passes" => Some(Which::Passes),
             _ => None,
         }
@@ -128,6 +132,8 @@ pub struct TreeLab {
     projection: Projection,
     /// The tree grown online.
     online: Tree,
+    /// The careful tree grown online.
+    careful: Tree,
     /// The tree built in passes, once there is one.
     passes: Option<Tree>,
     /// Queries for the search, generated with the stream's tree.
@@ -151,6 +157,7 @@ impl TreeLab {
             projected: Vec::new(),
             projection: Projection::fit(&[], 2, &mut Rng::new(1)),
             online: Tree::new(TreeParams::default(), spec.dim, seed as u64),
+            careful: Tree::new(TreeParams::careful(), spec.dim, seed as u64),
             passes: None,
             queries: Vec::new(),
             values: PARAMS.iter().map(|p| p.default).collect(),
@@ -222,10 +229,11 @@ impl TreeLab {
         self.leaves.clear();
         self.projected.clear();
         self.online = Tree::new(self.tree_params(), spec.dim, self.seed ^ 0x1234);
+        self.careful = Tree::new(self.careful_params(), spec.dim, self.seed ^ 0x1234);
         self.passes = None;
     }
 
-    /// Streams up to `n` more points into the online tree, stopping at the
+    /// Streams up to `n` more points into both online trees, stopping at the
     /// set number; once there, builds the tree in passes. Returns how many.
     pub fn step(&mut self, n: u32) -> u32 {
         let total = self.value("points") as usize;
@@ -237,6 +245,7 @@ impl TreeLab {
             self.store.extend(x);
             self.leaves.push(leaf as u32);
             self.online.insert(id, &self.store);
+            self.careful.insert(id, &self.store);
             done += 1;
         }
         if self.leaves.len() >= total && self.passes.is_none() {
@@ -364,9 +373,10 @@ impl TreeLab {
         out
     }
 
-    /// What tree `which` cost: distances per point to place points, per
-    /// point to split nodes, and passes over the points. Empty for an
-    /// unknown tree or one not built yet.
+    /// What tree `which` cost and repaired: distances per point to place
+    /// points, per point to split nodes, per point to re-check points;
+    /// passes over the points; splits put off for want of evidence; points
+    /// moved by re-checking. Empty for an unknown tree or one not built yet.
     pub fn cost(&self, which: &str) -> Vec<f32> {
         let Some(tree) = self.tree(which) else {
             return Vec::new();
@@ -381,7 +391,10 @@ impl TreeLab {
         vec![
             per(tree.place_checks),
             per(tree.split_checks),
+            per(tree.recheck_checks),
             tree.passes as f32,
+            tree.deferred as f32,
+            tree.moved as f32,
         ]
     }
 
@@ -440,13 +453,26 @@ impl TreeLab {
         }
     }
 
-    /// The tree's parameters from the current values.
+    /// The plain tree's parameters from the current values.
     fn tree_params(&self) -> TreeParams {
         TreeParams {
             split_at: self.value("split_at") as u32,
             max_depth: self.value("max_depth") as usize,
             max_children: self.value("max_children") as usize,
             price: self.value("price"),
+            ..TreeParams::default()
+        }
+    }
+
+    /// The careful tree's parameters: its own rule, cap and repairs, with
+    /// the split size, depth and price as set. Its coarsest-level rule
+    /// doesn't lean on the cap the way the plain tree's criterion does.
+    fn careful_params(&self) -> TreeParams {
+        TreeParams {
+            split_at: self.value("split_at") as u32,
+            max_depth: self.value("max_depth") as usize,
+            price: self.value("price"),
+            ..TreeParams::careful()
         }
     }
 
@@ -462,6 +488,7 @@ impl TreeLab {
     fn tree(&self, which: &str) -> Option<&Tree> {
         match Which::parse(which)? {
             Which::Online => Some(&self.online),
+            Which::Careful => Some(&self.careful),
             Which::Passes => self.passes.as_ref(),
         }
     }
@@ -489,9 +516,15 @@ mod tests {
     fn both_trees_find_the_topics_and_the_leaves() {
         let lab = run("sphere64", 20_000.0);
         assert!(lab.has_passes());
-        for which in ["online", "passes"] {
+        for which in ["online", "careful", "passes"] {
             let q = lab.quality(which);
             assert!(q[0] > 0.85 && q[3] > 0.85, "{which}: {q:?}");
+            if which == "careful" {
+                assert!(
+                    q[0] > 0.95 && q[1] > 0.95,
+                    "careful topics and subtopics: {q:?}"
+                );
+            }
         }
     }
 
