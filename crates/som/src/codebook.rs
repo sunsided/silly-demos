@@ -4,19 +4,24 @@
 /// One weight vector of `dim` values per node, node after node.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Codebook {
+    /// Values per weight vector: the dimension of input space.
     pub dim: usize,
+    /// `len() * dim` values, the weights of node `i` at `i * dim..(i + 1) * dim`.
     pub weights: Vec<f32>,
 }
 
 impl Codebook {
+    /// Number of nodes.
     pub fn len(&self) -> usize {
         self.weights.len() / self.dim
     }
 
+    /// Whether there are no nodes at all.
     pub fn is_empty(&self) -> bool {
         self.weights.is_empty()
     }
 
+    /// The weight vector of node `i`; panics when `i` is out of range.
     pub fn node(&self, i: usize) -> &[f32] {
         &self.weights[i * self.dim..(i + 1) * self.dim]
     }

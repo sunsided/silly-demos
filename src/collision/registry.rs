@@ -8,20 +8,28 @@ use super::report::Contact;
 use super::shape::{Shape, ShapeKind};
 use ShapeKind::*;
 
+/// Entry point of a method, monomorphized for probe `P`.
 type Run<P> = fn(&Shape, &Shape, &mut P) -> Contact;
 
+/// A narrowphase collision method, with the text the UI shows for it.
 pub struct Method {
+    /// Stable identifier used to select the method by name.
     pub id: &'static str,
+    /// Short display name.
     pub name: &'static str,
+    /// One- or two-sentence explanation of how the method works.
     pub summary: &'static str,
     /// Whether the method takes shapes of kinds `(a, b)` in this order.
     pub applies: fn(ShapeKind, ShapeKind) -> bool,
+    /// Entry point that counts operations and keeps notes.
     record: Run<Recorder>,
+    /// Uninstrumented entry point, for timing.
     silent: Run<Silent>,
 }
 
 /// Picks the monomorphized entry point for a probe type.
 pub trait Runner: Probe + Sized {
+    /// The method's entry point for `Self`.
     fn entry(m: &Method) -> Run<Self>;
 }
 
@@ -37,6 +45,7 @@ impl Runner for Silent {
     }
 }
 
+/// Builds a [`Method`], instantiating its function for both probe types.
 macro_rules! method {
     ($id:literal, $name:literal, $summary:literal, $applies:expr, $($f:ident)::+) => {
         Method {
@@ -155,11 +164,15 @@ pub static METHODS: &[Method] = &[
 /// A method resolved for a pair, possibly with A and B swapped.
 #[derive(Clone, Copy)]
 pub struct Resolved {
+    /// The method to run.
     pub method: &'static Method,
+    /// Whether the method runs on `(b, a)` and its result is flipped back.
     swapped: bool,
 }
 
 impl Resolved {
+    /// Runs the method on `a` and `b`, swapping the inputs and flipping the result
+    /// when needed, so the contact always reads from A to B.
     pub fn run<P: Runner>(&self, a: &Shape, b: &Shape, p: &mut P) -> Contact {
         let f = P::entry(self.method);
         if self.swapped {
@@ -170,6 +183,8 @@ impl Resolved {
     }
 }
 
+/// Resolves `method` for kinds `(a, b)`, falling back to the mirrored order;
+/// `None` if it takes neither.
 pub fn resolve(method: &'static Method, a: ShapeKind, b: ShapeKind) -> Option<Resolved> {
     if (method.applies)(a, b) {
         Some(Resolved {
@@ -186,10 +201,13 @@ pub fn resolve(method: &'static Method, a: ShapeKind, b: ShapeKind) -> Option<Re
     }
 }
 
+/// Every method that applies to kinds `(a, b)`, in [`METHODS`] order.
 pub fn methods_for(a: ShapeKind, b: ShapeKind) -> impl Iterator<Item = Resolved> {
     METHODS.iter().filter_map(move |m| resolve(m, a, b))
 }
 
+/// Looks up the method `id` and resolves it for `(a, b)`; `None` if the id is
+/// unknown or the method does not apply.
 pub fn find(id: &str, a: ShapeKind, b: ShapeKind) -> Option<Resolved> {
     METHODS
         .iter()

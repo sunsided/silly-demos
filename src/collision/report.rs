@@ -1,9 +1,13 @@
+//! Narrowphase results: the [`Contact`] a method reports and the construction
+//! [`Note`]s it leaves behind for drawing.
+
 use crate::vec2::Vec2;
 
 /// Outcome of a narrowphase test. Methods only fill in what they compute:
 /// a boolean test leaves `distance`, `normal` and `points` empty.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Contact {
+    /// Whether the shapes touch or overlap.
     pub intersect: bool,
     /// Signed distance: positive gap when apart, negative penetration depth when overlapping.
     pub distance: Option<f32>,
@@ -14,6 +18,7 @@ pub struct Contact {
 }
 
 impl Contact {
+    /// A yes/no result with no distance, normal or witness points.
     pub fn boolean(intersect: bool) -> Self {
         Self {
             intersect,
@@ -44,69 +49,113 @@ impl Contact {
 /// Colors, mapped to the drafting palette on the JS side.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tone {
+    /// Main ink for key points and shape A's marks.
     Ink = 0,
+    /// Muted ink for helper lines and captions.
     Soft = 1,
+    /// Barely-there ink for projector lines and empty cells.
     Faint = 2,
+    /// Blue for shape B, gaps and rejected pairs.
     Cobalt = 3,
+    /// Alert color for overlaps and hits.
     Signal = 4,
+    /// Green for capsule cores and cells holding only one of A or B.
     Verdigris = 5,
+    /// Amber for quadtree cells shared by A and B.
     Amber = 6,
 }
 
 /// A construction mark drawn on top of the shapes to explain what a method did.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Note {
+    /// A straight line from `a` to `b`.
     Segment {
+        /// Start point.
         a: Vec2,
+        /// End point.
         b: Vec2,
+        /// Color of the mark.
         tone: Tone,
+        /// Whether the line is dashed.
         dashed: bool,
     },
     /// Dimension line with arrowheads, offset sideways by `offset` px.
     Dimension {
+        /// Start of the measured span.
         a: Vec2,
+        /// End of the measured span.
         b: Vec2,
+        /// Sideways offset of the dimension line in px; the sign picks the side.
         offset: f32,
+        /// Color of the mark.
         tone: Tone,
+        /// Label written along the line.
         text: String,
     },
+    /// A dot marking a single point.
     Point {
+        /// Where the dot sits.
         p: Vec2,
+        /// Color of the mark.
         tone: Tone,
     },
+    /// A circle outline.
     Circle {
+        /// Center.
         c: Vec2,
+        /// Radius in px.
         r: f32,
+        /// Color of the mark.
         tone: Tone,
+        /// Whether the outline is dashed.
         dashed: bool,
     },
+    /// A closed polyline, optionally filled.
     Polygon {
+        /// Vertices in drawing order; the last joins back to the first.
         points: Vec<Vec2>,
+        /// Color of the mark.
         tone: Tone,
+        /// Whether the outline is dashed.
         dashed: bool,
+        /// Whether the interior is shaded.
         fill: bool,
     },
+    /// Free text anchored at a point.
     Label {
+        /// Anchor of the text.
         p: Vec2,
+        /// Color of the text.
         tone: Tone,
+        /// Text to draw.
         text: String,
     },
     /// The interval `[t0, t1]` along the line `origin + dir * t`, drawn with end ticks.
     Interval {
+        /// Point on the line where `t` is zero.
         origin: Vec2,
+        /// Direction of the line; `t` is measured in multiples of it.
         dir: Vec2,
+        /// Start parameter.
         t0: f32,
+        /// End parameter.
         t1: f32,
+        /// Color of the mark.
         tone: Tone,
     },
+    /// An arrow from `a` pointing at `b`.
     Arrow {
+        /// Tail.
         a: Vec2,
+        /// Head.
         b: Vec2,
+        /// Color of the mark.
         tone: Tone,
     },
 }
 
 impl Note {
+    /// A solid [`Note::Segment`].
     pub fn segment(a: Vec2, b: Vec2, tone: Tone) -> Self {
         Note::Segment {
             a,
@@ -116,6 +165,7 @@ impl Note {
         }
     }
 
+    /// A dashed [`Note::Segment`].
     pub fn dashed(a: Vec2, b: Vec2, tone: Tone) -> Self {
         Note::Segment {
             a,
@@ -125,6 +175,7 @@ impl Note {
         }
     }
 
+    /// A [`Note::Dimension`] taking any string-like label.
     pub fn dimension(a: Vec2, b: Vec2, offset: f32, tone: Tone, text: impl Into<String>) -> Self {
         Note::Dimension {
             a,
@@ -135,6 +186,7 @@ impl Note {
         }
     }
 
+    /// A [`Note::Label`] taking any string-like text.
     pub fn label(p: Vec2, tone: Tone, text: impl Into<String>) -> Self {
         Note::Label {
             p,

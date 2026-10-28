@@ -9,6 +9,7 @@ pub mod gjk;
 pub mod polygon;
 pub mod sat;
 
+/// Imports every method module needs.
 mod prelude {
     pub use super::super::probe::Probe;
     pub use super::super::report::{Contact, Note, Tone, fmt};
@@ -112,7 +113,7 @@ pub(crate) fn segments_cross<P: Probe>(a: Vec2, b: Vec2, c: Vec2, d: Vec2, p: &m
     on(c, a, b, d1) || on(d, a, b, d2) || on(a, c, d, d3) || on(b, c, d, d4)
 }
 
-/// Dimension between witness points labelled with the signed distance `d`.
+/// Dimension between witness points labeled with the signed distance `d`.
 pub(crate) fn gap_dimension(a: Vec2, b: Vec2, offset: f32, d: f32) -> Note {
     if d <= 0.0 {
         Note::dimension(a, b, offset, Tone::Signal, format!("overlap {}", fmt(-d)))

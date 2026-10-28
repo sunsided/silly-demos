@@ -1,6 +1,7 @@
-//! How the learning rate α and the neighbourhood radius σ shrink over
-//! training, and the neighbourhood kernel σ shapes.
+//! How the learning rate α and the neighborhood radius σ shrink over
+//! training, and the neighborhood kernel σ shapes.
 
+/// How a scheduled value travels from its start to its end.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Decay {
     /// `start · (end / start)^(t / T)`: the same factor every step.
@@ -10,6 +11,7 @@ pub enum Decay {
 }
 
 impl Decay {
+    /// The decay for a UI id, `exp` or `linear`; `None` for anything else.
     pub fn parse(id: &str) -> Option<Decay> {
         match id {
             "exp" => Some(Decay::Exponential),
@@ -23,9 +25,13 @@ impl Decay {
 /// samples, then held at the end values.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Schedule {
+    /// Samples over which α and σ decay.
     pub steps: u64,
+    /// Learning rate α at the start and the end, each in (0, 1].
     pub alpha: (f32, f32),
+    /// Neighborhood radius σ at the start and the end, in lattice units.
     pub sigma: (f32, f32),
+    /// The shape of the decay from start to end.
     pub decay: Decay,
     /// Never finish: once decayed, keep learning at the end values, so the
     /// map follows a density that changes.
@@ -55,12 +61,13 @@ impl Schedule {
         (lerp(self.alpha), lerp(self.sigma))
     }
 
+    /// Whether training is over after `t` presented samples; never for a continuous schedule.
     pub fn finished(&self, t: u64) -> bool {
         !self.continuous && t >= self.steps
     }
 }
 
-/// The Gaussian neighbourhood kernel: 1 at the best-matching unit, falling
+/// The Gaussian neighborhood kernel: 1 at the best-matching unit, falling
 /// off with squared lattice distance `d2`.
 pub fn kernel(d2: f32, sigma: f32) -> f32 {
     (-d2 / (2.0 * sigma * sigma)).exp()
@@ -155,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn kernel_is_one_at_the_centre_and_falls_off() {
+    fn kernel_is_one_at_the_center_and_falls_off() {
         assert_eq!(kernel(0.0, 2.0), 1.0);
         assert!((kernel(4.0, 2.0) - (-0.5f32).exp()).abs() < 1e-6);
     }

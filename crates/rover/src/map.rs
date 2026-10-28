@@ -9,20 +9,26 @@ use crate::laser::Laser;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Known {
+    /// Not seen yet.
     #[default]
     Unknown = 0,
+    /// Seen empty: a beam passed through it.
     Free = 1,
+    /// Seen solid: a beam stopped in it.
     Wall = 2,
 }
 
+/// The robot's map: what it knows of each cell, and how many it has seen free.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Map {
+    /// What is known of each cell, on the same grid as the floor plan's walls.
     pub grid: Grid<Known>,
     /// Number of cells seen free, kept up to date for coverage readouts.
     pub free: usize,
 }
 
 impl Map {
+    /// A map of `width` × `height` cells of `cell` m, all unknown.
     pub fn new(width: i32, height: i32, cell: f32) -> Self {
         Self {
             grid: Grid::new(width, height, cell, Known::Unknown),

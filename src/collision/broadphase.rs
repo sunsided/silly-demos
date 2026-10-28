@@ -1,3 +1,5 @@
+//! Cheap rejection tests on cached bounding volumes, run before the narrowphase.
+
 use super::probe::Probe;
 use super::report::{Note, Tone};
 use super::shape::Body;
@@ -5,6 +7,7 @@ use crate::vec2::Vec2;
 
 /// Bit flags selecting the broadphase stages run before the narrowphase.
 pub const BOUNDING_CIRCLE: u32 = 1;
+/// Reject pairs whose axis-aligned bounding boxes are apart.
 pub const BOUNDING_BOX: u32 = 2;
 /// Scene-wide: A and B are only tested if they share a quadtree leaf.
 pub const QUADTREE: u32 = 4;
@@ -12,9 +15,13 @@ pub const QUADTREE: u32 = 4;
 /// How far a test got before it returned.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
+    /// Rejected by the bounding-circle test.
     BoundingCircle = 0,
+    /// Rejected by the bounding-box test.
     BoundingBox = 1,
+    /// Passed every enabled stage; the narrowphase method gave the answer.
     Narrowphase = 2,
+    /// Rejected because A and B share no quadtree leaf.
     Quadtree = 3,
 }
 

@@ -18,16 +18,21 @@ pub struct StepTrace {
     pub previous: Vec<f32>,
 }
 
+/// A self-organizing map in training: its lattice, its weights and where it is in its schedule.
 #[derive(Clone, Debug)]
 pub struct Som {
+    /// How the nodes are arranged.
     pub lattice: Lattice,
+    /// Each node's weight vector in input space.
     pub codebook: Codebook,
+    /// How α and σ change as samples are presented.
     pub schedule: Schedule,
     /// Samples presented so far.
     pub t: u64,
 }
 
 impl Som {
+    /// Whether the schedule has run out; a continuous schedule never does.
     pub fn finished(&self) -> bool {
         self.schedule.finished(self.t)
     }
@@ -129,7 +134,7 @@ impl Som {
 mod tests {
     use super::*;
     use crate::density::Density;
-    use crate::init::{Init, initialise};
+    use crate::init::{Init, initialize};
     use crate::lattice::Kind;
     use crate::metrics::{quantization_error, topographic_error};
     use crate::rng::Rng;
@@ -162,7 +167,7 @@ mod tests {
         let mut rng = Rng::new(seed);
         let eval = draw(&mut density, &mut rng, 1000);
         let lattice = Lattice::new(kind, w, h).unwrap();
-        let codebook = initialise(init, &lattice, &eval, 2, &mut rng);
+        let codebook = initialize(init, &lattice, &eval, 2, &mut rng);
         let schedule = Schedule {
             steps,
             alpha: (0.5, 0.01),

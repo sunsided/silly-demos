@@ -8,15 +8,20 @@ use crate::grid::Grid;
 /// clockwise positive, i.e. positive turns right).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Command {
+    /// Forward speed, m/s; negative backs up.
     pub v: f32,
+    /// Turn rate, rad/s, positive to the right.
     pub w: f32,
 }
 
 /// Body and drive limits; sized after a VolksBot (about 0.4 m across).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Body {
+    /// Body radius, m, for collisions and planning room.
     pub radius: f32,
+    /// Top forward speed, m/s.
     pub max_v: f32,
+    /// Top turn rate, rad/s.
     pub max_w: f32,
     /// m/s²
     pub accel: f32,
@@ -36,18 +41,23 @@ impl Default for Body {
     }
 }
 
+/// The simulated robot: where it is, its body, and how fast it is moving.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Robot {
+    /// Where it is and which way it faces.
     pub pose: Pose,
+    /// Its size and drive limits.
     pub body: Body,
     /// Current speed and turn rate.
     pub v: f32,
+    /// Current turn rate, rad/s; `v` is the speed.
     pub w: f32,
     /// Whether the last step was blocked by a wall.
     pub bumped: bool,
 }
 
 impl Robot {
+    /// A robot standing still at `pose`.
     pub fn new(pose: Pose, body: Body) -> Self {
         Self {
             pose,
@@ -88,7 +98,7 @@ impl Robot {
 
 /// How far a disc of `radius` at `p` reaches into the walls: `radius` less
 /// the signed distance to the nearest wall cell, or 0 if it touches none.
-/// With the centre inside a wall cell the distance is negative (how deep it
+/// With the center inside a wall cell the distance is negative (how deep it
 /// is in), so moving towards the cell's edge still reduces the overlap.
 pub fn overlap(walls: &Grid<bool>, p: Point, radius: f32) -> f32 {
     let lo = walls.cell_of(Point::new(p.x - radius, p.y - radius));
@@ -98,7 +108,7 @@ pub fn overlap(walls: &Grid<bool>, p: Point, radius: f32) -> f32 {
     for y in lo.1..=hi.1 {
         for x in lo.0..=hi.0 {
             if walls.get((x, y)).copied().unwrap_or(true) {
-                // Signed distance from the disc centre to the cell square.
+                // Signed distance from the disc center to the cell square.
                 let c = walls.center((x, y));
                 let ex = (p.x - c.x).abs() - half;
                 let ey = (p.y - c.y).abs() - half;
@@ -159,8 +169,8 @@ mod tests {
     }
 
     #[test]
-    fn a_body_centred_inside_a_wall_can_still_get_out() {
-        // A single wall cell around (1.025, 1.025), with the centre in it.
+    fn a_body_centered_inside_a_wall_can_still_get_out() {
+        // A single wall cell around (1.025, 1.025), with the center in it.
         let mut walls = Grid::new(40, 40, 0.05, false);
         walls.set((20, 20), true);
         let mut r = Robot::new(Pose::new(1.03, 1.02, 0.0), Body::default());

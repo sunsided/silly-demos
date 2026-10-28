@@ -5,6 +5,7 @@
 use super::gap_dimension;
 use super::prelude::*;
 
+/// Bisection cap; f32 precision usually ends the search well before this.
 const MAX_BISECTIONS: usize = 64;
 
 /// Root of Eberly's F(s) = (r0·z0 / (s + r0))² + (z1 / (s + 1))² − 1 by bisection.
@@ -74,6 +75,8 @@ fn closest_first_quadrant<P: Probe>(e0: f32, e1: f32, y0: f32, y1: f32, p: &mut 
     }
 }
 
+/// Finds the exact closest point on the ellipse to the circle's center and
+/// compares its distance with the radius; works with the center inside the ellipse too.
 pub fn circle_ellipse<P: Probe>(a: &Shape, b: &Shape, p: &mut P) -> Contact {
     let (
         Shape::Circle { c, r },

@@ -3,6 +3,7 @@
 use super::gap_dimension;
 use super::prelude::*;
 
+/// Unpacks both circles as `(ca, ra, cb, rb)`; panics on other shapes.
 fn circles(a: &Shape, b: &Shape) -> (Vec2, f32, Vec2, f32) {
     match (*a, *b) {
         (Shape::Circle { c: ca, r: ra }, Shape::Circle { c: cb, r: rb }) => (ca, ra, cb, rb),

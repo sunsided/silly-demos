@@ -15,13 +15,17 @@ const ROOT_MARGIN: f32 = 12.0;
 /// Small random shapes drifting inside a rectangle centered on the origin.
 #[derive(Default)]
 pub struct Crowd {
+    /// The drifting bodies; their bounding volumes are refreshed every step.
     pub bodies: Vec<Body>,
+    /// Velocity of each body in px per second, parallel to `bodies`.
     velocities: Vec<Vec2>,
     /// Half extents of the area the crowd bounces around in.
     pub half: Vec2,
 }
 
 impl Crowd {
+    /// `count` small random shapes scattered over the area, each with a random
+    /// heading and speed; the same `seed` gives the same crowd.
     pub fn new(count: usize, half: Vec2, mut seed: u32) -> Self {
         let mut r = |lo: f32, hi: f32| lo + (hi - lo) * frand01(&mut seed);
         let mut crowd = Self {
@@ -71,8 +75,11 @@ impl Crowd {
 /// Scene-level numbers for the quadtree stage.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SceneStats {
+    /// Bodies in the tree: A, B and the crowd.
     pub bodies: u32,
+    /// Quadtree nodes, inner and leaf.
     pub nodes: u32,
+    /// Level of the deepest node below the root.
     pub depth: u32,
     /// In-leaf pair checks, before duplicates are removed.
     pub checks: u32,

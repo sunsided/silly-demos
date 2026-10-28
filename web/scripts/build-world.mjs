@@ -8,10 +8,11 @@
 // committed; the site build never runs this.
 
 import { readFile, writeFile } from 'node:fs/promises'
+import { admin0Source, fit, project } from './equal-earth.mjs'
 
 // 1:50m: 1:110m has no shapes for many small island states.
 const SCALE = process.env.NE_SCALE ?? '50m'
-const SOURCE = `https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_${SCALE}_admin_0_countries.geojson`
+const SOURCE = admin0Source(SCALE)
 const OUT = new URL('../static/data/world.json', import.meta.url)
 const COUNTRIES = new URL('../static/data/countries.json', import.meta.url)
 const WIDTH = 1000
@@ -24,20 +25,6 @@ const MIN_COVERAGE = Number(process.env.MIN_COVERAGE ?? 0.9)
 const RENAMES = { KOS: 'XKX', SDS: 'SSD', PSX: 'PSE' }
 /** No data and a lot of paper. */
 const SKIP = new Set(['ATA'])
-
-// Equal Earth (Šavrič, Patterson & Jenny 2018).
-const [A1, A2, A3, A4] = [1.340264, -0.081106, 0.000893, 0.003796]
-const M = Math.sqrt(3) / 2
-function project([lon, lat]) {
-  const l = (lon * Math.PI) / 180
-  const p = (lat * Math.PI) / 180
-  const t = Math.asin(M * Math.sin(p))
-  const t2 = t * t
-  const t6 = t2 * t2 * t2
-  const x = (l * Math.cos(t)) / (M * (A1 + 3 * A2 * t2 + t6 * (7 * A3 + 9 * A4 * t2)))
-  const y = t * (A1 + A2 * t2 + t6 * (A3 + A4 * t2))
-  return [x, y]
-}
 
 function code(props) {
   const iso = props.ISO_A3 !== '-99' ? props.ISO_A3 : props.ADM0_A3
@@ -56,24 +43,17 @@ for (const f of geo.features) {
   const polygons = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates
   shapes.push({ iso, rings: polygons.flat().map(ring => ring.map(project)) })
 }
-let [minX, minY, maxX, maxY] = [Infinity, Infinity, -Infinity, -Infinity]
-for (const { rings } of shapes)
-  for (const ring of rings)
-    for (const [x, y] of ring) {
-      minX = Math.min(minX, x)
-      maxX = Math.max(maxX, x)
-      minY = Math.min(minY, y)
-      maxY = Math.max(maxY, y)
-    }
-const k = WIDTH / (maxX - minX)
-const height = Math.ceil((maxY - minY) * k)
+const { height, toPx } = fit(
+  shapes.flatMap(s => s.rings),
+  WIDTH,
+)
 const r = v => Math.round(v * 10) / 10
 
 /** A ring as path data, dropping points nearer than `tolerance` px to the last one kept. */
 function ringPath(ring, tolerance) {
   const kept = []
   for (const [x, y] of ring) {
-    const p = [(x - minX) * k, (maxY - y) * k]
+    const p = toPx([x, y])
     const last = kept.at(-1)
     if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) >= tolerance) kept.push(p)
   }

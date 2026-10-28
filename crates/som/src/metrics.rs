@@ -16,12 +16,12 @@ pub fn quantization_error(cb: &Codebook, samples: &[f32]) -> f32 {
 }
 
 /// The share of samples whose nearest and second-nearest nodes are not
-/// neighbours on the lattice: 0 for a map whose order matches the data's,
+/// neighbors on the lattice: 0 for a map whose order matches the data's,
 /// higher where it is folded or twisted.
 pub fn topographic_error(cb: &Codebook, lattice: &Lattice, samples: &[f32]) -> f32 {
     mean(samples.chunks_exact(cb.dim).map(|x| {
         let (a, b) = cb.bmu2(x);
-        if lattice.neighbours(a, b) { 0.0 } else { 1.0 }
+        if lattice.neighbors(a, b) { 0.0 } else { 1.0 }
     }))
 }
 
@@ -29,11 +29,14 @@ pub fn topographic_error(cb: &Codebook, lattice: &Lattice, samples: &[f32]) -> f
 /// every other point is dropped, always keeping the newest.
 #[derive(Clone, Debug)]
 pub struct History {
+    /// Points to keep at most before thinning.
     cap: usize,
+    /// The points as flat (t, QE, TE) triples, oldest first.
     values: Vec<f32>,
 }
 
 impl History {
+    /// An empty history that keeps at most `cap` points.
     pub fn new(cap: usize) -> History {
         History {
             cap,
@@ -41,6 +44,8 @@ impl History {
         }
     }
 
+    /// Records QE and TE after `t` presented samples, thinning to every other point once over the
+    /// cap.
     pub fn push(&mut self, t: f32, qe: f32, te: f32) {
         self.values.extend([t, qe, te]);
         let n = self.values.len() / 3;
@@ -56,6 +61,7 @@ impl History {
         }
     }
 
+    /// Forgets every point, as when training restarts.
     pub fn clear(&mut self) {
         self.values.clear();
     }
@@ -66,6 +72,7 @@ impl History {
     }
 }
 
+/// The arithmetic mean, 0 for no values.
 fn mean(values: impl Iterator<Item = f32>) -> f32 {
     let (sum, n) = values.fold((0.0, 0usize), |(s, n), v| (s + v, n + 1));
     if n == 0 { 0.0 } else { sum / n as f32 }

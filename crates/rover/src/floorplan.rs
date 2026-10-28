@@ -1,14 +1,18 @@
-//! Floor plans as wall segments, and their rasterised occupancy grid.
+//! Floor plans as wall segments, and their rasterized occupancy grid.
 
 use crate::geom::{Point, Pose, segment_distance};
 use crate::grid::Grid;
 
-/// A floor plan: wall segments in metres, and where the robot starts.
+/// A floor plan: wall segments in meters, and where the robot starts.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FloorPlan {
+    /// Extent along x in meters, margin included.
     pub width: f32,
+    /// Extent along y in meters, margin included.
     pub height: f32,
+    /// Wall segments as end points in meters.
     pub walls: Vec<(Point, Point)>,
+    /// Where and facing which way the robot starts.
     pub start: Pose,
 }
 
@@ -74,7 +78,7 @@ impl FloorPlan {
     }
 
     /// Occupancy grid of `cell` m cells: true where a wall `thickness` m
-    /// thick covers the cell's centre.
+    /// thick covers the cell's center.
     pub fn rasterize(&self, cell: f32, thickness: f32) -> Grid<bool> {
         let mut grid = Grid::new(
             (self.width / cell).ceil() as i32,

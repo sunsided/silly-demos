@@ -1,8 +1,8 @@
-//! WASM bindings for the Kohonen lab's data maps: colours and countries.
+//! WASM bindings for the Kohonen lab's data maps: colors and countries.
 
 use som::codebook::Codebook;
-use som::data::Normaliser;
-use som::init::{Init, initialise};
+use som::data::Normalizer;
+use som::init::{Init, initialize};
 use som::lattice::{Kind, Lattice};
 use som::metrics::{History, quantization_error, topographic_error};
 use som::rng::Rng;
@@ -18,44 +18,59 @@ const BATCH_ROWS: usize = 2000;
 /// Up to this many rows, the errors are measured on all of them; above,
 /// on a fixed random subset of [`EVAL_SAMPLES`].
 const EVAL_ALL_UP_TO: usize = 2000;
+/// Size of the random subset the errors are measured on for larger data.
 const EVAL_SAMPLES: usize = 1000;
 /// Online samples between two measurements.
 const METRIC_EVERY: u64 = 250;
 /// History entries kept.
 const HISTORY_CAP: usize = 400;
 
+/// How the map learns from the rows.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Training {
+    /// One random row at a time, each counting as one step of the schedule.
     Online,
+    /// A whole epoch over the batch subset at once.
     Batch,
 }
 
-/// A self-organising map over rows of N-dimensional data (colours,
+/// A self-organizing map over rows of N-dimensional data (colors,
 /// countries by their indicators), drawn as a picture of its nodes rather
 /// than in input space. NaN in the data marks a missing value.
 #[wasm_bindgen]
 pub struct SomData {
+    /// The map: codebook, lattice, schedule and step count.
     som: Som,
+    /// How the codebook is seeded on a restart.
     init: Init,
+    /// Online or batch learning.
     training: Training,
+    /// Seed the random generator is reset to on every restart.
     seed: u64,
+    /// Drives initialization, online sampling and the row subsets.
     rng: Rng,
-    normalise: bool,
-    normaliser: Normaliser,
+    /// Whether to train on per-column z-scores rather than raw values.
+    normalize: bool,
+    /// Maps raw rows to training space and back.
+    normalizer: Normalizer,
     /// The rows as given, flat.
     raw: Vec<f32>,
-    /// The rows normalised, which is what the map trains on.
+    /// The rows normalized, which is what the map trains on.
     data: Vec<f32>,
+    /// Normalized rows a batch epoch covers: all of them, or a fixed subset of [`BATCH_ROWS`].
     batch: Vec<f32>,
+    /// Normalized rows the errors are measured on.
     eval: Vec<f32>,
+    /// Recorded `(step, quantization error, topographic error)` over training.
     history: History,
+    /// Latest quantization and topographic error.
     errors: (f32, f32),
 }
 
 #[wasm_bindgen]
 impl SomData {
     /// No data yet; a 10×10 grid from random rows, trained online with α
-    /// 0.5 → 0.01 and σ 5 → 0.5 over 30 000 samples. Columns are normalised.
+    /// 0.5 → 0.01 and σ 5 → 0.5 over 30 000 samples. Columns are normalized.
     #[wasm_bindgen(constructor)]
     pub fn new(seed: u32) -> Self {
         let lattice = Lattice::new(Kind::Grid, 10, 10).expect("a 10×10 grid is in bounds");
@@ -79,8 +94,8 @@ impl SomData {
             training: Training::Online,
             seed: seed as u64,
             rng: Rng::new(seed as u64),
-            normalise: true,
-            normaliser: Normaliser::identity(1),
+            normalize: true,
+            normalizer: Normalizer::identity(1),
             raw: Vec::new(),
             data: Vec::new(),
             batch: Vec::new(),
@@ -116,9 +131,9 @@ impl SomData {
     }
 
     /// Whether to train on z-scores per column (for columns in different
-    /// units) or on the values as given (colours). Starts over.
-    pub fn set_normalise(&mut self, on: bool) {
-        self.normalise = on;
+    /// units) or on the values as given (colors). Starts over.
+    pub fn set_normalize(&mut self, on: bool) {
+        self.normalize = on;
         if !self.raw.is_empty() {
             self.prepare();
             self.restart();
@@ -193,7 +208,7 @@ impl SomData {
         self.restart();
     }
 
-    /// Back to t = 0 with a freshly initialised map; replays the same run
+    /// Back to t = 0 with a freshly initialized map; replays the same run
     /// for the same seed.
     pub fn restart(&mut self) {
         self.rng = Rng::new(self.seed);
@@ -205,16 +220,16 @@ impl SomData {
         let dim = self.som.codebook.dim;
         self.batch = self.subset(BATCH_ROWS, BATCH_ROWS);
         self.eval = self.subset(EVAL_ALL_UP_TO, EVAL_SAMPLES);
-        // Initialisations copy rows or fit axes to them; gaps would carry
+        // Initializations copy rows or fit axes to them; gaps would carry
         // NaN into the weights, so fill them with the column means first.
-        let means = Normaliser::fit(&self.data, dim).mean;
+        let means = Normalizer::fit(&self.data, dim).mean;
         let filled: Vec<f32> = self
             .data
             .iter()
             .enumerate()
             .map(|(i, &v)| if v.is_nan() { means[i % dim] } else { v })
             .collect();
-        self.som.codebook = initialise(self.init, &self.som.lattice, &filled, dim, &mut self.rng);
+        self.som.codebook = initialize(self.init, &self.som.lattice, &filled, dim, &mut self.rng);
         self.measure(true);
     }
 
@@ -250,10 +265,10 @@ impl SomData {
 
     /// The nodes' weights in the data's own units, node after node.
     pub fn codebook(&self) -> Vec<f32> {
-        self.normaliser.invert(&self.som.codebook.weights)
+        self.normalizer.invert(&self.som.codebook.weights)
     }
 
-    /// Each node's mean distance to its lattice neighbours, in the units
+    /// Each node's mean distance to its lattice neighbors, in the units
     /// the map trains in.
     pub fn umatrix(&self) -> Vec<f32> {
         if self.data.is_empty() {
@@ -268,7 +283,7 @@ impl SomData {
         if self.data.is_empty() || k >= self.som.codebook.dim {
             return Vec::new();
         }
-        let (mean, scale) = (self.normaliser.mean[k], self.normaliser.scale[k]);
+        let (mean, scale) = (self.normalizer.mean[k], self.normalizer.scale[k]);
         views::plane(&self.som.codebook, k)
             .into_iter()
             .map(|v| v * scale + mean)
@@ -291,12 +306,12 @@ impl SomData {
         views::bmus(&self.som.codebook, &self.data)
     }
 
-    /// RGBA pixels with each colour replaced by its best-matching node's,
-    /// alpha kept. Only for colour maps (three columns, not normalised);
+    /// RGBA pixels with each color replaced by its best-matching node's,
+    /// alpha kept. Only for color maps (three columns, not normalized);
     /// anything else comes back unchanged.
     pub fn quantize(&self, pixels: &[u8]) -> Vec<u8> {
         let cb = &self.som.codebook;
-        if cb.dim != 3 || self.normalise || cb.is_empty() {
+        if cb.dim != 3 || self.normalize || cb.is_empty() {
             return pixels.to_vec();
         }
         let mut out = pixels.to_vec();
@@ -357,17 +372,19 @@ impl SomData {
             .collect()
     }
 
-    /// Fits the normaliser to the raw rows and normalises them.
+    /// Fits the normalizer to the raw rows and normalizes them.
     fn prepare(&mut self) {
         let dim = self.som.codebook.dim;
-        self.normaliser = if self.normalise {
-            Normaliser::fit(&self.raw, dim)
+        self.normalizer = if self.normalize {
+            Normalizer::fit(&self.raw, dim)
         } else {
-            Normaliser::identity(dim)
+            Normalizer::identity(dim)
         };
-        self.data = self.normaliser.apply(&self.raw);
+        self.data = self.normalizer.apply(&self.raw);
     }
 
+    /// Measures both errors on the evaluation rows, appending them to the
+    /// history if `record`; does nothing before there is a codebook or data.
     fn measure(&mut self, record: bool) {
         let cb = &self.som.codebook;
         if cb.is_empty() || self.eval.is_empty() {
@@ -447,7 +464,7 @@ mod tests {
     #[test]
     fn rgb_map_orders_itself() {
         let mut lab = SomData::new(1);
-        lab.set_normalise(false);
+        lab.set_normalize(false);
         assert!(lab.set_data(&uniform_rgb(2000, 2), 3));
         while lab.step(1000) > 0 {}
         assert_eq!(lab.status(), "converged");
@@ -457,7 +474,7 @@ mod tests {
     }
 
     #[test]
-    fn normalised_codebook_comes_back_in_data_units() {
+    fn normalized_codebook_comes_back_in_data_units() {
         let mut lab = SomData::new(1);
         let mut rng = Rng::new(4);
         let data: Vec<f32> = (0..500)
@@ -479,9 +496,9 @@ mod tests {
     }
 
     #[test]
-    fn quantize_maps_pixels_to_node_colours() {
+    fn quantize_maps_pixels_to_node_colors() {
         let mut lab = SomData::new(1);
-        lab.set_normalise(false);
+        lab.set_normalize(false);
         assert!(lab.set_lattice("grid", 2, 1));
         // A small final σ, so the two nodes stop pulling on each other.
         assert!(lab.set_schedule(5000, 0.5, 0.01, 1.0, 0.05, "exp", false));
@@ -509,11 +526,11 @@ mod tests {
     }
 
     #[test]
-    fn quantize_is_identity_for_non_colour_data() {
+    fn quantize_is_identity_for_non_color_data() {
         let mut lab = SomData::new(1);
         assert!(lab.set_data(&[1.0, 2.0, 3.0, 4.0], 2));
         assert_eq!(lab.quantize(&[1, 2, 3, 4]), vec![1, 2, 3, 4]);
-        // Colour data, but normalised: not colours any more.
+        // Color data, but normalized: not colors any more.
         assert!(lab.set_data(&uniform_rgb(10, 1), 3));
         assert_eq!(lab.quantize(&[1, 2, 3, 4]), vec![1, 2, 3, 4]);
     }
@@ -523,7 +540,7 @@ mod tests {
         // An image's pixels outnumber T; a batch epoch over all of them
         // would end training after one step.
         let mut lab = SomData::new(1);
-        lab.set_normalise(false);
+        lab.set_normalize(false);
         assert!(lab.set_lattice("grid", 8, 8));
         assert!(lab.set_training("batch"));
         assert!(lab.set_data(&uniform_rgb(60_000, 3), 3));

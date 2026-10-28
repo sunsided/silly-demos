@@ -1,20 +1,32 @@
+//! Convex 2D shapes in world space, with support points, polygon conversion
+//! and bounding volumes.
+
 use crate::vec2::Vec2;
 
 /// Upper bound on polygon vertices; keeps shapes `Copy` and allocation free.
 pub const MAX_VERTS: usize = 16;
 
+/// Which kind of shape a [`Shape`] is, without its parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ShapeKind {
+    /// A disk.
     Circle,
+    /// An axis-aligned box.
     Aabb,
+    /// A rotated box.
     Obb,
+    /// A triangle, stored as a [`Poly`].
     Triangle,
+    /// A convex polygon of up to [`MAX_VERTS`] vertices.
     Polygon,
+    /// A rotated ellipse.
     Ellipse,
+    /// A segment inflated by a radius.
     Capsule,
 }
 
 impl ShapeKind {
+    /// Every kind, in declaration order.
     pub const ALL: [ShapeKind; 7] = [
         ShapeKind::Circle,
         ShapeKind::Aabb,
@@ -25,6 +37,7 @@ impl ShapeKind {
         ShapeKind::Capsule,
     ];
 
+    /// Stable lowercase name used across the WASM boundary.
     pub const fn id(self) -> &'static str {
         match self {
             ShapeKind::Circle => "circle",
@@ -37,6 +50,7 @@ impl ShapeKind {
         }
     }
 
+    /// Inverse of [`ShapeKind::id`]; `None` for unknown names.
     pub fn from_id(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|k| k.id() == id)
     }
@@ -53,7 +67,9 @@ impl ShapeKind {
 /// A convex polygon with counter-clockwise (positive area) winding.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Poly {
+    /// Vertex storage; only the first `n` entries are meaningful.
     v: [Vec2; MAX_VERTS],
+    /// Number of vertices in use, at most [`MAX_VERTS`].
     n: usize,
 }
 
@@ -98,10 +114,12 @@ impl Poly {
         Self::new(&hull)
     }
 
+    /// The vertices in counter-clockwise order.
     pub fn verts(&self) -> &[Vec2] {
         &self.v[..self.n]
     }
 
+    /// Number of vertices.
     pub fn len(&self) -> usize {
         self.n
     }
@@ -111,6 +129,7 @@ impl Poly {
         (self.v[i], self.v[(i + 1) % self.n])
     }
 
+    /// The same polygon moved by `d`.
     pub fn translated(&self, d: Vec2) -> Self {
         let mut out = *self;
         for v in &mut out.v[..out.n] {
@@ -119,6 +138,7 @@ impl Poly {
         out
     }
 
+    /// Mean of the vertices (not the area centroid); the origin for an empty polygon.
     pub fn centroid(&self) -> Vec2 {
         let sum = self.verts().iter().fold(Vec2::default(), |s, &v| s + v);
         sum / self.n.max(1) as f32
@@ -128,33 +148,51 @@ impl Poly {
 /// A convex shape in world space.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Shape {
+    /// A disk.
     Circle {
+        /// Center.
         c: Vec2,
+        /// Radius, non-negative.
         r: f32,
     },
+    /// An axis-aligned box.
     Aabb {
+        /// Corner with the smallest coordinates.
         min: Vec2,
+        /// Corner with the largest coordinates.
         max: Vec2,
     },
     /// `u` is the unit local x axis; the local y axis is `u.perp()`.
     Obb {
+        /// Center.
         c: Vec2,
+        /// Half extents along `u` and `u.perp()`.
         half: Vec2,
+        /// Unit local x axis.
         u: Vec2,
     },
+    /// A triangle as a counter-clockwise [`Poly`].
     Triangle(Poly),
+    /// A convex polygon as a counter-clockwise [`Poly`].
     Polygon(Poly),
     /// Semi-axes `a` along `u` and `b` along `u.perp()`.
     Ellipse {
+        /// Center.
         c: Vec2,
+        /// Semi-axis along `u`.
         a: f32,
+        /// Semi-axis along `u.perp()`.
         b: f32,
+        /// Unit direction of the `a` axis.
         u: Vec2,
     },
     /// Segment `p`–`q` swept by a disk of radius `r`.
     Capsule {
+        /// One end of the core segment.
         p: Vec2,
+        /// Other end of the core segment.
         q: Vec2,
+        /// Radius of the swept disk.
         r: f32,
     },
 }
@@ -235,6 +273,7 @@ impl Shape {
         }
     }
 
+    /// Which [`ShapeKind`] this shape is.
     pub fn kind(&self) -> ShapeKind {
         match self {
             Shape::Circle { .. } => ShapeKind::Circle,
@@ -247,6 +286,8 @@ impl Shape {
         }
     }
 
+    /// A representative center: the true center for round shapes and boxes, the
+    /// vertex mean for polygons and the core's midpoint for capsules.
     pub fn center(&self) -> Vec2 {
         match *self {
             Shape::Circle { c, .. } | Shape::Obb { c, .. } | Shape::Ellipse { c, .. } => c,
@@ -418,12 +459,16 @@ impl Shape {
 /// alongside the body; broadphase tests read these instead of recomputing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Body {
+    /// The world-space shape the volumes bound.
     pub shape: Shape,
+    /// Cached [`Shape::bounding_circle`] as `(center, radius)`.
     pub circle: (Vec2, f32),
+    /// Cached [`Shape::aabb`] as `(min, max)`.
     pub aabb: (Vec2, Vec2),
 }
 
 impl Body {
+    /// Wraps `shape` and computes its bounding volumes.
     pub fn new(shape: Shape) -> Self {
         Self {
             shape,

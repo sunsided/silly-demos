@@ -18,7 +18,7 @@
 //!   robot's radius, follows it with pure pursuit, and drives back to where
 //!   it started once no frontier is left.
 //!
-//! Coordinates are in metres in a screen-like frame: x to the right, y
+//! Coordinates are in meters in a screen-like frame: x to the right, y
 //! downwards, and angles clockwise from +x, so a positive turn rate turns
 //! right.
 

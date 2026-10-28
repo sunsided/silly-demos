@@ -74,6 +74,18 @@ tasks:
     cmds:
       - node scripts/fetch-images.mjs
 
+  data:tsplib:
+    desc: Fetch the TSPLIB instances and optimal tours for the Kohonen lab's Tours mode (network; the output is committed)
+    deps: [tooling:check]
+    cmds:
+      - node scripts/fetch-tsplib.mjs
+
+  data:cities:
+    desc: Fetch Natural Earth's populated places for the Tours mode's real cities (network; the output is committed)
+    deps: [tooling:check]
+    cmds:
+      - node scripts/build-cities.mjs
+
   dev:
     desc: Start the Vite dev server (port 3000)
     deps: [install, wasm:check]

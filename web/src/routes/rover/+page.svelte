@@ -102,7 +102,7 @@
     {#if showClearance}
       <p>
         Clearance field: each free cell's distance to the nearest wall the rover knows of, darker nearer the wall, in
-        10 cm bands. The red edge is as close as the rover's centre may get; inside the blue edge, paths cost extra, so
+        10 cm bands. The red edge is as close as the rover's center may get; inside the blue edge, paths cost extra, so
         plans keep to the middle of corridors. Hover to read a value.
       </p>
     {/if}

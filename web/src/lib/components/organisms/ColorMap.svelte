@@ -1,8 +1,8 @@
 <!--
   @component
-  A self-organising map of colours, drawn as its cells: trained on random
-  colours, or on an image's pixels, whose palette it becomes; the image is
-  shown next to it recoloured with only the map's colours.
+  A self-organizing map of colors, drawn as its cells: trained on random
+  colors, or on an image's pixels, whose palette it becomes; the image is
+  shown next to it recolored with only the map's colors.
 -->
 <script lang="ts">
   import type { SomData } from 'silly_demos'
@@ -29,7 +29,7 @@
     onstats,
   }: {
     wasm: Wasm
-    /** Random colours, or the pixels of `pixels`. */
+    /** Random colors, or the pixels of `pixels`. */
     source: 'rgb' | 'image'
     pixels: Pixels | null
     /** Changing any of it starts the map over; chains and rings become grids. */
@@ -38,7 +38,7 @@
     running: boolean
     /** Online: samples per frame. Batch: epochs per second. */
     speed: number
-    /** Shades the cells by their distance to their neighbours. */
+    /** Shades the cells by their distance to their neighbors. */
     showUmatrix: boolean
     /** Changing this value starts the map over. */
     restart?: number
@@ -47,9 +47,9 @@
     onstats: (stats: SomStats) => void
   } = $props()
 
-  /** Random colours to train on in the RGB source. */
-  const RANDOM_COLOURS = 2000
-  /** How often the recoloured image is redrawn while training, ms. */
+  /** Random colors to train on in the RGB source. */
+  const RANDOM_COLORS = 2000
+  /** How often the recolored image is redrawn while training, ms. */
   const QUANTIZE_EVERY = 250
 
   let lab: SomData | null = null
@@ -57,7 +57,7 @@
   let since = -Infinity
   let quantizedAt = -Infinity
   let quantizedDirty = true
-  // Offscreen canvases for the original and the recoloured image.
+  // Offscreen canvases for the original and the recolored image.
   let original: HTMLCanvasElement | null = null
   let quantized: HTMLCanvasElement | null = null
 
@@ -72,8 +72,8 @@
     if (lab) onstats(readStats(lab))
   }
 
-  /** Uniform random colours from a seeded generator (mulberry32). */
-  function randomColours(n: number, seed: number): Float32Array {
+  /** Uniform random colors from a seeded generator (mulberry32). */
+  function randomColors(n: number, seed: number): Float32Array {
     let a = seed >>> 0
     const next = () => {
       a = (a + 0x6d2b79f5) >>> 0
@@ -106,20 +106,20 @@
   // Only the seed, not the whole config: the data needn't be rebuilt on every slider tick.
   let dataSeed = $derived(config.seed)
 
-  // The data: random colours (seeded by the config's seed) or the image's pixels.
+  // The data: random colors (seeded by the config's seed) or the image's pixels.
   $effect(() => {
     const s = source
     const p = pixels
     const seed = dataSeed
     if (!lab) {
       lab = new wasm.SomData(seed)
-      lab.set_normalise(false)
+      lab.set_normalize(false)
       untrack(() => {
         lab!.set_training(training)
         applyDataConfig(lab!, $state.snapshot(config) as SomConfig)
       })
     }
-    if (s === 'rgb') lab.set_data(randomColours(RANDOM_COLOURS, seed), 3)
+    if (s === 'rgb') lab.set_data(randomColors(RANDOM_COLORS, seed), 3)
     else if (p) {
       lab.set_data(pixelRows(p), 3)
       original = toCanvas(p, p.rgba, original)
@@ -178,7 +178,7 @@
     const { width, height, dpr } = canvas.size
     const margin = 16
     const withImage = source === 'image' && pixels !== null
-    // The map on the left; with an image, the original and its recolouring stacked on the right.
+    // The map on the left; with an image, the original and its recoloring stacked on the right.
     const mapBox: Box = withImage
       ? { x: margin, y: margin, width: width * 0.6 - 1.5 * margin, height: height - 2 * margin }
       : { x: margin, y: margin, width: width - 2 * margin, height: height - 2 * margin }
@@ -214,7 +214,7 @@
       const boxH = (height - 3 * margin) / 2
       const panels: [HTMLCanvasElement | null, string, number][] = [
         [original, 'Original', margin],
-        [quantized, `${nodes} colours`, 2 * margin + boxH],
+        [quantized, `${nodes} colors`, 2 * margin + boxH],
       ]
       for (const [img, text, y] of panels) {
         if (!img) continue
@@ -236,4 +236,4 @@
   })
 </script>
 
-<canvas {@attach canvas.attach}>A self-organising map of colours, drawn as a grid of coloured cells</canvas>
+<canvas {@attach canvas.attach}>A self-organizing map of colors, drawn as a grid of colored cells</canvas>

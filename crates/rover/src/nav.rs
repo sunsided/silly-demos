@@ -11,11 +11,11 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, VecDeque};
 
 use crate::geom::Point;
-use crate::grid::{Cell, Grid, neighbours4, neighbours8, trace};
+use crate::grid::{Cell, Grid, neighbors4, neighbors8, trace};
 use crate::map::Known;
 
-/// Distance in metres from every cell to the nearest known wall cell's
-/// edge (8-neighbour chamfer distance), capped at `cap` (at least 0).
+/// Distance in meters from every cell to the nearest known wall cell's
+/// edge (8-neighbor chamfer distance), capped at `cap` (at least 0).
 pub fn clearance(map: &Grid<Known>, cap: f32) -> Grid<f32> {
     let cap = cap.max(0.0);
     let (w, h) = (map.width as usize, map.height as usize);
@@ -25,7 +25,7 @@ pub fn clearance(map: &Grid<Known>, cap: f32) -> Grid<f32> {
         .map(|&k| if k == Known::Wall { 0.0 } else { f32::INFINITY })
         .collect();
     const DIAG: f32 = std::f32::consts::SQRT_2;
-    // Forward pass from the left and upper neighbours, then backward from
+    // Forward pass from the left and upper neighbors, then backward from
     // the right and lower ones.
     for y in 0..h {
         for x in 0..w {
@@ -65,7 +65,7 @@ pub fn clearance(map: &Grid<Known>, cap: f32) -> Grid<f32> {
             d[i] = v;
         }
     }
-    // Cell-centre distances in cells, to metres from the wall cell's edge.
+    // Cell-center distances in cells, to meters from the wall cell's edge.
     for v in &mut d {
         *v = ((*v - 0.5) * map.cell).clamp(0.0, cap);
     }
@@ -87,6 +87,7 @@ pub struct Room {
 }
 
 impl Room {
+    /// Whether the robot may enter `c`: seen free, with at least `hard` clearance.
     pub fn passable(&self, map: &Grid<Known>, clear: &Grid<f32>, c: Cell) -> bool {
         map.get(c) == Some(&Known::Free) && clear.get(c).is_some_and(|&d| d >= self.hard)
     }
@@ -101,16 +102,19 @@ impl Room {
     }
 }
 
+/// A planned route through the known map.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Path {
     /// Corner points, start first, after line-of-sight smoothing.
     pub points: Vec<Point>,
     /// The goal cell reached.
     pub goal: Cell,
-    /// Travel cost in metres, penalties included.
+    /// Travel cost in meters, penalties included.
     pub cost: f32,
 }
 
+/// A cell on Dijkstra's open list with its cost so far, ordered so the cheapest pops first from a
+/// max-heap.
 #[derive(PartialEq)]
 struct Open(f32, Cell);
 
@@ -163,7 +167,7 @@ pub fn plan(
                 cost: g,
             });
         }
-        for (n, step) in neighbours8(c) {
+        for (n, step) in neighbors8(c) {
             if !room.passable(map, clear, n) {
                 continue;
             }
@@ -178,6 +182,7 @@ pub fn plan(
     None
 }
 
+/// The cells from the start to `c`, following each cell's predecessor in `came`.
 fn walk_back(came: &Grid<Option<Cell>>, mut c: Cell) -> Vec<Cell> {
     let mut cells = vec![c];
     while let Some(&Some(p)) = came.get(c) {
@@ -239,7 +244,7 @@ fn in_sight(map: &Grid<Known>, clear: &Grid<f32>, need: f32, a: Point, b: Point)
 /// (unknown cells) at most `reach` m long, found by casting rays out from
 /// each target. A laser beam from a lookout towards its target has to enter
 /// the target, so a scan there reveals it. Rays only leave within 60° of
-/// the side the target is open to (its free neighbours): seen at a grazing
+/// the side the target is open to (its free neighbors): seen at a grazing
 /// angle along a wall, a cell is too thin a target for the beams to hit.
 /// Away from the target, a ray also keeps `margin` m from known walls, so a
 /// robot standing a little off the lookout still sees past wall ends.
@@ -255,7 +260,7 @@ pub fn lookouts(
     let mut out = map.like(None);
     for (i, &t) in targets.iter().enumerate() {
         let from = map.center(t);
-        let open: Vec<Point> = neighbours4(t)
+        let open: Vec<Point> = neighbors4(t)
             .into_iter()
             .filter(|&n| map.get(n) == Some(&Known::Free))
             .map(|n| Point::new((n.0 - t.0) as f32, (n.1 - t.1) as f32))
@@ -296,7 +301,7 @@ pub fn near(map: &Grid<Known>, seeds: impl IntoIterator<Item = Cell>, reach: f32
     let steps = reach / map.cell;
     while let Some(c) = queue.pop_front() {
         let dc = dist.get(c).copied().unwrap_or(f32::INFINITY);
-        for (n, step) in neighbours8(c) {
+        for (n, step) in neighbors8(c) {
             if map.get(n) == Some(&Known::Free)
                 && dc + step <= steps
                 && dc + step < dist.get(n).copied().unwrap_or(0.0)
@@ -341,7 +346,7 @@ mod tests {
         let g = room_with_door();
         let d = clearance(&g, 5.0);
         assert_eq!(d.get((40, 10)), Some(&0.0));
-        // Cell centre 0.5 cells from its neighbour's edge, then 1 cell per cell.
+        // Cell center 0.5 cells from its neighbor's edge, then 1 cell per cell.
         assert!((d.get((43, 10)).unwrap() - 0.125).abs() < 1e-5);
     }
 

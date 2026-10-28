@@ -3,13 +3,17 @@
 /// PCG32 (XSH RR): small, fast and good enough for sampling.
 #[derive(Clone, Debug)]
 pub struct Rng {
+    /// The LCG state; each output is a permuted function of it.
     state: u64,
 }
 
+/// The 64-bit LCG multiplier from Knuth's MMIX.
 const MULTIPLIER: u64 = 6364136223846793005;
+/// The LCG increment, odd so the generator has full period.
 const INCREMENT: u64 = 1442695040888963407;
 
 impl Rng {
+    /// A generator seeded with `seed`; the same seed gives the same sequence.
     pub fn new(seed: u64) -> Self {
         let mut rng = Self { state: 0 };
         rng.next_u32();
@@ -18,6 +22,7 @@ impl Rng {
         rng
     }
 
+    /// The next 32 uniformly random bits.
     pub fn next_u32(&mut self) -> u32 {
         let old = self.state;
         self.state = old.wrapping_mul(MULTIPLIER).wrapping_add(INCREMENT);

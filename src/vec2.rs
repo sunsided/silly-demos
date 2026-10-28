@@ -1,24 +1,33 @@
+//! Minimal 2D vector type shared by the demos.
+
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
+/// A 2D vector, used for points, velocities and directions alike.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Vec2 {
+    /// Horizontal component.
     pub x: f32,
+    /// Vertical component.
     pub y: f32,
 }
 
 impl Vec2 {
+    /// Creates a vector from its components.
     pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
 
+    /// Euclidean length.
     pub fn length(&self) -> f32 {
         (self.x * self.x + self.y * self.y).sqrt()
     }
 
+    /// Squared length, without the square root.
     pub const fn length_squared(&self) -> f32 {
         self.x * self.x + self.y * self.y
     }
 
+    /// Unit vector in the same direction; the zero vector comes back unchanged.
     pub fn normalized(&self) -> Self {
         let len = self.length();
         if len > 0.0 {
@@ -31,6 +40,7 @@ impl Vec2 {
         }
     }
 
+    /// Multiplied by `s`; a `const` alternative to `*`.
     pub const fn scale(&self, s: f32) -> Self {
         Self {
             x: self.x * s,
@@ -38,6 +48,7 @@ impl Vec2 {
         }
     }
 
+    /// Component-wise sum; a `const` alternative to `+`.
     pub const fn add(&self, other: Self) -> Self {
         Self {
             x: self.x + other.x,
@@ -45,6 +56,7 @@ impl Vec2 {
         }
     }
 
+    /// Component-wise difference; a `const` alternative to `-`.
     pub const fn sub(&self, other: Self) -> Self {
         Self {
             x: self.x - other.x,
@@ -52,6 +64,7 @@ impl Vec2 {
         }
     }
 
+    /// Dot product.
     pub const fn dot(&self, other: Self) -> f32 {
         self.x * other.x + self.y * other.y
     }
@@ -69,6 +82,7 @@ impl Vec2 {
         }
     }
 
+    /// Linear interpolation from `self` at `t = 0` to `other` at `t = 1`; `t` is not clamped.
     pub const fn lerp(&self, other: Self, t: f32) -> Self {
         Self {
             x: self.x + (other.x - self.x) * t,
@@ -76,6 +90,7 @@ impl Vec2 {
         }
     }
 
+    /// Shortened to at most `max` in length, keeping its direction.
     pub fn limit(&self, max: f32) -> Self {
         let len = self.length();
         if len > max {

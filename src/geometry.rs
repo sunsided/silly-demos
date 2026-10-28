@@ -1,3 +1,5 @@
+//! Plain-Rust geometry behind `GeometryTests`.
+
 use crate::PointLineResult;
 use crate::vec2::Vec2;
 

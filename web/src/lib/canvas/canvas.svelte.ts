@@ -67,7 +67,7 @@ export class DrawingCanvas {
 
 /**
  * Calls `frame(time, dt)` on every animation frame while `active()` is true.
- * Call during component initialisation.
+ * Call during component initialization.
  */
 export function onFrame(frame: (time: number, dt: number) => void, active: () => boolean = () => true) {
   $effect(() => {

@@ -12,14 +12,19 @@ pub const MAX_SIDE: usize = 256;
 /// Presets keep this far from the edges, so the map stays on the sheet.
 const MARGIN: f32 = 0.05;
 
+/// A density on a grid of `side`×`side` cells, sampled through a lazily
+/// rebuilt cumulative sum.
 #[derive(Clone, Debug)]
 pub struct Density {
+    /// Cells per side.
     side: usize,
     /// Row-major; row 0 covers y in [0, 1 / side).
     cells: Vec<f32>,
     /// Running sums of `cells`, rebuilt on the first sample after an edit.
     cumulative: Vec<f32>,
+    /// Set by edits; `cumulative` is stale until the next sample.
     dirty: bool,
+    /// Bumped by every edit.
     version: u64,
 }
 
@@ -34,8 +39,8 @@ impl Density {
             },
             "moons" => moons,
             "blobs" => |x, y| {
-                const CENTRES: [(f32, f32); 3] = [(0.3, 0.3), (0.7, 0.35), (0.45, 0.72)];
-                let w: f32 = CENTRES
+                const CENTERS: [(f32, f32); 3] = [(0.3, 0.3), (0.7, 0.35), (0.45, 0.72)];
+                let w: f32 = CENTERS
                     .iter()
                     .map(|&(cx, cy)| {
                         (-((x - cx).powi(2) + (y - cy).powi(2)) / (2.0 * 0.07f32.powi(2))).exp()
@@ -54,7 +59,7 @@ impl Density {
         };
         let cells = (0..SIZE * SIZE)
             .map(|i| {
-                let (x, y) = centre(SIZE, i);
+                let (x, y) = center(SIZE, i);
                 weight(x, y)
             })
             .collect();
@@ -87,6 +92,7 @@ impl Density {
         })
     }
 
+    /// Cells per side.
     pub fn side(&self) -> usize {
         self.side
     }
@@ -101,7 +107,7 @@ impl Density {
             return;
         }
         for (i, cell) in self.cells.iter_mut().enumerate() {
-            let (cx, cy) = centre(self.side, i);
+            let (cx, cy) = center(self.side, i);
             let d = (cx - x).hypot(cy - y);
             if d < radius {
                 let falloff = (1.0 - (d / radius).powi(2)).powi(2);
@@ -112,10 +118,12 @@ impl Density {
         self.version += 1;
     }
 
+    /// Total weight over all cells; 0 means nothing can be sampled.
     pub fn mass(&self) -> f32 {
         self.cells.iter().sum()
     }
 
+    /// The weights, row-major from y = 0.
     pub fn cells(&self) -> &[f32] {
         &self.cells
     }
@@ -158,7 +166,8 @@ impl Density {
     }
 }
 
-fn centre(side: usize, i: usize) -> (f32, f32) {
+/// The center of cell `i` of a `side`×`side` grid, in the unit square.
+fn center(side: usize, i: usize) -> (f32, f32) {
     let cell = 1.0 / side as f32;
     (
         ((i % side) as f32 + 0.5) * cell,
@@ -166,6 +175,7 @@ fn centre(side: usize, i: usize) -> (f32, f32) {
     )
 }
 
+/// Whether (x, y) lies within the presets' margin.
 fn inside(x: f32, y: f32) -> bool {
     (MARGIN..=1.0 - MARGIN).contains(&x) && (MARGIN..=1.0 - MARGIN).contains(&y)
 }

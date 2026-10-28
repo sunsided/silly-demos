@@ -132,7 +132,7 @@ export function drawChain(ctx: CanvasRenderingContext2D, t: Theme, joints: Float
 
 /**
  * The bend at every inner joint: an arc from the previous link's extension to
- * the next link, labelled in degrees (counter-clockwise on screen positive).
+ * the next link, labeled in degrees (counter-clockwise on screen positive).
  */
 export function drawJointAngles(ctx: CanvasRenderingContext2D, t: Theme, joints: Float32Array) {
   const n = joints.length / 2

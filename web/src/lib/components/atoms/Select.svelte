@@ -1,4 +1,4 @@
-<!-- @component Labelled native select. -->
+<!-- @component Labeled native select. -->
 <script lang="ts" generics="T extends string">
   let {
     label,

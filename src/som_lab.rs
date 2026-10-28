@@ -2,7 +2,7 @@
 
 use som::codebook::Codebook;
 use som::density::Density;
-use som::init::{Init, initialise};
+use som::init::{Init, initialize};
 use som::lattice::{Kind, Lattice};
 use som::metrics::{History, quantization_error, topographic_error};
 use som::rng::Rng;
@@ -21,27 +21,40 @@ const METRIC_EVERY: u64 = 250;
 /// History entries kept; when full, every other one is dropped.
 const HISTORY_CAP: usize = 400;
 
+/// How the map learns from the density.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Training {
+    /// One fresh sample at a time, each counting as one step of the schedule.
     Online,
+    /// A whole epoch over the batch samples at once.
     Batch,
 }
 
-/// A self-organising map training on a 2D density. The map lives in WASM;
+/// A self-organizing map training on a 2D density. The map lives in WASM;
 /// JS steps it, paints the density and reads flat snapshots for drawing.
 #[wasm_bindgen]
 pub struct SomLab {
+    /// The map: codebook, lattice, schedule and step count.
     som: Som,
+    /// How the codebook is seeded on a restart.
     init: Init,
+    /// Online or batch learning.
     training: Training,
+    /// The 2D distribution the samples are drawn from.
     density: Density,
+    /// Seed the random generator is reset to on every restart.
     seed: u64,
+    /// Drives initialization and sampling.
     rng: Rng,
+    /// Samples a batch epoch trains on, `x, y` per sample.
     batch: Vec<f32>,
+    /// Samples the errors are measured on, `x, y` per sample.
     eval: Vec<f32>,
+    /// What the last traced update did, for drawing it; `None` after a restart.
     trace: Option<StepTrace>,
     /// (t, QE, TE) triples.
     history: History,
+    /// Latest quantization and topographic error.
     errors: (f32, f32),
 }
 
@@ -200,12 +213,12 @@ impl SomLab {
         self.restart();
     }
 
-    /// Back to t = 0 with a freshly initialised map. The random numbers
+    /// Back to t = 0 with a freshly initialized map. The random numbers
     /// start over from the seed too, so a restart replays the same run.
     pub fn restart(&mut self) {
         self.rng = Rng::new(self.seed);
         self.draw_samples();
-        self.som.codebook = initialise(self.init, &self.som.lattice, &self.eval, 2, &mut self.rng);
+        self.som.codebook = initialize(self.init, &self.som.lattice, &self.eval, 2, &mut self.rng);
         self.som.t = 0;
         self.trace = None;
         self.history.clear();
@@ -585,7 +598,7 @@ mod tests {
         lab.paint(0.8, 0.8, 0.1, 1.0);
         assert_eq!(lab.status(), "training");
         assert_eq!(lab.progress()[0], 0.0);
-        // Initialised from the painted samples, not piled up in the middle.
+        // Initialized from the painted samples, not piled up in the middle.
         assert!(
             lab.weights()
                 .chunks(2)

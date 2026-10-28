@@ -2,13 +2,17 @@
 
 use std::ops::{Add, Mul, Sub};
 
+/// A point or vector in the plane, in meters; y points down, so angles run clockwise.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Point {
+    /// Meters along x.
     pub x: f32,
+    /// Meters along y, downwards.
     pub y: f32,
 }
 
 impl Point {
+    /// The point (x, y).
     pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
@@ -19,14 +23,17 @@ impl Point {
         Self::new(cos, sin)
     }
 
+    /// The dot product.
     pub fn dot(self, o: Self) -> f32 {
         self.x * o.x + self.y * o.y
     }
 
+    /// The Euclidean length of the vector.
     pub fn length(self) -> f32 {
         self.dot(self).sqrt()
     }
 
+    /// The Euclidean distance between two points.
     pub fn distance(self, o: Self) -> f32 {
         (self - o).length()
     }
@@ -61,17 +68,21 @@ impl Mul<f32> for Point {
 /// Position and heading of the robot.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Pose {
+    /// Meters along x.
     pub x: f32,
+    /// Meters along y, downwards.
     pub y: f32,
     /// Heading, clockwise from +x.
     pub theta: f32,
 }
 
 impl Pose {
+    /// The pose at (x, y) heading `theta` radians.
     pub const fn new(x: f32, y: f32, theta: f32) -> Self {
         Self { x, y, theta }
     }
 
+    /// Where the robot is, without its heading.
     pub const fn position(self) -> Point {
         Point::new(self.x, self.y)
     }

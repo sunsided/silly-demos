@@ -27,7 +27,7 @@
     const range = Math.max(Math.max(...values) - lo, 1e-9)
     const t = currentTheme()
     ctx.fillStyle = t.cobalt
-    for (let i = 0; i < layout.centres.length; i++) {
+    for (let i = 0; i < layout.centers.length; i++) {
       ctx.globalAlpha = 0.08 + 0.92 * ((values[i] - lo) / range)
       ctx.beginPath()
       cellPath(ctx, layout, i)

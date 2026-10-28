@@ -116,13 +116,19 @@ pub enum Phase {
 /// is left to explore.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Explorer {
+    /// What it is doing now.
     pub phase: Phase,
+    /// The path it is following; `None` before the first plan, when no plan was found, or once
+    /// done.
     pub path: Option<Path>,
     /// The unknown cell behind a frontier that the current path leads to a
     /// view of.
     pub target: Option<Point>,
+    /// Where it started, and returns to.
     home: Pose,
+    /// How much room it keeps to the walls, sized from the body.
     room: Room,
+    /// Seconds since the last plan; infinite at first so the first tick plans.
     since_plan: f32,
     /// How far (rad) it has turned on the spot at the end of its path to
     /// look at the target frontier.
@@ -145,6 +151,7 @@ const TURN_IN_PLACE: f32 = 0.8;
 const GIVEN_UP_RADIUS: f32 = 0.2;
 
 impl Explorer {
+    /// An explorer about to set out from `home`, keeping room to the walls for `body`.
     pub fn new(home: Pose, body: Body) -> Self {
         Self {
             phase: Phase::Explore,
@@ -228,10 +235,13 @@ impl Explorer {
         self.home
     }
 
+    /// Unknown cells it went to look at but couldn't uncover.
     pub fn given_up(&self) -> &[Point] {
         &self.given_up
     }
 
+    /// Plans a fresh path: to the nearest lookout while exploring, home once there is none, and
+    /// gives up when home can't be reached either.
     fn replan(&mut self, map: &Grid<Known>, frontiers: &[Cluster], here: Point) {
         self.since_plan = 0.0;
         let clear = nav::clearance(map, 2.0);
