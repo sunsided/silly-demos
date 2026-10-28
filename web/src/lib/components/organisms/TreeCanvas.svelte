@@ -21,6 +21,7 @@
     type SpaceId,
     type TreeParam,
     type TreeStats,
+    type WhichTree,
   } from '../../demos/clustering/tree.ts'
   import type { Wasm } from '../../wasm/wasm.ts'
 
@@ -33,6 +34,7 @@
     params,
     depth,
     colorBy,
+    drawn,
     restart = 0,
     buildRequest = 0,
     onstats,
@@ -50,8 +52,10 @@
     params: Record<string, number>
     /** The depth whose nodes color the points and are drawn. */
     depth: number
-    /** Color points by their node in the online tree, or by their true topic. */
+    /** Color points by their node in the drawn tree, or by their true topic. */
     colorBy: 'tree' | 'truth'
+    /** The tree drawn over the points. */
+    drawn: WhichTree
     /** Changing this value starts over. */
     restart?: number
     /** Each increment builds the tree in passes from the points so far. */
@@ -130,26 +134,27 @@
     h: number
   }
 
-  /** The scatter as a square, the two icicles beside it when wide and below when tall. */
+  /** The scatter as a square, one icicle per tree beside it when wide and below when tall. */
   function layout(width: number, height: number): { scatter: Box; icicles: Box[] } {
+    const n = TREES.length
     if (width >= height * 1.2) {
       const size = Math.min(height - 2 * GAP - TITLE, width * 0.55 - 2 * GAP)
       const scatter = { x: GAP, y: GAP + TITLE, w: size, h: size }
       const left = scatter.x + size + 2 * GAP
       const w = width - left - GAP
-      const h = (height - 2 * GAP - 2 * TITLE - GAP) / 2
+      const h = (height - GAP - n * (TITLE + GAP)) / n
       return {
         scatter,
-        icicles: [0, 1].map(i => ({ x: left, y: GAP + TITLE + i * (h + TITLE + GAP), w, h })),
+        icicles: TREES.map((_, i) => ({ x: left, y: GAP + TITLE + i * (h + TITLE + GAP), w, h })),
       }
     }
-    const size = Math.min(width - 2 * GAP, height * 0.55)
+    const size = Math.min(width - 2 * GAP, height * 0.5)
     const scatter = { x: (width - size) / 2, y: GAP + TITLE, w: size, h: size }
     const top = scatter.y + size + GAP + TITLE
-    const h = (height - top - GAP - TITLE) / 2
+    const h = (height - top - GAP) / n - TITLE
     return {
       scatter,
-      icicles: [0, 1].map(i => ({ x: GAP, y: top + i * (h + TITLE), w: width - 2 * GAP, h: h - GAP })),
+      icicles: TREES.map((_, i) => ({ x: GAP, y: top + i * (h + TITLE), w: width - 2 * GAP, h: h - GAP })),
     }
   }
 
@@ -159,7 +164,7 @@
 
   function drawScatter(ctx: CanvasRenderingContext2D, t: Theme, box: Box, l: TreeLab, dark: boolean) {
     const pts = l.projected()
-    const colors = colorBy === 'truth' ? l.true_labels(0) : l.assignments('online', depth)
+    const colors = colorBy === 'truth' ? l.true_labels(0) : l.assignments(drawn, depth)
     const at = (x: number, y: number) => ({ x: box.x + x * box.w, y: box.y + y * box.h })
     ctx.strokeStyle = t.rule
     ctx.strokeRect(box.x, box.y, box.w, box.h)
@@ -171,7 +176,7 @@
       ctx.fillRect(q.x - size / 2, q.y - size / 2, size, size)
     }
     // The tree down to the chosen depth: links, then centers sized by their points.
-    const nodes = l.nodes('online')
+    const nodes = l.nodes(drawn)
     const count = nodes.length / NODE_STRIDE
     const total = Math.max(1, nodes[2])
     ctx.save()
@@ -253,7 +258,7 @@
     label(
       ctx,
       t,
-      `${dim}-D points on two axes · ${points.toLocaleString()} of ${total.toLocaleString()} · depth ${depth}`,
+      `${dim}-D points on two axes · ${points.toLocaleString()} of ${total.toLocaleString()} · ${TREES.find(t => t.id === drawn)?.label.toLowerCase()} to depth ${depth}`,
       { x: scatter.x, y: scatter.y - TITLE / 2 },
       t.ink,
       'left',
