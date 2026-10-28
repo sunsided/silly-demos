@@ -8,8 +8,8 @@
 #![cfg(target_arch = "wasm32")]
 
 use silly_demos::{
-    BoidsParams, BoidsSim, CollisionLab, GeometryTests, IkChain, RoverLab, SomData, SomLab, TspLab,
-    VoronoiTests,
+    BoidsParams, BoidsSim, CollisionLab, GeometryTests, IkChain, RoverLab, SomData, SomLab,
+    SuccessorLab, TspLab, VoronoiTests,
 };
 use wasm_bindgen_test::*;
 
@@ -365,6 +365,27 @@ fn tsp_lab_refuses_what_it_cant_use() {
     assert!(lab.set_method("exact"));
     assert_eq!(lab.status(), "too-big");
     assert!(lab.tour().is_empty());
+}
+
+/// GNG-U's point, on the target the site ships: after the left half of the
+/// density is erased, it moves its nodes off it while plain GNG keeps them.
+#[wasm_bindgen_test]
+fn growing_gas_with_utility_follows_an_erased_half_on_wasm32() {
+    let mut lab = SuccessorLab::new(3);
+    while lab.progress()[0] < 20_000.0 {
+        lab.step(5000);
+    }
+    for y in 0..=20 {
+        lab.paint(0.2, y as f32 / 20.0, 0.3, -10.0);
+    }
+    while lab.progress()[0] < 60_000.0 {
+        lab.step(5000);
+    }
+    let left = |id: &str| lab.weights(id).chunks(2).filter(|p| p[0] < 0.4).count();
+    assert!(left("gng") > 10, "GNG keeps {}", left("gng"));
+    assert!(left("gng-u") <= 3, "GNG-U keeps {}", left("gng-u"));
+    assert!(lab.errors("kmeans")[1].is_nan());
+    assert!(lab.weights("lvq").is_empty());
 }
 
 /// On wasm32 `usize` is 32 bits: a grid this size has more cells than it can
