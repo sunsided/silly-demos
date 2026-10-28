@@ -139,7 +139,7 @@ const PARAMS: [Param; 11] = [
         id: "decay",
         model: "both",
         label: "Forgetting per point",
-        default: 0.0005,
+        default: 0.002,
         min: 0.0,
         max: 0.005,
         step: 0.0001,

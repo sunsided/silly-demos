@@ -46,7 +46,7 @@ impl Default for SketchParams {
             cluster_cost: 0.02,
             cap: 60,
             growth: 1.5,
-            decay: 0.0005,
+            decay: 0.002,
             share: 0.02,
             every: 200,
         }

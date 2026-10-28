@@ -55,7 +55,7 @@ pub struct BallParams {
 
 impl Default for BallParams {
     /// Reach 2.5 radii, radius 0.02 to start and 0.015 at least, merging
-    /// when that grows the radius by at most 1.2×, a half-life of about 1400 points,
+    /// when that grows the radius by at most 1.2×, a half-life of about 350 points,
     /// clusters of at least 2 % of the points, pruning below weight 1, and splitting when the halves
     /// are 1.6 times their summed radii apart: a round blob's halves sit
     /// about 0.9 apart in those terms and a long thin one's about 1.3.
@@ -65,7 +65,7 @@ impl Default for BallParams {
             r_init: 0.02,
             r_min: 0.015,
             merge: 1.2,
-            decay: 0.0005,
+            decay: 0.002,
             share: 0.02,
             prune: 1.0,
             split: 1.6,
@@ -85,8 +85,14 @@ const SPLIT_SUPPORT: f32 = 10.0;
 const YOUTH: u64 = 1000;
 /// Points between two pruning sweeps.
 const PRUNE_EVERY: u64 = 100;
-/// How far a ball may move or grow before its neighbor links are refreshed.
+/// How far a ball may move, or its reach change, from where it was last
+/// linked before its links are refreshed.
 const SLACK: f32 = 0.01;
+/// The margin on a neighborhood, in [`SLACK`]s. Since the later of two
+/// balls' links, one has moved at most 2 and the other 1, and the reach at
+/// either time is within 2 of now; twice the reach plus 3 of movement
+/// needs 7, and 8 leaves room.
+const MARGIN: f32 = 8.0;
 /// Nearest balls every ball links to besides its neighborhood, so the
 /// balls form a graph a greedy walk can cross.
 const LINKS: usize = 3;
@@ -104,9 +110,9 @@ pub struct Ball {
     pub weight: f32,
     /// When it was spawned, in points of the stream.
     pub born: u64,
-    /// How far it has moved plus how much its reach has grown since its
-    /// place in the neighbor lists was last refreshed.
-    slack: f32,
+    /// Where it was, and how far it reached, when its place in the neighbor
+    /// lists was last refreshed.
+    anchor: (Point, f32),
     /// A two-means of its own points, to notice when they come apart.
     halves: [Half; 2],
 }
@@ -353,7 +359,6 @@ impl Balls {
     fn join(&mut self, i: usize, x: Point) {
         let p = self.params;
         let b = &mut self.balls[i];
-        let before = (b.center, b.reach(&p));
         b.weight += 1.0;
         let rate = (1.0 / b.weight).max(MIN_RATE);
         let d2 = dist2(b.center, x);
@@ -371,8 +376,9 @@ impl Balls {
             h1
         };
         half.take(x);
-        b.slack += dist2(before.0, b.center).sqrt() + (b.reach(&p) - before.1).max(0.0);
-        if b.slack > SLACK {
+        // Net movement matters, not the jitter that adds up to little.
+        let moved = dist2(b.anchor.0, b.center).sqrt() + (b.reach(&p) - b.anchor.1).abs();
+        if moved > SLACK {
             self.link(i);
         }
     }
@@ -387,7 +393,7 @@ impl Balls {
             m2: self.params.r_init * self.params.r_init,
             weight: 1.0,
             born: self.t,
-            slack: 0.0,
+            anchor: (x, 0.0),
             halves: [Half::default(); 2],
         });
         self.last = Some(self.balls.len() - 1);
@@ -482,7 +488,7 @@ impl Balls {
             m2: h.m2.max(p.r_min * p.r_min),
             weight: h.weight * share,
             born,
-            slack: 0.0,
+            anchor: (h.center, 0.0),
             halves: [Half::default(); 2],
         };
         let old_id = self.balls[i].id;
@@ -544,7 +550,7 @@ impl Balls {
     fn link(&mut self, i: usize) {
         let p = self.params;
         let n = self.balls.len();
-        let limit = |b: &Ball| 2.0 * b.reach(&p) + 4.0 * SLACK;
+        let limit = |b: &Ball| 2.0 * b.reach(&p) + MARGIN * SLACK;
         let mut by_distance: Vec<(f32, usize)> = Vec::with_capacity(n);
         for j in 0..n {
             if j == i {
@@ -565,7 +571,8 @@ impl Balls {
             .filter(|&(rank, &(d, _))| rank < LINKS || d < own)
             .map(|(_, &(_, j))| j)
             .collect();
-        self.balls[i].slack = 0.0;
+        let b = &mut self.balls[i];
+        b.anchor = (b.center, b.reach(&p));
     }
 }
 
@@ -625,8 +632,12 @@ mod tests {
     #[test]
     fn the_walk_checks_a_few_of_many_balls() {
         // 36 small blobs on a grid, points from any of them in random order.
+        // Each holds under 3 % of the points, so the share to count is lowered.
         let mut rng = crate::rng::Rng::new(6);
-        let mut balls = Balls::new(BallParams::default());
+        let mut balls = Balls::new(BallParams {
+            share: 0.01,
+            ..BallParams::default()
+        });
         let n = 30_000;
         for _ in 0..n {
             let k = rng.below(36);
@@ -655,7 +666,7 @@ mod tests {
             balls.insert(blob(if i % 2 == 0 { 0.3 } else { 0.7 }, &mut rng));
         }
         assert_eq!(balls.clusters().count(), 2);
-        // From its steady weight near 1000, a ball fades below 1 in ~14 000 points.
+        // From its steady weight near 250, a ball fades below 1 in ~3000 points.
         for _ in 0..16_000 {
             balls.insert(blob(0.7, &mut rng));
         }
