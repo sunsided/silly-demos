@@ -47,6 +47,13 @@ export const DEMOS = [
     rust: 'RoverLab::step',
   },
   {
+    route: '/vector-search',
+    name: 'Vector search lab',
+    blurb:
+      'Five indexes find a query’s nearest neighbors among streamed embeddings without comparing it with every point: HNSW, an inverted file that splits online, a tree of clusters, IVF-PQ and Vamana, measured in recall against distances.',
+    rust: 'VectorLab::search',
+  },
+  {
     route: '/voronoi',
     name: 'Voronoi / Delaunay',
     blurb: 'Moving points with their Delaunay triangulation and the Voronoi diagram it implies.',

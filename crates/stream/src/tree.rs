@@ -1126,6 +1126,19 @@ impl Tree {
     /// left; their members are the candidates. Returns the ids, nearest
     /// first, and the distances computed.
     pub fn search(&self, q: &[f32], k: usize, beam: usize, store: &[f32]) -> (Vec<u32>, u64) {
+        self.search_seen(q, k, beam, store, &mut Vec::new())
+    }
+
+    /// [`Tree::search`], also putting the candidates it compared `q` with
+    /// in `seen`.
+    pub fn search_seen(
+        &self,
+        q: &[f32],
+        k: usize,
+        beam: usize,
+        store: &[f32],
+        seen: &mut Vec<u32>,
+    ) -> (Vec<u32>, u64) {
         let mut checks = 0u64;
         let mut frontier: Vec<(usize, f32)> = vec![(0, 0.0)];
         while frontier.iter().any(|&(n, _)| !self.nodes[n].is_leaf()) {
@@ -1149,6 +1162,7 @@ impl Tree {
             .flat_map(|&(n, _)| self.nodes[n].members.iter())
             .map(|&id| {
                 checks += 1;
+                seen.push(id);
                 (id, dist2(self.point(store, id), q))
             })
             .collect();

@@ -1,0 +1,19 @@
+[package]
+name = "ann"
+version = "0.1.0"
+description = "Approximate nearest-neighbor indexes over embeddings: HNSW, an IVF that splits online, IVF-PQ and Vamana, counted in distances"
+authors = ["Markus Mayer <widemeadows@gmail.com>"]
+repository = "https://github.com/sunsided/silly-demos"
+license = "MIT OR Apache-2.0 OR EUPL-1.2"
+edition = "2024"
+publish = false
+
+[dependencies]
+stream = { path = "../stream" }
+
+# Every item is documented, private ones included; `task lint` denies warnings.
+[lints.rust]
+missing_docs = "warn"
+
+[lints.clippy]
+missing_docs_in_private_items = "warn"

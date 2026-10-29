@@ -1,4 +1,5 @@
 import type { TreeLab } from 'silly_demos'
+import { readSearchCurve, type SearchCurve } from '../search.ts'
 
 export type SpaceId = 'sphere64' | 'plane'
 export type WhichTree = 'online' | 'careful' | 'repaired' | 'passes'
@@ -68,12 +69,6 @@ export interface TreeQuality {
   repairs: number
 }
 
-/** Recall@10 and distances per query at each beam, and what a scan takes. */
-export interface SearchCurve {
-  beams: { beam: number; recall: number; cost: number }[]
-  scan: number
-}
-
 export interface TreeStats {
   points: number
   total: number
@@ -106,12 +101,7 @@ export function readTreeStats(lab: TreeLab): TreeStats {
   return { points, total, dim, quality }
 }
 
-export function readSearch(lab: TreeLab, which: WhichTree): SearchCurve | null {
-  const s = lab.search(which)
-  if (s.length === 0) return null
-  const beams = []
-  for (let i = 0; i + 2 < s.length - 1; i += 3) beams.push({ beam: s[i], recall: s[i + 1], cost: s[i + 2] })
-  return { beams, scan: s[s.length - 1] }
-}
+/** Recall@10 against distances at beams of 1, 2, 4 and 8. */
+export const readSearch = (lab: TreeLab, which: WhichTree): SearchCurve | null => readSearchCurve(lab.search(which))
 
 export const emptyTreeStats = (): TreeStats => ({ points: 0, total: 0, dim: 64, quality: {} })

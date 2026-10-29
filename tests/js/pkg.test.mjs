@@ -19,7 +19,7 @@ before(async () => {
 })
 
 test('the classes and functions the pages use are exported', () => {
-  for (const name of ['BoidsParams', 'BoidsSim', 'ClusterLab', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'SuccessorLab', 'TreeLab', 'TspLab', 'VoronoiTests']) {
+  for (const name of ['BoidsParams', 'BoidsSim', 'ClusterLab', 'CollisionLab', 'GeometryTests', 'IkChain', 'RoverLab', 'SomData', 'SomLab', 'SuccessorLab', 'TreeLab', 'TspLab', 'VectorLab', 'VoronoiTests']) {
     assert.equal(typeof wasm[name], 'function', name)
   }
   assert.equal(typeof wasm.run, 'function')
@@ -201,6 +201,27 @@ test('the tree lab returns its points, nodes and scores as typed arrays', () => 
     assert.equal(lab.cost(which).length, 8, which)
   }
   assert.equal(JSON.parse(lab.params()).length, 6)
+  lab.free()
+})
+
+test('the vector lab returns its curves, costs and traces as typed arrays', () => {
+  const lab = new wasm.VectorLab(1)
+  assert.equal(lab.set_space('plane'), true)
+  assert.equal(lab.set_param('points', 2000), true)
+  while (lab.step(1000) > 0) {}
+  assert.equal(lab.phase(), 'done')
+  assert.ok(lab.projected() instanceof Float32Array && lab.projected().length === 4000)
+  for (const which of ['hnsw', 'spfresh', 'pq', 'vamana', 'tree']) {
+    const efforts = lab.efforts(which)
+    assert.ok(efforts instanceof Uint32Array && efforts.length > 0, which)
+    assert.equal(lab.search(which).length, 3 * efforts.length + 1, which)
+    assert.equal(lab.cost(which).length, 4, which)
+    const trace = lab.trace(which, 0, efforts[0])
+    assert.ok(trace instanceof Uint32Array && trace[0] === 10, which)
+  }
+  assert.ok(lab.neighbors(0) instanceof Uint32Array && lab.neighbors(0).length === 10)
+  assert.equal(lab.query_point(0).length, 2)
+  assert.equal(JSON.parse(lab.params()).length, 11)
   lab.free()
 })
 
